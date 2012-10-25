@@ -69,6 +69,22 @@ flag is given, swapping is disabled on all known swap devices and files
 .I /proc/swaps
 or
 .IR /etc/fstab ).
+.PP
+If
+.I loop=/dev/loop?
+and
+.I encryption=AES128
+options are present in
+.I /etc/fstab
+then
+.BR "swapon -a"
+will set up loop devices using random keys, run
+.BR "mkswap"
+on them, and enable encrypted swap on specified loop devices. Encrypted loop
+devices are set up with page size offset so that unencrypted swap signatures
+on first page of swap devices are not touched.
+.BR "swapoff -a"
+will tear down such loop devices.
 
 .SH OPTIONS
 .TP

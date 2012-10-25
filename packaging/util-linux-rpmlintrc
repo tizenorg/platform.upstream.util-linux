@@ -1,0 +1,7 @@
+addFilter("init-script-without-%stop_on_removal-preun /etc/init.d/raw")
+addFilter("init-script-without-%restart_on_update-postun /etc/init.d/raw")
+addFilter("incoherent-init-script-name raw")
+addFilter("no-reload-entry /etc/init.d/raw")
+# There is no egrep(1) used -> False positive
+addFilter("deprecated-grep")
+ 

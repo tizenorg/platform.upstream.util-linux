@@ -1,0 +1,37 @@
+* Mon Oct 27 2014 Maciej Wereski <m.wereski@partner.samsung.com> upstream/2.25.2
+- Update to 2.25.2
+
+* Tue Jun 17 2014 John L. Whiteman <john.l.whiteman@intel.com> accepted/tizen/ivi/panda/20140312.123353-1-g390b4ea
+- Bug-Tizen: TC-294 Bug: https://bugs.tizen.org/jira/browse/TC-294?filter=-1 Setting default user to 'User' for tty sessions. This change provides default user consistency for tty, ssh and wayland console sessions.
+
+* Wed Jan 15 2014 Maciej Wereski <m.wereski@partner.samsung.com> upstream/2.24@2e42ced
+- Update to 2.24
+
+* Mon Oct 28 2013 Aleksander Zdyb <a.zdyb@partner.samsung.com> accepted/tizen/20130913.063250@801f6bc
+- Fixed group and upstream URL
+
+* Mon Sep 30 2013 Aleksander Zdyb <a.zdyb@partner.samsung.com> accepted/tizen/20130913.063250@c0e303b
+- Removed unnecessary dependency on bash
+- Moved examples to docs package
+
+* Fri Aug 16 2013 Mikko Ylinen <mikko.ylinen@intel.com> 1a08de4
+- blkid: enable evaluate by scan (TIVI-1121)
+
+* Wed Aug 07 2013 Maciej Wereski <m.wereski@partner.samsung.com> a801ef2
+- Enable mountpoint utility
+
+* Thu Jul 18 2013 Shane Bryan <shane.bryan@intel.com> e8cbe9e
+- Fix man8 file conflicts with -docs subpackage
+
+* Sat Jun 29 2013 Alexandru Cornea <alexandru.cornea@intel.com> 14b3f6f
+- resetting manifest requested domain to floor
+
+* Sat May 11 2013 Anas Nashif <anas.nashif@intel.com> submit/tizen/20130509.184703@07a1e5d
+- Set license using %license
+
+* Fri Mar 22 2013 Anas Nashif <anas.nashif@intel.com> submit/trunk/20130116.154548@34e7e97
+- Fixed package groups
+
+* Wed Jan 16 2013 Anas Nashif <anas.nashif@intel.com> upstream/2.22.2@bb588e5
+- Update to 2.22.2
+
