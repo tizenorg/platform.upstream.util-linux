@@ -1,0 +1,77 @@
+#!/bin/sh
+### BEGIN INIT INFO
+# Provides:          uuidd
+# Required-Start:    $time $local_fs $remote_fs
+# Should-Start: 
+# Required-Stop:     $time $local_fs $remote_fs
+# Should-Stop:
+# Default-Start:     2 3 5
+# Default-Stop:      0 1 2 6
+# Short-Description: UUID generating daemon
+# Description: UUID generating daemon
+### END INIT INFO
+# 
+
+
+UUIDD_BIN=/usr/sbin/uuidd
+UUIDD_PID_PATH=/var/run/uuidd
+UUIDD_OPTIONS="-q -T 0"
+
+test -x $UUIDD_BIN || { echo "$UUIDD_BIN not installed"; 
+	if [ "$1" = "stop" ]; then exit 0;
+	else exit 5; fi; }
+
+. /etc/rc.status
+
+# Reset status of this service
+rc_reset
+
+case "$1" in
+    start)
+	echo -n "Starting uuidd "
+	mkdir -p $UUIDD_PID_PATH
+	chown uuidd:uuidd $UUIDD_PID_PATH
+	/sbin/startproc -u uuidd -g uuidd $UUIDD_BIN $UUIDD_OPTIONS
+	rc_status -v
+	;;
+    stop)
+	echo -n "Shutting down uuidd "
+	/sbin/killproc -TERM $UUIDD_BIN
+	rc_status -v
+	;;
+    try-restart|condrestart|force-reload)
+	## Do a restart only if the service was active before.
+	## Note: try-restart is now part of LSB (as of 1.9).
+	## RH has a similar command named condrestart.
+	if test "$1" = "condrestart"; then
+		echo "${attn} Use try-restart ${done}(LSB)${attn} rather than condrestart ${warn}(RH)${norm}"
+	fi
+	$0 status
+	if test $? = 0; then
+		$0 restart
+	else
+		rc_reset	# Not running is not a failure.
+	fi
+	# Remember status and be quiet
+	rc_status
+	;;
+    restart)
+	$0 stop
+	$0 start
+	rc_status
+	;;
+    reload)
+	rc_failed 3
+	rc_status -v
+	;;
+    status)
+	echo -n "Checking for service uuidd "
+	/sbin/checkproc $UUIDD_BIN
+	rc_status -v
+	;;
+    *)
+	echo "Usage: $0 {start|stop|status|try-restart|restart|force-reload|reload|probe}"
+	exit 1
+	;;
+esac
+rc_exit

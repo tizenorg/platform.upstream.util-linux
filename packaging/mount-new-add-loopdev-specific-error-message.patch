@@ -1,0 +1,51 @@
+From 10389b1e4535dda7d27e5ab39d3d4f9d7868a5c9 Mon Sep 17 00:00:00 2001
+From: Karel Zak <kzak@redhat.com>
+Date: Mon, 28 May 2012 12:26:41 +0200
+Subject: [PATCH] mount: (new) add loopdev specific error message
+
+Signed-off-by: Karel Zak <kzak@redhat.com>
+Signed-off-by: Petr Uzel <petr.uzel@suse.cz>
+---
+ sys-utils/mount.c |   15 ++++++++++++---
+ 1 files changed, 12 insertions(+), 3 deletions(-)
+
+Index: util-linux-2.21.2/sys-utils/mount.c
+===================================================================
+--- util-linux-2.21.2.orig/sys-utils/mount.c
++++ util-linux-2.21.2/sys-utils/mount.c
+@@ -354,6 +354,9 @@ try_readonly:
+ 		return MOUNT_EX_SUCCESS;	/* mount(2) success */
+ 	}
+ 
++	mnt_context_get_mflags(cxt, &mflags);		/* mount(2) flags */
++	mnt_context_get_user_mflags(cxt, &uflags);	/* userspace flags */
++
+ 	if (!mnt_context_syscall_called(cxt)) {
+ 		/*
+ 		 * libmount errors (extra library checks)
+@@ -382,7 +385,15 @@ try_readonly:
+ 			else
+ 				warnx(_("mount source not defined"));
+ 			return MOUNT_EX_USAGE;
+-
++		case -MNT_ERR_LOOPDEV:
++			if (errno == ENOENT
++			    && (uflags & MNT_MS_ENCRYPTION)
++			    && src && stat(src, &st) == 0)
++				warnx(_("%s: failed to setup loop device "
++					"(probably unknown encryption type)"), src);
++			else
++				warn(_("%s: failed to setup loop device"), src);
++			return MOUNT_EX_FAIL;
+ 		default:
+ 		return handle_generic_errors(rc, _("%s: mount failed"),
+ 					     tgt ? tgt : src);
+@@ -406,8 +417,6 @@ try_readonly:
+ 	 */
+ 	syserr = mnt_context_get_syscall_errno(cxt);
+ 
+-	mnt_context_get_mflags(cxt, &mflags);		/* mount(2) flags */
+-	mnt_context_get_user_mflags(cxt, &uflags);	/* userspace flags */
+ 
+ 	switch(syserr) {
+ 	case EPERM:
