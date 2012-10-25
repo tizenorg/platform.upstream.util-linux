@@ -1,0 +1,27 @@
+From 89a0fa3ca57be7440500dd207d96ea1e2908959f Mon Sep 17 00:00:00 2001
+From: Ludwig Nussel <ludwig.nussel@suse.de>
+Date: Wed, 20 Jun 2012 10:56:05 +0200
+Subject: [PATCH] UGLY HACK: boot.localfs parses mount ouput and needs source
+ rather than target
+
+---
+ sys-utils/mount.c |    3 +++
+ 1 files changed, 3 insertions(+), 0 deletions(-)
+
+diff --git a/sys-utils/mount.c b/sys-utils/mount.c
+index 8706716..b28d67a 100644
+--- a/sys-utils/mount.c
++++ b/sys-utils/mount.c
+@@ -166,6 +166,9 @@ static int mount_all(struct libmnt_context *cxt)
+ 	while (mnt_context_next_mount(cxt, itr, &fs, &mntrc, &ignored) == 0) {
+ 
+ 		const char *tgt = mnt_fs_get_target(fs);
++		if (getenv("MOUNT_PRINT_SOURCE")) {
++			tgt = mnt_fs_get_srcpath(fs);
++		}
+ 
+ 		if (ignored) {
+ 			if (mnt_context_is_verbose(cxt))
+-- 
+1.7.7
+

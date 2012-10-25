@@ -1,0 +1,27 @@
+--- klogconsole/Makefile
++++ klogconsole/Makefile
+@@ -15,11 +15,11 @@
+ all:	klogconsole
+ 
+ klogconsole:	klogconsole.c
+-	$(CC) $(CFLAGS) -s -o $@ $<
++	$(CC) $(CFLAGS) -o $@ $<
+ 
+ clean:
+ 	$(RM) klogconsole
+ 
+ install:	klogconsole klogconsole.man
+-	$(INSTALL) -s -m 0700 klogconsole     $(DEST)/usr/sbin/
++	$(INSTALL) -m 0700 klogconsole     $(DEST)/usr/sbin/
+ 	$(INSTALL) -c -m 0444 klogconsole.man $(DEST)/usr/share/man/man8/klogconsole.8
+--- klogconsole/klogconsole.c
++++ klogconsole/klogconsole.c
+@@ -46,7 +46,7 @@
+   char newvt[2];
+   int vt;
+ 
+-  if ((new_console < 1) || (new_console > MAX_CONSOLE)) {
++  if ((new_console < 0) || (new_console > MAX_CONSOLE)) {
+     fprintf(stderr,"wrong console number\n");
+     exit(1);
+   }

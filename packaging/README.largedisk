@@ -1,0 +1,12 @@
+Some hints on fdisk and large disks (> 2TB)
+-------------------------------------------
+
+Note that fdisk only supports legacy partition tables.
+Legacy partition tables (like DOS) use 32 bit LBA addressing,
+which means that you can only address partitions with a starting 
+sector and a size with a maximum of 2**32 sectors = 2TB.
+This means you can not create partitions that are greater than 2TB 
+with fdisk!
+If you want to use partition sizes above this limit, you need to use
+GUID Partition Tables (GPT) which use 64 bit LBA addressing.
+They are supported by parted.
