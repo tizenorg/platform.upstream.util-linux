@@ -1,0 +1,20 @@
+--- resuse.h
++++ resuse.h
+@@ -39,6 +39,9 @@
+ # if HAVE_WAIT3
+ #  include <sys/resource.h>
+ # else
++#  if defined(__linux__) && defined(__alpha__)
++#   include <sys/resource.h>
++#  else
+ /* Process resource usage structure.  */
+ struct rusage
+ {
+@@ -49,6 +52,7 @@
+   ru_oublock, ru_msgsnd, ru_msgrcv, ru_nsignals,
+   ru_nvcsw, ru_nivcsw;
+ };
++#  endif
+ # endif
+ #endif
+ 

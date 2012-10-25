@@ -1,0 +1,25 @@
+From e26de525e21677c680d87f63e4dafbe4859365bf Mon Sep 17 00:00:00 2001
+From: Karel Zak <kzak@redhat.com>
+Date: Thu, 14 Jun 2012 14:43:21 +0200
+Subject: [PATCH] mount: (new) allow sloppy for non-root
+
+Addresses: https://bugzilla.redhat.com/show_bug.cgi?id=825836
+Signed-off-by: Karel Zak <kzak@redhat.com>
+Signed-off-by: Petr Uzel <petr.uzel@suse.cz>
+---
+ sys-utils/mount.c |    2 +-
+ 1 files changed, 1 insertions(+), 1 deletions(-)
+
+Index: util-linux-2.21.2/sys-utils/mount.c
+===================================================================
+--- util-linux-2.21.2.orig/sys-utils/mount.c
++++ util-linux-2.21.2/sys-utils/mount.c
+@@ -732,7 +732,7 @@ int main(int argc, char **argv)
+ 					longopts, NULL)) != -1) {
+ 
+ 		/* only few options are allowed for non-root users */
+-		if (mnt_context_is_restricted(cxt) && !strchr("hlLUVvpri", c))
++		if (mnt_context_is_restricted(cxt) && !strchr("hlLUVvpris", c))
+ 			exit_non_root(option_to_longopt(c, longopts));
+ 
+ 		switch(c) {
