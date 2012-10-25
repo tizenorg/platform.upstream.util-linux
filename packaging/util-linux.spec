@@ -363,6 +363,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/su
 %config(noreplace) /etc/pam.d/su
 %config(noreplace) /etc/pam.d/su-l
+%config(noreplace) /etc/default/su
 
 %files -f %{name}.files 
 # Common files for all archs
