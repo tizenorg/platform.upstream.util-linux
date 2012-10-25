@@ -359,11 +359,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 %docs_package
 
-%files -n su
-%{_bindir}/su
-%config(noreplace) /etc/pam.d/su
-%config(noreplace) /etc/pam.d/su-l
-%config(noreplace) /etc/default/su
 
 %files -f %{name}.files 
 # Common files for all archs
@@ -372,6 +367,10 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %config(noreplace) %{_sysconfdir}/blkid.conf
 %config(noreplace) /etc/pam.d/login
 %config(noreplace) /etc/pam.d/remote
+%config(noreplace) /etc/pam.d/su
+%config(noreplace) /etc/pam.d/su-l
+%config(noreplace) /etc/default/su
+%{_bindir}/su
 %{_bindir}/cal
 %{_bindir}/eject
 #%{_bindir}/kill
