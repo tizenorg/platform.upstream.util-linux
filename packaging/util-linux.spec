@@ -360,8 +360,8 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/su
 %{_bindir}/utmpdump
 %{_bindir}/wdctl
-%{_bindir}/resizepart
-%{_bindir}/sulogin
+%{_sbindir}/resizepart
+%{_sbindir}/sulogin
 %{_bindir}/login
 %{_bindir}/chrt
 %{_bindir}/col
