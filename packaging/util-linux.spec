@@ -268,6 +268,7 @@ install -m 644 %{SOURCE51} %{buildroot}%{_sysconfdir}/blkid.conf
 install -m 644 %{SOURCE8} %{buildroot}/etc/pam.d/login
 install -m 644 %{SOURCE9} %{buildroot}/etc/pam.d/remote
 install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su
+install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su-l
 cp adjtimex-*/adjtimex %{buildroot}/%{_sbindir}
 cp adjtimex-*/adjtimex.8  %{buildroot}%{_mandir}/man8/
 pushd ..
@@ -358,6 +359,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %files -n su
 %{_bindir}/su
 %config(noreplace) /etc/pam.d/su
+%config(noreplace) /etc/pam.d/su-l
 
 %files -f %{name}.files 
 # Common files for all archs
