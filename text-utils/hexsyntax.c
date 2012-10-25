@@ -45,6 +45,7 @@
 #include "hexdump.h"
 #include "nls.h"
 #include "strutils.h"
+#include "c.h"
 
 off_t skip;				/* bytes to skip */
 
@@ -53,7 +54,7 @@ void
 newsyntax(int argc, char ***argvp)
 {
 	int ch;
-	char *p, **argv;
+	char **argv;
 
 	argv = *argvp;
 	while ((ch = getopt(argc, argv, "bcCde:f:n:os:vxV")) != -1) {
@@ -82,26 +83,14 @@ newsyntax(int argc, char ***argvp)
 			addfile(optarg);
 			break;
 		case 'n':
-		        length = strtol_or_err(optarg, _("bad length value"));
+			length = strtosize_or_err(optarg, _("failed to parse length"));
 			break;
 		case 'o':
 			add("\"%07.7_Ax\n\"");
 			add("\"%07.7_ax \" 8/2 \" %06o \" \"\\n\"");
 			break;
 		case 's':
-			if ((skip = strtol(optarg, &p, 0)) < 0)
-				err(EXIT_FAILURE, _("bad skip value"));
-			switch(*p) {
-			case 'b':
-				skip *= 512;
-				break;
-			case 'k':
-				skip *= 1024;
-				break;
-			case 'm':
-				skip *= 1048576;
-				break;
-			}
+			skip = strtosize_or_err(optarg, _("failed to parse offset"));
 			break;
 		case 'v':
 			vflag = ALL;

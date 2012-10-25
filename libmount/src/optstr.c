@@ -62,6 +62,11 @@ static int mnt_optstr_parse_next(char **optstr,	 char **name, size_t *namesz,
 	if (valsz)
 		*valsz = 0;
 
+	/* trim leading commas as to not invalidate option
+	 * strings with multiple consecutive commas */
+	while (optstr0 && *optstr0 == ',')
+		optstr0++;
+
 	for (p = optstr0; p && *p; p++) {
 		if (!start)
 			start = p;		/* begin of the option item */
@@ -169,6 +174,8 @@ static int __mnt_optstr_append_option(char **optstr,
 	size_t sz, osz;
 
 	assert(name);
+	assert(*name);
+	assert(nsz);
 
 	osz = *optstr ? strlen(*optstr) : 0;
 
@@ -214,7 +221,7 @@ int mnt_optstr_append_option(char **optstr, const char *name, const char *value)
 {
 	size_t vsz, nsz;
 
-	if (!name)
+	if (!name || !*name)
 		return 0;
 
 	nsz = strlen(name);
@@ -283,6 +290,48 @@ int mnt_optstr_get_option(const char *optstr, const char *name,
 	return rc;
 }
 
+/**
+ * mnt_optstr_deduplicate_option:
+ * @optstr: string with comma separated list of options
+ * @name: requested option name
+ *
+ * Removes all instances of @name except the last one.
+ *
+ * Returns: 0 on success, 1 when not found the @name or negative number in case
+ * of error.
+ */
+int mnt_optstr_deduplicate_option(char **optstr, const char *name)
+{
+	int rc;
+	char *begin = NULL, *end = NULL, *opt = *optstr;
+
+	do {
+		struct libmnt_optloc ol;
+
+		mnt_init_optloc(&ol);
+
+		rc = mnt_optstr_locate_option(opt, name, &ol);
+		if (!rc) {
+			if (begin) {
+				/* remove previous instance */
+				size_t shift = strlen(*optstr);
+
+				mnt_optstr_remove_option_at(optstr, begin, end);
+
+				/* now all offset are not valied anymore - recount */
+				shift -= strlen(*optstr);
+				ol.begin -= shift;
+				ol.end -= shift;
+			}
+			begin = ol.begin;
+			end = ol.end;
+			opt = end && *end ? end + 1 : NULL;
+		}
+	} while (rc == 0 && opt && *opt);
+
+	return rc < 0 ? rc : begin ? 0 : 1;
+}
+
 /*
  * The result never starts or ends with comma or contains two commas
  *    (e.g. ",aaa,bbb" or "aaa,,bbb" or "aaa,")
@@ -300,7 +349,7 @@ int mnt_optstr_remove_option_at(char **optstr, char *begin, char *end)
 	sz = strlen(end);
 
 	memmove(begin, end, sz + 1);
-	if (!*begin && *(begin - 1) == ',')
+	if (!*begin && (begin > *optstr) && *(begin - 1) == ',')
 		*(begin - 1) = '\0';
 
 	return 0;
@@ -579,7 +628,7 @@ int mnt_optstr_get_flags(const char *optstr, unsigned long *flags,
 {
 	struct libmnt_optmap const *maps[2];
 	char *name, *str = (char *) optstr;
-	size_t namesz = 0;
+	size_t namesz = 0, valsz = 0;
 	int nmaps = 0;
 
 	assert(optstr);
@@ -596,7 +645,7 @@ int mnt_optstr_get_flags(const char *optstr, unsigned long *flags,
 		 */
 		maps[nmaps++] = mnt_get_builtin_optmap(MNT_USERSPACE_MAP);
 
-	while(!mnt_optstr_next_option(&str, &name, &namesz, NULL, NULL)) {
+	while(!mnt_optstr_next_option(&str, &name, &namesz, NULL, &valsz)) {
 		const struct libmnt_optmap *ent;
 		const struct libmnt_optmap *m;
 
@@ -610,9 +659,10 @@ int mnt_optstr_get_flags(const char *optstr, unsigned long *flags,
 			else
 				*flags |= ent->id;
 
-		} else if (nmaps == 2 && m == maps[1]) {
+		} else if (nmaps == 2 && m == maps[1] && valsz == 0) {
 			/*
-			 * Special case -- translate "user" to MS_ options
+			 * Special case -- translate "user" (but no user=) to
+			 * MS_ options
 			 */
 			if (ent->mask & MNT_INVERT)
 				continue;
@@ -730,7 +780,7 @@ int mnt_optstr_apply_flags(char **optstr, unsigned long flags,
 			/* don't add options which require values (e.g. offset=%d) */
 			p = strchr(ent->name, '=');
 			if (p) {
-				if (*(p - 1) == '[')
+				if (p > ent->name && *(p - 1) == '[')
 					p--;			/* name[=] */
 				else
 					continue;		/* name= */
@@ -766,11 +816,22 @@ err:
  *
  * Returns: 0 on success, negative number in case of error.
  */
-int mnt_optstr_fix_secontext(char **optstr, char *value, size_t valsz, char **next)
+#ifndef HAVE_LIBSELINUX
+int mnt_optstr_fix_secontext(char **optstr __attribute__ ((__unused__)),
+			     char *value   __attribute__ ((__unused__)),
+			     size_t valsz  __attribute__ ((__unused__)),
+			     char **next   __attribute__ ((__unused__)))
+{
+	return 0;
+}
+#else
+int mnt_optstr_fix_secontext(char **optstr,
+			     char *value,
+			     size_t valsz,
+			     char **next)
 {
 	int rc = 0;
 
-#ifdef HAVE_LIBSELINUX
 	security_context_t raw = NULL;
 	char *p, *val, *begin, *end;
 	size_t sz;
@@ -828,9 +889,10 @@ int mnt_optstr_fix_secontext(char **optstr, char *value, size_t valsz, char **ne
 	mnt_optstr_remove_option_at(optstr, begin, end);
 	rc = insert_value(optstr, begin, val, next);
 	free(val);
-#endif
+
 	return rc;
 }
+#endif
 
 static int set_uint_value(char **optstr, unsigned int num,
 			char *begin, char *end, char **next)
@@ -1167,6 +1229,24 @@ int test_remove(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
+int test_dedup(struct libmnt_test *ts, int argc, char *argv[])
+{
+	const char *name;
+	char *optstr;
+	int rc;
+
+	if (argc < 3)
+		return -EINVAL;
+	optstr = strdup(argv[1]);
+	name = argv[2];
+
+	rc = mnt_optstr_deduplicate_option(&optstr, name);
+	if (!rc)
+		printf("result: >%s<\n", optstr);
+	free(optstr);
+	return rc;
+}
+
 int test_fix(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *optstr;
@@ -1210,6 +1290,7 @@ int main(int argc, char *argv[])
 		{ "--set",    test_set,    "<optstr> <name> [<value>]  (un)set value" },
 		{ "--get",    test_get,    "<optstr> <name>            search name in optstr" },
 		{ "--remove", test_remove, "<optstr> <name>            remove name in optstr" },
+		{ "--dedup",  test_dedup,  "<optstr> <name>            deduplicate name in optstr" },
 		{ "--split",  test_split,  "<optstr>                   split into FS, VFS and userspace" },
 		{ "--flags",  test_flags,  "<optstr>                   convert options to MS_* flags" },
 		{ "--apply",  test_apply,  "--{linux,user} <optstr> <mask>    apply mask to optstr" },

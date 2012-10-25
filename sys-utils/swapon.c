@@ -1,11 +1,8 @@
-/*
- * A swapon(8)/swapoff(8) for Linux 0.99.
- */
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <getopt.h>
 #include <string.h>
-#include <mntent.h>
 #include <errno.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -15,16 +12,20 @@
 #include <stdint.h>
 #include <ctype.h>
 
+#include <libmount.h>
+
+#include "c.h"
+#include "nls.h"
 #include "bitops.h"
 #include "blkdev.h"
-#include "nls.h"
-#include "fsprobe.h"
 #include "pathnames.h"
-#include "swapheader.h"
-#include "mangle.h"
-#include "canonicalize.h"
 #include "xalloc.h"
-#include "c.h"
+#include "closestream.h"
+
+#include "swapheader.h"
+#include "swapon-common.h"
+#include "strutils.h"
+#include "tt.h"
 
 #define PATH_MKSWAP	"/sbin/mkswap"
 
@@ -52,10 +53,7 @@
 /* libc is insane, let's call the kernel */
 # include <sys/syscall.h>
 # define swapon(path, flags) syscall(SYS_swapon, path, flags)
-# define swapoff(path) syscall(SYS_swapoff, path)
 #endif
-
-#define streq(s, t)	(strcmp ((s), (t)) == 0)
 
 #define QUIET	1
 #define CANONIC	1
@@ -77,191 +75,186 @@ static int discard;
 /* If true, don't complain if the device/file doesn't exist */
 static int ifexists;
 static int fixpgsz;
-
 static int verbose;
-static char *progname;
 
-static const struct option longswaponopts[] = {
-		/* swapon only */
-	{ "priority", required_argument, 0, 'p' },
-	{ "discard", 0, 0, 'd' },
-	{ "ifexists", 0, 0, 'e' },
-	{ "summary", 0, 0, 's' },
-	{ "fixpgsz", 0, 0, 'f' },
-		/* also for swapoff */
-	{ "all", 0, 0, 'a' },
-	{ "help", 0, 0, 'h' },
-	{ "verbose", 0, 0, 'v' },
-	{ "version", 0, 0, 'V' },
-	{ NULL, 0, 0, 0 }
+/* column names */
+struct colinfo {
+        const char *name; /* header */
+        double     whint; /* width hint (N < 1 is in percent of termwidth) */
+        int        flags; /* TT_FL_* */
+        const char *help;
 };
+enum { COL_PATH, COL_TYPE, COL_SIZE, COL_USED, COL_PRIO };
+struct colinfo infos[] = {
+	[COL_PATH]     = { "NAME",	0.20, 0, N_("device file or partition path") },
+	[COL_TYPE]     = { "TYPE",	0.20, TT_FL_TRUNC, N_("type of the device")},
+	[COL_SIZE]     = { "SIZE",	0.20, TT_FL_RIGHT, N_("size of the swap area")},
+	[COL_USED]     = { "USED",	0.20, TT_FL_RIGHT, N_("bytes in use")},
+	[COL_PRIO]     = { "PRIO",	0.20, TT_FL_RIGHT, N_("swap priority")},
+};
+#define NCOLS ARRAY_SIZE(infos)
+static int columns[NCOLS], ncolumns;
 
-static const struct option *longswapoffopts = &longswaponopts[4];
+static int column_name_to_id(const char *name, size_t namesz)
+{
+	size_t i;
 
-static int cannot_find(const char *special);
+	assert(name);
 
-#define PRINT_USAGE_SPECIAL(_fp) \
-	fputs(_("\nThe <spec> parameter:\n" \
-		" -L <label>             LABEL of device to be used\n" \
-		" -U <uuid>              UUID of device to be used\n" \
-		" LABEL=<label>          LABEL of device to be used\n" \
-		" UUID=<uuid>            UUID of device to be used\n" \
-		" <device>               name of device to be used\n" \
-		" <file>                 name of file to be used\n\n"), _fp)
+	for (i = 0; i < NCOLS; i++) {
+		const char *cn = infos[i].name;
 
-static void
-swapon_usage(FILE *out, int n) {
-	fputs(_("\nUsage:\n"), out);
-	fprintf(out, _(" %s [options] [<spec>]\n"), progname);
-
-	fputs(_("\nOptions:\n"), out);
-	fputs(_(" -a, --all              enable all swaps from /etc/fstab\n"
-		" -d, --discard          discard freed pages before they are reused\n"
-		" -e, --ifexists         silently skip devices that do not exis\n"
-		" -f, --fixpgsz          reinitialize the swap space if necessary\n"
-		" -h, --help             display help and exit\n"
-		" -p, --priority <prio>  specify the priority of the swap device.\n"
-		" -s, --summary          display summary about used swap devices and exit\n"
-		" -v, --verbose          verbose mode\n"
-		" -V, --version          display version and exit\n"), out);
-
-	PRINT_USAGE_SPECIAL(out);
-
-	exit(n);
+		if (!strncasecmp(name, cn, namesz) && !*(cn + namesz))
+			return i;
+	}
+	warnx(_("unknown column: %s"), name);
+	return -1;
 }
 
-static void
-swapoff_usage(FILE *out, int n) {
-	fputs(_("\nUsage:\n"), out);
-	fprintf(out, _(" %s [options] [<spec>]\n"), progname);
+static inline int get_column_id(int num)
+{
+	assert(ARRAY_SIZE(columns) == NCOLS);
+	assert(num < ncolumns);
+	assert(columns[num] < (int)NCOLS);
 
-	fputs(_("\nOptions:\n"), out);
-	fputs(_(" -a, --all              disable all swaps from /proc/swaps\n"
-		" -h, --help             display help and exit\n"
-		" -v, --verbose          verbose mode\n"
-		" -V, --version          display version and exit\n"), out);
-
-	PRINT_USAGE_SPECIAL(out);
-
-	exit(n);
+	return columns[num];
 }
 
-/*
- * contents of /proc/swaps
- */
-static int numSwaps;
-static char **swapFiles;	/* array of swap file and partition names */
+static inline struct colinfo *get_column_info(unsigned num)
+{
+	return &infos[get_column_id(num)];
+}
 
-static void
-read_proc_swaps(void) {
-	FILE *swaps;
-	char line[1024];
-	char *p, **q;
-	size_t sz;
+static void add_tt_line(struct tt *tt, struct libmnt_fs *fs, int bytes)
+{
+	int i;
+	struct tt_line *line;
 
-	numSwaps = 0;
-	swapFiles = NULL;
+	assert(tt);
+	assert(fs);
 
-	swaps = fopen(_PATH_PROC_SWAPS, "r");
-	if (swaps == NULL)
-		return;		/* nothing wrong */
-
-	/* skip the first line */
-	if (!fgets(line, sizeof(line), swaps)) {
-		/* do not whine about an empty file */
-		if (ferror(swaps))
-			warn(_("%s: unexpected file format"), _PATH_PROC_SWAPS);
-		fclose(swaps);
+	line = tt_add_line(tt, NULL);
+	if (!line) {
+		warn(_("failed to add line to output"));
 		return;
 	}
-	/* make sure the first line is the header */
-	if (line[0] != '\0' && strncmp(line, "Filename\t", 9))
-		goto valid_first_line;
 
-	while (fgets(line, sizeof(line), swaps)) {
- valid_first_line:
-		/*
-		 * Cut the line "swap_device  ... more info" after device.
-		 * This will fail with names with embedded spaces.
-		 */
-		for (p = line; *p && *p != ' '; p++);
-		*p = '\0';
+	for (i = 0; i < ncolumns; i++) {
+		char *str = NULL;
+		int rc = 0;
+		off_t size;
 
-		/* the kernel can use " (deleted)" suffix for paths
-		 * in /proc/swaps, we have to remove this junk.
-		 */
-		sz = strlen(line);
-		if (sz > PATH_DELETED_SUFFIX_SZ) {
-		       p = line + (sz - PATH_DELETED_SUFFIX_SZ);
-		       if (strcmp(p, PATH_DELETED_SUFFIX) == 0)
-			       *p = '\0';
+		switch (get_column_id(i)) {
+		case COL_PATH:
+			rc = xasprintf(&str, "%s", mnt_fs_get_source(fs));
+			break;
+		case COL_TYPE:
+			rc = xasprintf(&str, "%s", mnt_fs_get_swaptype(fs));
+			break;
+		case COL_SIZE:
+			size = mnt_fs_get_size(fs);
+			size *= 1024;	/* convert to bytes */
+			if (bytes)
+				rc = xasprintf(&str, "%jd", size);
+			else
+				str = size_to_human_string(SIZE_SUFFIX_1LETTER, size);
+			break;
+		case COL_USED:
+			size = mnt_fs_get_usedsize(fs);
+			size *= 1024;	/* convert to bytes */
+			if (bytes)
+				rc = xasprintf(&str, "%jd", size);
+			else
+				str = size_to_human_string(SIZE_SUFFIX_1LETTER, size);
+			break;
+		case COL_PRIO:
+			rc = xasprintf(&str, "%d", mnt_fs_get_priority(fs));
+			break;
+		default:
+			break;
 		}
 
-		q = realloc(swapFiles, (numSwaps+1) * sizeof(*swapFiles));
-		if (q == NULL)
-			break;
-		swapFiles = q;
-
-		if ((p = unmangle(line, NULL)) == NULL)
-			break;
-
-		swapFiles[numSwaps++] = canonicalize_path(p);
-		free(p);
+		if (rc || str)
+			tt_line_set_data(line, i, str);
 	}
-	fclose(swaps);
+	return;
 }
 
-/* note that swapFiles are always canonicalized */
-static int
-is_in_proc_swaps(const char *fname) {
-	int i;
+static int display_summary(void)
+{
+	struct libmnt_table *st = get_swaps();
+	struct libmnt_iter *itr;
+	struct libmnt_fs *fs;
 
-	for (i = 0; i < numSwaps; i++)
-		if (swapFiles[i] && !strcmp(fname, swapFiles[i]))
-			return 1;
+	if (!st)
+		return -1;
+
+	itr = mnt_new_iter(MNT_ITER_FORWARD);
+	if (!itr)
+		err(EXIT_FAILURE, _("failed to initialize libmount iterator"));
+
+	if (mnt_table_get_nents(st) > 0)
+		printf(_("%s\t\t\t\tType\t\tSize\tUsed\tPriority\n"), _("Filename"));
+
+	while (mnt_table_next_fs(st, itr, &fs) == 0) {
+		printf("%-39s\t%s\t%jd\t%jd\t%d\n",
+			mnt_fs_get_source(fs),
+			mnt_fs_get_swaptype(fs),
+			mnt_fs_get_size(fs),
+			mnt_fs_get_usedsize(fs),
+			mnt_fs_get_priority(fs));
+	}
+
+	mnt_free_iter(itr);
 	return 0;
 }
 
-static int
-display_summary(void)
+static int show_table(int tt_flags, int bytes)
 {
-	FILE *swaps;
-	char line[1024] ;
+	struct libmnt_table *st = get_swaps();
+	struct libmnt_iter *itr;
+	struct libmnt_fs *fs;
 
-	if ((swaps = fopen(_PATH_PROC_SWAPS, "r")) == NULL) {
-		warn(_("%s: open failed"), _PATH_PROC_SWAPS);
+	int i, rc = 0;
+	struct tt *tt;
+
+	if (!st)
+		return -1;
+
+	itr = mnt_new_iter(MNT_ITER_FORWARD);
+	if (!itr)
+		err(EXIT_FAILURE, _("failed to initialize libmount iterator"));
+
+	tt = tt_new_table(tt_flags);
+	if (!tt) {
+		warn(_("failed to initialize output table"));
 		return -1;
 	}
 
-	while (fgets(line, sizeof(line), swaps)) {
-		char *p, *dev, *cn;
-		if (!strncmp(line, "Filename\t", 9)) {
-			printf("%s", line);
-			continue;
-		}
-		for (p = line; *p && *p != ' '; p++);
-		*p = '\0';
-		for (++p; *p && isblank((unsigned int) *p); p++);
+	for (i = 0; i < ncolumns; i++) {
+		struct colinfo *col = get_column_info(i);
 
-		dev = unmangle(line, NULL);
-		if (!dev)
-			continue;
-		cn = canonicalize_path(dev);
-		if (cn)
-			printf("%-39s %s", cn, p);
-		free(dev);
-		free(cn);
+		if (!tt_define_column(tt, col->name, col->whint, col->flags)) {
+			warnx(_("failed to initialize output column"));
+			rc = -1;
+			goto done;
+		}
 	}
 
-	fclose(swaps);
-	return 0 ;
+	while (mnt_table_next_fs(st, itr, &fs) == 0)
+		add_tt_line(tt, fs, bytes);
+
+	mnt_free_iter(itr);
+	tt_print_table(tt);
+ done:
+	tt_free_table(tt);
+	return rc;
 }
 
 /* calls mkswap */
-static int
-swap_reinitialize(const char *device) {
-	const char *label = fsprobe_get_label_by_devname(device);
-	const char *uuid  = fsprobe_get_uuid_by_devname(device);
+static int swap_reinitialize(const char *device,
+			     const char *label, const char *uuid)
+{
 	pid_t pid;
 	int status, ret;
 	char *cmd[7];
@@ -308,14 +301,13 @@ swap_reinitialize(const char *device) {
 	return -1; /* error */
 }
 
-static int
-swap_rewrite_signature(const char *devname, unsigned int pagesize)
+static int swap_rewrite_signature(const char *devname, unsigned int pagesize)
 {
 	int fd, rc = -1;
 
 	fd = open(devname, O_WRONLY);
 	if (fd == -1) {
-		warn(_("%s: open failed"), devname);
+		warn(_("cannot open %s"), devname);
 		return -1;
 	}
 
@@ -336,8 +328,7 @@ err:
 	return rc;
 }
 
-static int
-swap_detect_signature(const char *buf, int *sig)
+static int swap_detect_signature(const char *buf, int *sig)
 {
 	if (memcmp(buf, "SWAP-SPACE", 10) == 0 ||
             memcmp(buf, "SWAPSPACE2", 10) == 0)
@@ -355,8 +346,7 @@ swap_detect_signature(const char *buf, int *sig)
 	return 1;
 }
 
-static char *
-swap_get_header(int fd, int *sig, unsigned int *pagesize)
+static char *swap_get_header(int fd, int *sig, unsigned int *pagesize)
 {
 	char *buf;
 	ssize_t datasz;
@@ -394,8 +384,8 @@ err:
 }
 
 /* returns real size of swap space */
-unsigned long long
-swap_get_size(const char *hdr, const char *devname, unsigned int pagesize)
+static unsigned long long swap_get_size(const char *hdr, const char *devname,
+					unsigned int pagesize)
 {
 	unsigned int last_page = 0;
 	int swap_version = 0;
@@ -422,8 +412,29 @@ swap_get_size(const char *hdr, const char *devname, unsigned int pagesize)
 	return ((unsigned long long) last_page + 1) * pagesize;
 }
 
-static int
-swapon_checks(const char *special)
+static void swap_get_info(const char *hdr, char **label, char **uuid)
+{
+	struct swap_header_v1_2 *s = (struct swap_header_v1_2 *) hdr;
+
+	if (s && *s->volume_name && label)
+		*label = xstrdup(s->volume_name);
+
+	if (s && *s->uuid && uuid) {
+		const unsigned char *u = s->uuid;
+		char str[37];
+
+		snprintf(str, sizeof(str),
+			"%02x%02x%02x%02x-"
+			"%02x%02x-%02x%02x-"
+			"%02x%02x-%02x%02x%02x%02x%02x%02x",
+			u[0], u[1], u[2], u[3],
+			u[4], u[5], u[6], u[7],
+			u[8], u[9], u[10], u[11], u[12], u[13], u[14], u[15]);
+		*uuid = xstrdup(str);
+	}
+}
+
+static int swapon_checks(const char *special)
 {
 	struct stat st;
 	int fd = -1, sig;
@@ -432,7 +443,7 @@ swapon_checks(const char *special)
 	unsigned long long devsize = 0;
 
 	if (stat(special, &st) < 0) {
-		warn(_("%s: stat failed"), special);
+		warn(_("stat failed %s"), special);
 		goto err;
 	}
 
@@ -463,7 +474,7 @@ swapon_checks(const char *special)
 
 	fd = open(special, O_RDONLY);
 	if (fd == -1) {
-		warn(_("%s: open failed"), special);
+		warn(_("cannot open %s"), special);
 		goto err;
 	}
 
@@ -494,9 +505,17 @@ swapon_checks(const char *special)
 					special, swapsize);
 		} else if (syspg < 0 || (unsigned) syspg != pagesize) {
 			if (fixpgsz) {
+				char *label = NULL, *uuid = NULL;
+				int rc;
+
+				swap_get_info(hdr, &label, &uuid);
+
 				warnx(_("%s: swap format pagesize does not match."),
 					special);
-				if (swap_reinitialize(special) < 0)
+				rc = swap_reinitialize(special, label, uuid);
+				free(label);
+				free(uuid);
+				if (rc < 0)
 					goto err;
 			} else
 				warnx(_("%s: swap format pagesize does not match. "
@@ -525,17 +544,18 @@ err:
 	return -1;
 }
 
-static int
-do_swapon(const char *orig_special, int prio, int fl_discard, int canonic) {
+static int do_swapon(const char *orig_special, int prio,
+		     int fl_discard, int canonic)
+{
 	int status;
 	const char *special = orig_special;
 	int flags = 0;
 
 	if (verbose)
-		printf(_("%s on %s\n"), progname, orig_special);
+		printf(_("swapon %s\n"), orig_special);
 
 	if (!canonic) {
-		special = fsprobe_get_devname_by_spec(orig_special);
+		special = mnt_resolve_spec(orig_special, mntcache);
 		if (!special)
 			return cannot_find(orig_special);
 	}
@@ -562,157 +582,161 @@ do_swapon(const char *orig_special, int prio, int fl_discard, int canonic) {
 	return status;
 }
 
-static int
-cannot_find(const char *special) {
-	warnx(_("cannot find the device for %s"), special);
-	return -1;
-}
-
-static int
-swapon_by_label(const char *label, int prio, int dsc) {
-	const char *special = fsprobe_get_devname_by_label(label);
+static int swapon_by_label(const char *label, int prio, int dsc)
+{
+	const char *special = mnt_resolve_tag("LABEL", label, mntcache);
 	return special ? do_swapon(special, prio, dsc, CANONIC) :
 			 cannot_find(label);
 }
 
-static int
-swapon_by_uuid(const char *uuid, int prio, int dsc) {
-	const char *special = fsprobe_get_devname_by_uuid(uuid);
+static int swapon_by_uuid(const char *uuid, int prio, int dsc)
+{
+	const char *special = mnt_resolve_tag("UUID", uuid, mntcache);
 	return special ? do_swapon(special, prio, dsc, CANONIC) :
 			 cannot_find(uuid);
 }
 
-static int
-do_swapoff(const char *orig_special, int quiet, int canonic) {
-        const char *special = orig_special;
-
-	if (verbose)
-		printf(_("%s on %s\n"), progname, orig_special);
-
-	if (!canonic) {
-		special = fsprobe_get_devname_by_spec(orig_special);
-		if (!special)
-			return cannot_find(orig_special);
-	}
-
-	if (swapoff(special) == 0)
-		return 0;	/* success */
-
-	if (errno == EPERM)
-		errx(EXIT_FAILURE, _("Not superuser."));
-
-	if (!quiet || errno == ENOMEM)
-		warn(_("%s: swapoff failed"), orig_special);
-
-	return -1;
-}
-
-static int
-swapoff_by_label(const char *label, int quiet) {
-	const char *special = fsprobe_get_devname_by_label(label);
-	return special ? do_swapoff(special, quiet, CANONIC) : cannot_find(label);
-}
-
-static int
-swapoff_by_uuid(const char *uuid, int quiet) {
-	const char *special = fsprobe_get_devname_by_uuid(uuid);
-	return special ? do_swapoff(special, quiet, CANONIC) : cannot_find(uuid);
-}
-
-static int
-swapon_all(void) {
-	FILE *fp;
-	struct mntent *fstab;
+static int swapon_all(void)
+{
+	struct libmnt_table *tb = get_fstab();
+	struct libmnt_iter *itr;
+	struct libmnt_fs *fs;
 	int status = 0;
 
-	read_proc_swaps();
+	if (!tb)
+		err(EXIT_FAILURE, _("failed to parse %s"), mnt_get_fstab_path());
 
-	fp = setmntent(_PATH_MNTTAB, "r");
-	if (fp == NULL)
-		err(2, _("%s: open failed"), _PATH_MNTTAB);
+	itr = mnt_new_iter(MNT_ITER_FORWARD);
+	if (!itr)
+		err(EXIT_FAILURE, _("failed to initialize libmount iterator"));
 
-	while ((fstab = getmntent(fp)) != NULL) {
-		const char *special;
-		int skip = 0, nofail = ifexists;
-		int pri = priority, dsc = discard;
-		char *opt, *opts;
+	while (mnt_table_find_next_fs(tb, itr, match_swap, NULL, &fs) == 0) {
+		/* defaults */
+		int pri = priority, dsc = discard, nofail = ifexists;
+		char *p, *src;
 
-		if (!streq(fstab->mnt_type, MNTTYPE_SWAP))
+		if (mnt_fs_get_option(fs, "noauto", NULL, NULL) == 0)
 			continue;
+		if (mnt_fs_get_option(fs, "discard", NULL, NULL) == 0)
+			dsc = 1;
+		if (mnt_fs_get_option(fs, "nofail", NULL, NULL) == 0)
+			nofail = 1;
+		if (mnt_fs_get_option(fs, "pri", &p, NULL) == 0 && p)
+			pri = atoi(p);
 
-		opts = strdup(fstab->mnt_opts);
-
-		for (opt = strtok(opts, ","); opt != NULL;
-		     opt = strtok(NULL, ",")) {
-			if (strncmp(opt, "pri=", 4) == 0)
-				pri = atoi(opt+4);
-			if (strcmp(opt, "discard") == 0)
-				dsc = 1;
-			if (strcmp(opt, "noauto") == 0)
-				skip = 1;
-			if (strcmp(opt, "nofail") == 0)
-				nofail = 1;
-		}
-		free(opts);
-
-		if (skip)
-			continue;
-
-		special = fsprobe_get_devname_by_spec(fstab->mnt_fsname);
-		if (!special) {
+		src = mnt_resolve_spec(mnt_fs_get_source(fs), mntcache);
+		if (!src) {
 			if (!nofail)
-				status |= cannot_find(fstab->mnt_fsname);
+				status |= cannot_find(mnt_fs_get_source(fs));
 			continue;
 		}
 
-		if (!is_in_proc_swaps(special) &&
-		    (!nofail || !access(special, R_OK)))
-			status |= do_swapon(special, pri, dsc, CANONIC);
-
-		free((void *) special);
+		if (!is_active_swap(src) &&
+		    (!nofail || !access(src, R_OK)))
+			status |= do_swapon(src, pri, dsc, CANONIC);
 	}
-	fclose(fp);
 
+	mnt_free_iter(itr);
 	return status;
 }
 
-static const char **llist = NULL;
-static int llct = 0;
-static const char **ulist = NULL;
-static int ulct = 0;
+static void __attribute__ ((__noreturn__)) usage(FILE * out)
+{
+	fputs(USAGE_HEADER, out);
 
-static void addl(const char *label) {
-	llist = (const char **) xrealloc(llist, (++llct) * sizeof(char *));
-	llist[llct-1] = label;
+	fprintf(out, _(" %s [options] [<spec>]\n"), program_invocation_short_name);
+
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -a, --all              enable all swaps from /etc/fstab\n"
+		" -d, --discard          discard freed pages before they are reused\n"
+		" -e, --ifexists         silently skip devices that do not exist\n"
+		" -f, --fixpgsz          reinitialize the swap space if necessary\n"
+		" -p, --priority <prio>  specify the priority of the swap device\n"
+		" -s, --summary          display summary about used swap devices\n"
+		"     --show[=<columns>] display summary in definable table\n"
+		"     --noheadings       don't print headings, use with --show\n"
+		"     --raw              use the raw output format, use with --show\n"
+		"     --bytes            display swap size in bytes in --show output\n"
+		" -v, --verbose          verbose mode\n"), out);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
+
+	fputs(_("\nThe <spec> parameter:\n" \
+		" -L <label>             synonym for LABEL=<label>\n"
+		" -U <uuid>              synonym for UUID=<uuid>\n"
+		" LABEL=<label>          specifies device by swap area label\n"
+		" UUID=<uuid>            specifies device by swap area UUID\n"
+		" PARTLABEL=<label>      specifies device by partition label\n"
+		" PARTUUID=<uuid>        specifies device by partition UUID\n"
+		" <device>               name of device to be used\n"
+		" <file>                 name of file to be used\n"), out);
+
+	fputs(_("\nAvailable columns (for --show):\n"), out);
+	for (size_t i = 0; i < NCOLS; i++)
+		fprintf(out, " %4s  %s\n", infos[i].name, _(infos[i].help));
+
+	fprintf(out, USAGE_MAN_TAIL("swapon(8)"));
+	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
-static void addu(const char *uuid) {
-	ulist = (const char **) xrealloc(ulist, (++ulct) * sizeof(char *));
-	ulist[ulct-1] = uuid;
-}
+int main(int argc, char *argv[])
+{
+	int status = 0, c;
+	int show = 0, tt_flags = 0;
+	int bytes = 0;
+	size_t i;
 
-static int
-main_swapon(int argc, char *argv[]) {
-	int status = 0;
-	int c, i;
+	enum {
+		SHOW_OPTION = CHAR_MAX + 1,
+		RAW_OPTION,
+		NOHEADINGS_OPTION,
+		BYTES_OPTION
+	};
+
+	static const struct option long_opts[] = {
+		{ "priority", 1, 0, 'p' },
+		{ "discard",  0, 0, 'd' },
+		{ "ifexists", 0, 0, 'e' },
+		{ "summary",  0, 0, 's' },
+		{ "fixpgsz",  0, 0, 'f' },
+		{ "all",      0, 0, 'a' },
+		{ "help",     0, 0, 'h' },
+		{ "verbose",  0, 0, 'v' },
+		{ "version",  0, 0, 'V' },
+		{ "show",     2, 0, SHOW_OPTION },
+		{ "noheadings", 0, 0, NOHEADINGS_OPTION },
+		{ "raw",      0, 0, RAW_OPTION },
+		{ "bytes",    0, 0, BYTES_OPTION },
+		{ NULL, 0, 0, 0 }
+	};
+
+	setlocale(LC_ALL, "");
+	bindtextdomain(PACKAGE, LOCALEDIR);
+	textdomain(PACKAGE);
+	atexit(close_stdout);
+
+	mnt_init_debug(0);
+	mntcache = mnt_new_cache();
 
 	while ((c = getopt_long(argc, argv, "ahdefp:svVL:U:",
-				longswaponopts, NULL)) != -1) {
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'a':		/* all */
 			++all;
 			break;
 		case 'h':		/* help */
-			swapon_usage(stdout, 0);
+			usage(stdout);
 			break;
 		case 'p':		/* priority */
 			priority = atoi(optarg);
 			break;
 		case 'L':
-			addl(optarg);
+			add_label(optarg);
 			break;
 		case 'U':
-			addu(optarg);
+			add_uuid(optarg);
 			break;
 		case 'd':
 			discard = 1;
@@ -725,154 +749,75 @@ main_swapon(int argc, char *argv[]) {
 			break;
 		case 's':		/* status report */
 			status = display_summary();
-			exit(status);
+			return status;
 		case 'v':		/* be chatty */
 			++verbose;
 			break;
+		case SHOW_OPTION:
+			if (optarg) {
+				ncolumns = string_to_idarray(optarg,
+							     columns,
+							     ARRAY_SIZE(columns),
+							     column_name_to_id);
+				if (ncolumns < 0)
+					return EXIT_FAILURE;
+			}
+			show = 1;
+			break;
+		case NOHEADINGS_OPTION:
+			tt_flags |= TT_FL_NOHEADINGS;
+			break;
+		case RAW_OPTION:
+			tt_flags |= TT_FL_RAW;
+			break;
+		case BYTES_OPTION:
+			bytes = 1;
+			break;
 		case 'V':		/* version */
-			printf(_("%s (%s)\n"), progname, PACKAGE_STRING);
-			exit(EXIT_SUCCESS);
+			printf(UTIL_LINUX_VERSION);
+			return EXIT_SUCCESS;
 		case 0:
 			break;
 		case '?':
 		default:
-			swapon_usage(stderr, 1);
+			usage(stderr);
 		}
 	}
 	argv += optind;
 
-	if (!all && !llct && !ulct && *argv == NULL)
-		swapon_usage(stderr, 2);
+	if (show) {
+		if (!ncolumns) {
+			/* default columns */
+			columns[ncolumns++] = COL_PATH;
+			columns[ncolumns++] = COL_TYPE;
+			columns[ncolumns++] = COL_SIZE;
+			columns[ncolumns++] = COL_USED;
+			columns[ncolumns++] = COL_PRIO;
+		}
+		status = show_table(tt_flags, bytes);
+		return status;
+	}
 
-	if (ifexists && (!all || strcmp(progname, "swapon")))
-		swapon_usage(stderr, 1);
+	if (!all && !numof_labels() && !numof_uuids() && *argv == NULL)
+		usage(stderr);
+
+	if (ifexists && !all)
+		usage(stderr);
 
 	if (all)
 		status |= swapon_all();
 
-	for (i = 0; i < llct; i++)
-		status |= swapon_by_label(llist[i], priority, discard);
+	for (i = 0; i < numof_labels(); i++)
+		status |= swapon_by_label(get_label(i), priority, discard);
 
-	for (i = 0; i < ulct; i++)
-		status |= swapon_by_uuid(ulist[i], priority, discard);
+	for (i = 0; i < numof_uuids(); i++)
+		status |= swapon_by_uuid(get_uuid(i), priority, discard);
 
 	while (*argv != NULL)
 		status |= do_swapon(*argv++, priority, discard, !CANONIC);
 
-	return status;
-}
-
-static int
-main_swapoff(int argc, char *argv[]) {
-	FILE *fp;
-	struct mntent *fstab;
-	int status = 0;
-	int c, i;
-
-	while ((c = getopt_long(argc, argv, "ahvVL:U:",
-				 longswapoffopts, NULL)) != -1) {
-		switch (c) {
-		case 'a':		/* all */
-			++all;
-			break;
-		case 'h':		/* help */
-			swapoff_usage(stdout, 0);
-			break;
-		case 'v':		/* be chatty */
-			++verbose;
-			break;
-		case 'V':		/* version */
-			printf(_("%s (%s)\n"), progname, PACKAGE_STRING);
-			exit(EXIT_SUCCESS);
-		case 'L':
-			addl(optarg);
-			break;
-		case 'U':
-			addu(optarg);
-			break;
-		case 0:
-			break;
-		case '?':
-		default:
-			swapoff_usage(stderr, 1);
-		}
-	}
-	argv += optind;
-
-	if (!all && !llct && !ulct && *argv == NULL)
-		swapoff_usage(stderr, 2);
-
-	/*
-	 * swapoff any explicitly given arguments.
-	 * Complain in case the swapoff call fails.
-	 */
-	for (i = 0; i < llct; i++)
-		status |= swapoff_by_label(llist[i], !QUIET);
-
-	for (i = 0; i < ulct; i++)
-		status |= swapoff_by_uuid(ulist[i], !QUIET);
-
-	while (*argv != NULL)
-		status |= do_swapoff(*argv++, !QUIET, !CANONIC);
-
-	if (all) {
-		/*
-		 * In case /proc/swaps exists, unswap stuff listed there.
-		 * We are quiet but report errors in status.
-		 * Errors might mean that /proc/swaps
-		 * exists as ordinary file, not in procfs.
-		 * do_swapoff() exits immediately on EPERM.
-		 */
-		read_proc_swaps();
-		for(i=0; i<numSwaps; i++)
-			status |= do_swapoff(swapFiles[i], QUIET, CANONIC);
-
-		/*
-		 * Unswap stuff mentioned in /etc/fstab.
-		 * Probably it was unmounted already, so errors are not bad.
-		 * Doing swapoff -a twice should not give error messages.
-		 */
-		fp = setmntent(_PATH_MNTTAB, "r");
-		if (fp == NULL)
-			err(2, _("%s: open failed"), _PATH_MNTTAB);
-
-		while ((fstab = getmntent(fp)) != NULL) {
-			const char *special;
-
-			if (!streq(fstab->mnt_type, MNTTYPE_SWAP))
-				continue;
-
-			special = fsprobe_get_devname_by_spec(fstab->mnt_fsname);
-			if (!special)
-				continue;
-
-			if (!is_in_proc_swaps(special))
-				do_swapoff(special, QUIET, CANONIC);
-		}
-		fclose(fp);
-	}
+	free_tables();
+	mnt_free_cache(mntcache);
 
 	return status;
-}
-
-int
-main(int argc, char *argv[]) {
-
-	setlocale(LC_ALL, "");
-	bindtextdomain(PACKAGE, LOCALEDIR);
-	textdomain(PACKAGE);
-
-	progname = program_invocation_short_name;
-	if (!progname) {
-		char *p = strrchr(argv[0], '/');
-		progname = p ? p+1 : argv[0];
-	}
-
-	if (streq(progname, "swapon"))
-		return main_swapon(argc, argv);
-	else if (streq(progname, "swapoff"))
-		return main_swapoff(argc, argv);
-
-	errx(EXIT_FAILURE, _("'%s' is unsupported program name "
-			"(must be 'swapon' or 'swapoff')."), progname);
 }

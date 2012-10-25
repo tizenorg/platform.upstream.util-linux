@@ -42,19 +42,20 @@
 #include <sys/ioctl.h>
 
 #include <ctype.h>
-#include <limits.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <getopt.h>
-#include "nls.h"
 
+#include "nls.h"
 #include "widechar.h"
 #include "c.h"
 #include "xalloc.h"
 #include "strutils.h"
+#include "closestream.h"
+#include "ttyutils.h"
 
 #ifdef HAVE_WIDECHAR
 #define wcs_width(s) wcswidth(s,wcslen(s))
@@ -104,10 +105,9 @@ static void __attribute__((__noreturn__)) usage(int rc)
 
 int main(int argc, char **argv)
 {
-	struct winsize win;
 	int ch, tflag = 0, xflag = 0;
 	int i;
-	long termwidth = 80;
+	int termwidth = 80;
 	int entries = 0;		/* number of records */
 	unsigned int eval = 0;		/* exit value */
 	int maxlength = 0;		/* longest record */
@@ -121,9 +121,9 @@ int main(int argc, char **argv)
 	{
 		{ "help",	0, 0, 'h' },
 		{ "version",    0, 0, 'V' },
-		{ "columns",	0, 0, 'c' },
+		{ "columns",	1, 0, 'c' },
 		{ "table",	0, 0, 't' },
-		{ "separator",	0, 0, 's' },
+		{ "separator",	1, 0, 's' },
 		{ "fillrows",	0, 0, 'x' },
 		{ NULL,		0, 0, 0 },
 	};
@@ -131,15 +131,11 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
-	if (ioctl(STDIN_FILENO, TIOCGWINSZ, &win) == -1 || !win.ws_col) {
-		char *p;
-
-		if ((p = getenv("COLUMNS")) != NULL)
-			termwidth = strtol_or_err(p,
-					_("terminal environment COLUMNS failed"));
-	} else
-		termwidth = win.ws_col;
+	termwidth = get_terminal_width();
+	if (termwidth <= 0)
+		termwidth = 80;
 
 	while ((ch = getopt_long(argc, argv, "hVc:s:tx", longopts, NULL)) != -1)
 		switch(ch) {
@@ -151,11 +147,7 @@ int main(int argc, char **argv)
 				 PACKAGE_STRING);
 				 return EXIT_SUCCESS;
 		case 'c':
-			termwidth = strtol_or_err(optarg,
-						  _("bad columns width value"));
-			if (termwidth < 1)
-				errx(EXIT_FAILURE,
-				     _("-%c positive integer expected as an argument"), ch);
+			termwidth = strtou32_or_err(optarg, _("invalid columns argument"));
 			break;
 		case 's':
 			separator = mbs_to_wcs(optarg);
@@ -202,9 +194,6 @@ int main(int argc, char **argv)
 	for (i = 0; i < entries; i++)
 		free(list[i]);
 	free(list);
-
-	if (ferror(stdout) || fclose(stdout))
-		eval += EXIT_FAILURE;
 
 	if (eval == 0)
 		return EXIT_SUCCESS;

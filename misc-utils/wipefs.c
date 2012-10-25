@@ -14,9 +14,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -35,9 +35,11 @@
 #include "nls.h"
 #include "xalloc.h"
 #include "strutils.h"
-#include "writeall.h"
+#include "all-io.h"
 #include "match.h"
 #include "c.h"
+#include "closestream.h"
+#include "optutils.h"
 
 struct wipe_desc {
 	loff_t		offset;		/* magic string offset */
@@ -55,8 +57,10 @@ struct wipe_desc {
 	struct wipe_desc	*next;
 };
 
-#define WP_MODE_PRETTY		0		/* default */
-#define WP_MODE_PARSABLE	1
+enum {
+	WP_MODE_PRETTY,		/* default */
+	WP_MODE_PARSABLE
+};
 
 static const char *type_pattern;
 
@@ -116,6 +120,8 @@ print_all(struct wipe_desc *wp, int mode)
 		case WP_MODE_PARSABLE:
 			print_parsable(wp, n++);
 			break;
+		default:
+			abort();
 		}
 		wp = wp->next;
 	}
@@ -136,6 +142,19 @@ add_offset(struct wipe_desc *wp0, loff_t offset, int zap)
 	wp->offset = offset;
 	wp->next = wp0;
 	wp->zap = zap;
+	return wp;
+}
+
+static struct wipe_desc *
+clone_offset(struct wipe_desc *wp0)
+{
+	struct wipe_desc *wp = NULL;
+
+	while(wp0) {
+		wp = add_offset(wp, wp0->offset, wp0->zap);
+		wp0 = wp0->next;
+	}
+
 	return wp;
 }
 
@@ -248,56 +267,6 @@ read_offsets(struct wipe_desc *wp, const char *devname)
 	return wp;
 }
 
-static struct wipe_desc *
-do_wipe(struct wipe_desc *wp, const char *devname, int noact, int all)
-{
-	blkid_probe pr = new_probe(devname, O_RDWR);
-	struct wipe_desc *w;
-
-	if (!pr)
-		return NULL;
-
-	while (blkid_do_probe(pr) == 0) {
-		w = get_desc_for_probe(wp, pr);
-		if (!w)
-			break;
-		wp = w;
-		if (!wp->on_disk)
-			continue;
-		wp->zap = all ? 1 : wp->zap;
-		if (!wp->zap)
-			continue;
-
-		if (blkid_do_wipe(pr, noact))
-			warn(_("failed to erase %s magic string at offset 0x%08jx"),
-			     wp->type, wp->offset);
-		else {
-			size_t i;
-
-			printf(_("%zd bytes were erased at offset 0x%08jx (%s): "),
-				wp->len, wp->offset, wp->type);
-
-			for (i = 0; i < wp->len; i++) {
-				printf("%02x", wp->magic[i]);
-				if (i + 1 < wp->len)
-					fputc(' ', stdout);
-			}
-			putchar('\n');
-		}
-	}
-
-	for (w = wp; w != NULL; w = w->next) {
-		if (!w->on_disk)
-			warnx(_("offset 0x%jx not found"), w->offset);
-	}
-
-	fsync(blkid_probe_get_fd(pr));
-	close(blkid_probe_get_fd(pr));
-	blkid_free_probe(pr);
-
-	return wp;
-}
-
 static void
 free_wipe(struct wipe_desc *wp)
 {
@@ -315,14 +284,72 @@ free_wipe(struct wipe_desc *wp)
 	}
 }
 
-static loff_t
-strtoll_offset(const char *str)
+static void do_wipe_real(blkid_probe pr, const char *devname, struct wipe_desc *w, int noact, int quiet)
 {
-	uintmax_t sz;
+	size_t i;
 
-	if (strtosize(str, &sz))
-		errx(EXIT_FAILURE, _("invalid offset value '%s' specified"), str);
-	return sz;
+	if (blkid_do_wipe(pr, noact))
+		warn(_("%s: failed to erase %s magic string at offset 0x%08jx"),
+		     devname, w->type, w->offset);
+
+	if (quiet)
+		return;
+
+	printf(_("%s: %zd bytes were erased at offset 0x%08jx (%s): "),
+		devname, w->len, w->offset, w->type);
+
+	for (i = 0; i < w->len; i++) {
+		printf("%02x", w->magic[i]);
+		if (i + 1 < w->len)
+			fputc(' ', stdout);
+	}
+	putchar('\n');
+}
+
+static struct wipe_desc *
+do_wipe(struct wipe_desc *wp, const char *devname, int noact, int all, int quiet)
+{
+	blkid_probe pr = new_probe(devname, O_RDWR);
+	struct wipe_desc *w, *wp0 = clone_offset(wp);
+	int zap = all ? 1 : wp->zap;
+
+	if (!pr)
+		return NULL;
+
+	while (blkid_do_probe(pr) == 0) {
+		wp = get_desc_for_probe(wp, pr);
+		if (!wp)
+			break;
+
+		/* Check if offset is in provided list */
+		w = wp0;
+		while(w && w->offset != wp->offset)
+			w = w->next;
+		if (wp0 && !w)
+			continue;
+
+		/* Mark done if found in provided list */
+		if (w)
+			w->on_disk = wp->on_disk;
+
+		if (!wp->on_disk)
+			continue;
+
+		if (zap)
+			do_wipe_real(pr, devname, wp, noact, quiet);
+	}
+
+	for (w = wp0; w != NULL; w = w->next) {
+		if (!w->on_disk && !quiet)
+			warnx(_("%s: offset 0x%jx not found"), devname, w->offset);
+	}
+
+	fsync(blkid_probe_get_fd(pr));
+	close(blkid_probe_get_fd(pr));
+	blkid_free_probe(pr);
+	free_wipe(wp0);
+
+	return wp;
 }
 
 
@@ -339,6 +366,7 @@ usage(FILE *out)
 		" -n, --no-act        do everything except the actual write() call\n"
 		" -o, --offset <num>  offset to erase, in bytes\n"
 		" -p, --parsable      print out in parsable instead of printable format\n"
+		" -q, --quiet         suppress output messages\n"
 		" -t, --types <list>  limit the set of filesystem, RAIDs or partition tables\n"
 		" -V, --version       output version information and exit\n"), out);
 
@@ -351,9 +379,9 @@ usage(FILE *out)
 int
 main(int argc, char **argv)
 {
-	struct wipe_desc *wp = NULL;
-	int c, all = 0, has_offset = 0, noact = 0, mode = 0;
-	const char *devname;
+	struct wipe_desc *wp0 = NULL, *wp;
+	int c, all = 0, has_offset = 0, noact = 0, quiet = 0;
+	int mode = WP_MODE_PRETTY;
 
 	static const struct option longopts[] = {
 	    { "all",       0, 0, 'a' },
@@ -361,16 +389,27 @@ main(int argc, char **argv)
 	    { "no-act",    0, 0, 'n' },
 	    { "offset",    1, 0, 'o' },
 	    { "parsable",  0, 0, 'p' },
+	    { "quiet",     0, 0, 'q' },
 	    { "types",     1, 0, 't' },
 	    { "version",   0, 0, 'V' },
 	    { NULL,        0, 0, 0 }
 	};
 
+	static const ul_excl_t excl[] = {       /* rows and cols in in ASCII order */
+		{ 'a','o' },
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
+
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "ahno:pt:V", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "ahno:pqt:V", longopts, NULL)) != -1) {
+
+		err_exclusive_options(c, longopts, excl, excl_st);
+
 		switch(c) {
 		case 'a':
 			all++;
@@ -382,11 +421,15 @@ main(int argc, char **argv)
 			noact++;
 			break;
 		case 'o':
-			wp = add_offset(wp, strtoll_offset(optarg), 1);
+			wp0 = add_offset(wp0, strtosize_or_err(optarg,
+					 _("invalid offset argument")), 1);
 			has_offset++;
 			break;
 		case 'p':
 			mode = WP_MODE_PARSABLE;
+			break;
+		case 'q':
+			quiet++;
 			break;
 		case 't':
 			type_pattern = optarg;
@@ -401,30 +444,29 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (wp && all)
-		errx(EXIT_FAILURE, _("--offset and --all are mutually exclusive"));
 	if (optind == argc)
 		usage(stderr);
-
-	devname = argv[optind++];
-
-	if (optind != argc)
-		errx(EXIT_FAILURE, _("only one device as argument is currently supported."));
 
 	if (!all && !has_offset) {
 		/*
 		 * Print only
 		 */
-		wp = read_offsets(wp, devname);
-		if (wp)
-			print_all(wp, mode);
+		while (optind < argc) {
+			wp0 = read_offsets(NULL, argv[optind++]);
+			if (wp0)
+				print_all(wp0, mode);
+			free_wipe(wp0);
+		}
 	} else {
 		/*
 		 * Erase
 		 */
-		wp = do_wipe(wp, devname, noact, all);
+		while (optind < argc) {
+			wp = clone_offset(wp0);
+			wp = do_wipe(wp, argv[optind++], noact, all, quiet);
+			free_wipe(wp);
+		}
 	}
 
-	free_wipe(wp);
 	return EXIT_SUCCESS;
 }

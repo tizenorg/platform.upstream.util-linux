@@ -49,7 +49,9 @@
 #include <stdlib.h>
 #include <sys/syslog.h>
 #include <sys/sysmacros.h>
-#include <linux/major.h>
+#ifdef HAVE_LINUX_MAJOR_H
+# include <linux/major.h>
+#endif
 #include <netdb.h>
 #include <lastlog.h>
 #include <security/pam_appl.h>
@@ -66,7 +68,8 @@
 #include "strutils.h"
 #include "nls.h"
 #include "xalloc.h"
-#include "writeall.h"
+#include "all-io.h"
+#include "fileutils.h"
 
 #include "logindefs.h"
 
@@ -124,7 +127,7 @@ struct login_context {
  * This bounds the time given to login.  Not a define so it can
  * be patched on machines where it's too small.
  */
-static int timeout = LOGIN_TIMEOUT;
+static unsigned int timeout = LOGIN_TIMEOUT;
 static int child_pid = 0;
 static volatile int got_sig = 0;
 
@@ -169,8 +172,8 @@ static void timedout(int sig __attribute__ ((__unused__)))
 {
 	signal(SIGALRM, timedout2);
 	alarm(10);
-	/* TRANSLATORS: The standard value for %d is 60. */
-	warnx(_("timed out after %d seconds"), timeout);
+	/* TRANSLATORS: The standard value for %u is 60. */
+	warnx(_("timed out after %u seconds"), timeout);
 	signal(SIGALRM, SIG_IGN);
 	alarm(0);
 	timedout2(0);
@@ -186,12 +189,12 @@ static void timedout(int sig __attribute__ ((__unused__)))
  */
 static void sig_handler(int signal)
 {
-	if (child_pid) {
-		if (signal == SIGTERM)
-			signal = SIGHUP;	/* because the shell often ignores SIGTERM */
+	if (child_pid)
 		kill(-child_pid, signal);
-	} else
+	else
 		got_sig = 1;
+	if (signal == SIGTERM)
+		kill(-child_pid, SIGHUP);	/* because the shell often ignores SIGTERM */
 }
 
 /*
@@ -200,7 +203,7 @@ static void sig_handler(int signal)
  */
 static void __attribute__ ((__noreturn__)) sleepexit(int eval)
 {
-	sleep(getlogindefs_num("FAIL_DELAY", LOGIN_EXIT_TIMEOUT));
+	sleep((unsigned int)getlogindefs_num("FAIL_DELAY", LOGIN_EXIT_TIMEOUT));
 	exit(eval);
 }
 
@@ -316,15 +319,12 @@ static void chown_tty(struct login_context *cxt)
 
 	grname = getlogindefs_str("TTYGROUP", TTYGRPNAME);
 	if (grname && *grname) {
-		if (*grname >= 0 && *grname <= 9)		/* group by ID */
-			gid = getlogindefs_num("TTYGROUP", gid);
-		else {						/* group by name */
-			struct group *gr = getgrnam(grname);
-			if (gr)
-				gid = gr->gr_gid;
-		}
+		struct group *gr = getgrnam(grname);
+		if (gr)	/* group by name */
+			gid = gr->gr_gid;
+		else	/* group by ID */
+			gid = (gid_t) getlogindefs_num("TTYGROUP", gid);
 	}
-
 	if (fchown(0, uid, gid))				/* tty */
 		chown_err(cxt->tty_name, uid, gid);
 	if (fchmod(0, cxt->tty_mode))
@@ -364,7 +364,7 @@ static void init_tty(struct login_context *cxt)
 	 *
 	 * More precisely, the problem is  ttyn := ttyname(0); ...; chown(ttyn);
 	 * here ttyname() might return "/tmp/x", a hardlink to a pseudotty.
-	 * All of this is a problem only when login is suid, which it isnt.
+	 * All of this is a problem only when login is suid, which it isn't.
 	 */
 	if (!cxt->tty_path || !*cxt->tty_path ||
 	    lstat(cxt->tty_path, &st) != 0 || !S_ISCHR(st.st_mode) ||
@@ -408,6 +408,14 @@ static void init_tty(struct login_context *cxt)
 
 	/* Kill processes left on this tty */
 	tcsetattr(0, TCSAFLUSH, &ttt);
+
+	/*
+	 * Let's close file decriptors before vhangup
+	 * https://lkml.org/lkml/2012/6/5/145
+	 */
+	close(STDIN_FILENO);
+	close(STDOUT_FILENO);
+	close(STDERR_FILENO);
 
 	signal(SIGHUP, SIG_IGN);	/* so vhangup() wont kill us */
 	vhangup();
@@ -576,12 +584,20 @@ static void log_utmp(struct login_context *cxt)
 	/* If we can't find a pre-existing entry by pid, try by line.
 	 * BSD network daemons may rely on this.
 	 */
-	if (utp == NULL) {
+	if (utp == NULL && cxt->tty_name) {
 		setutent();
 		ut.ut_type = LOGIN_PROCESS;
-		if (cxt->tty_name)
-			strncpy(ut.ut_line, cxt->tty_name, sizeof(ut.ut_line));
+		strncpy(ut.ut_line, cxt->tty_name, sizeof(ut.ut_line));
 		utp = getutline(&ut);
+	}
+
+	/* If we can't find a pre-existing entry by pid and line, try it by id.
+	 * Very stupid telnetd deamons don't set up utmp at all (kzak) */
+	if (utp == NULL && cxt->tty_number) {
+	     setutent();
+	     ut.ut_type = DEAD_PROCESS;
+	     strncpy(ut.ut_id, cxt->tty_number, sizeof(ut.ut_id));
+	     utp = getutid(&ut);
 	}
 
 	if (utp)
@@ -769,7 +785,8 @@ static pam_handle_t *init_loginpam(struct login_context *cxt)
 
 static void loginpam_auth(struct login_context *cxt)
 {
-	int rc, failcount = 0, show_unknown, retries;
+	int rc, show_unknown;
+	unsigned int retries, failcount = 0;
 	const char *hostname = cxt->hostname ? cxt->hostname :
 			       cxt->tty_name ? cxt->tty_name : "<unknown>";
 	pam_handle_t *pamh = cxt->pamh;
@@ -805,7 +822,7 @@ static void loginpam_auth(struct login_context *cxt)
 			loginpam_get_username(pamh, &cxt->username);
 
 		syslog(LOG_NOTICE,
-		       _("FAILED LOGIN %d FROM %s FOR %s, %s"),
+		       _("FAILED LOGIN %u FROM %s FOR %s, %s"),
 		       failcount, hostname,
 		       cxt->username ? cxt->username : "(unknown)",
 		       pam_strerror(pamh, rc));
@@ -828,7 +845,7 @@ static void loginpam_auth(struct login_context *cxt)
 
 		if (rc == PAM_MAXTRIES)
 			syslog(LOG_NOTICE,
-			       _("TOO MANY LOGIN TRIES (%d) FROM %s FOR %s, %s"),
+			       _("TOO MANY LOGIN TRIES (%u) FROM %s FOR %s, %s"),
 			       failcount, hostname,
 			       cxt->username ? cxt->username : "(unknown)",
 			       pam_strerror(pamh, rc));
@@ -1109,7 +1126,7 @@ static void fork_session(struct login_context *cxt)
 		exit(EXIT_FAILURE);
 
 	/*
-	 * Problem: if the user's shell is a shell like ash that doesnt do
+	 * Problem: if the user's shell is a shell like ash that doesn't do
 	 * setsid() or setpgrp(), then a ctrl-\, sending SIGQUIT to every
 	 * process in the pgrp, will kill us.
 	 */
@@ -1232,11 +1249,11 @@ int main(int argc, char **argv)
 		.conv = { misc_conv, NULL }	/* PAM conversation function */
 	};
 
-	timeout = getlogindefs_num("LOGIN_TIMEOUT", LOGIN_TIMEOUT);
+	timeout = (unsigned int)getlogindefs_num("LOGIN_TIMEOUT", LOGIN_TIMEOUT);
 
 	signal(SIGALRM, timedout);
 	siginterrupt(SIGALRM, 1);	/* we have to interrupt syscalls like ioclt() */
-	alarm((unsigned int)timeout);
+	alarm(timeout);
 	signal(SIGQUIT, SIG_IGN);
 	signal(SIGINT, SIG_IGN);
 
@@ -1297,7 +1314,7 @@ int main(int argc, char **argv)
 			*p++ = ' ';
 	}
 
-	for (cnt = (getdtablesize() - 1); cnt > 2; cnt--)
+	for (cnt = get_fd_tabsize() - 1; cnt > 2; cnt--)
 		close(cnt);
 
 	setpgrp();	 /* set pgid to pid this means that setsid() will fail */
@@ -1316,7 +1333,7 @@ int main(int argc, char **argv)
 	/*
 	 * Authentication may be skipped (for example, during krlogin, rlogin,
 	 * etc...), but it doesn't mean that we can skip other account checks.
-	 * The account could be disabled or password expired (althought
+	 * The account could be disabled or password expired (although
 	 * kerberos ticket is valid).         -- kzak@redhat.com (22-Feb-2006)
 	 */
 	loginpam_acct(&cxt);

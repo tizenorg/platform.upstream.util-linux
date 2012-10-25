@@ -33,11 +33,12 @@
 #include <grp.h>
 
 #include "strutils.h"
-#include "writeall.h"
+#include "all-io.h"
 #include "nls.h"
 #include "pathnames.h"
 #include "c.h"
 #include "widechar.h"
+#include "ttyutils.h"
 
 #ifdef __linux__
 #  include <sys/kd.h>
@@ -117,14 +118,6 @@
 #define DEF_EOF		CTL('D')	/* default EOF char */
 #define DEF_EOL		0
 #define DEF_SWITCH	0		/* default switch char */
-
-#ifndef MAXHOSTNAMELEN
-#  ifdef HOST_NAME_MAX
-#    define MAXHOSTNAMELEN HOST_NAME_MAX
-#  else
-#    define MAXHOSTNAMELEN 64
-#  endif			/* HOST_NAME_MAX */
-#endif				/* MAXHOSTNAMELEN */
 
 /*
  * When multiple baud rates are specified on the command line, the first one
@@ -271,11 +264,11 @@ static void login_options_to_argv(char *argv[], int *argc, char *str, char *user
 static char *fakehost;
 
 #ifdef DEBUGGING
-#define debug(s) fprintf(dbf,s); fflush(dbf)
+#define debug(s) do { fprintf(dbf,s); fflush(dbf); } while (0)
 FILE *dbf;
 #else
-#define debug(s)
-#endif				/* DEBUGGING */
+#define debug(s) do { ; } while (0)
+#endif
 
 int main(int argc, char **argv)
 {
@@ -540,8 +533,6 @@ static void login_options_to_argv(char *argv[], int *argc,
 /* Parse command-line arguments. */
 static void parse_args(int argc, char **argv, struct options *op)
 {
-	extern char *optarg;
-	extern int optind;
 	int c;
 
 	enum {
@@ -878,7 +869,7 @@ static void update_utmp(struct options *op)
 static void open_tty(char *tty, struct termios *tp, struct options *op)
 {
 	const pid_t pid = getpid();
-	int serial;
+	int serial, closed = 0;
 
 	/* Set up new standard input, unless we are given an already opened port. */
 
@@ -928,26 +919,33 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 				log_warn("/dev/%s: cannot get controlling tty: %m", tty);
 		}
 
-		if (op->flags & F_HANGUP) {
-			/*
-			 * vhangup() will replace all open file descriptors in the kernel
-			 * that point to our controlling tty by a dummy that will deny
-			 * further reading/writing to our device. It will also reset the
-			 * tty to sane defaults, so we don't have to modify the tty device
-			 * for sane settings. We also get a SIGHUP/SIGCONT.
-			 */
-			if (vhangup())
-				log_err("/dev/%s: vhangup() failed: %m", tty);
-			ioctl(fd, TIOCNOTTY);
-		}
-
-		close(fd);
 		close(STDIN_FILENO);
 		errno = 0;
+
+		if (op->flags & F_HANGUP) {
+
+			if (ioctl(fd, TIOCNOTTY))
+				debug("TIOCNOTTY ioctl failed\n");
+
+			/*
+			 * Let's close all file decriptors before vhangup
+			 * https://lkml.org/lkml/2012/6/5/145
+			 */
+			close(fd);
+			close(STDOUT_FILENO);
+			close(STDERR_FILENO);
+			errno = 0;
+			closed = 1;
+
+			if (vhangup())
+				log_err("/dev/%s: vhangup() failed: %m", tty);
+		} else
+			close(fd);
 
 		debug("open(2)\n");
 		if (open(buf, O_RDWR|O_NOCTTY|O_NONBLOCK, 0) != 0)
 			log_err(_("/dev/%s: cannot open as standard input: %m"), tty);
+
 		if (((tid = tcgetsid(STDIN_FILENO)) < 0) || (pid != tid)) {
 			if (ioctl(STDIN_FILENO, TIOCSCTTY, 1) == -1)
 				log_warn("/dev/%s: cannot get controlling tty: %m", tty);
@@ -966,12 +964,14 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 	}
 
 	if (tcsetpgrp(STDIN_FILENO, pid))
-		log_err("/dev/%s: cannot set process group: %m", tty);
+		log_warn("/dev/%s: cannot set process group: %m", tty);
 
 	/* Get rid of the present outputs. */
-	close(STDOUT_FILENO);
-	close(STDERR_FILENO);
-	errno = 0;
+	if (!closed) {
+		close(STDOUT_FILENO);
+		close(STDERR_FILENO);
+		errno = 0;
+	}
 
 	/* Set up standard output and standard error file descriptors. */
 	debug("duping\n");
@@ -1123,7 +1123,8 @@ static void termio_init(struct options *op, struct termios *tp)
 			ws.ws_col = 80;
 			set++;
 		}
-		ioctl(STDIN_FILENO, TIOCSWINSZ, &ws);
+		if (ioctl(STDIN_FILENO, TIOCSWINSZ, &ws))
+			debug("TIOCSWINSZ ioctl failed\n");
 	}
 
 	/* Optionally enable hardware flow control. */
@@ -1144,70 +1145,13 @@ static void termio_init(struct options *op, struct termios *tp)
 /* Reset virtual console on stdin to its defaults */
 static void reset_vc(const struct options *op, struct termios *tp)
 {
-	/* Use defaults of <sys/ttydefaults.h> for base settings */
-	tp->c_iflag |= TTYDEF_IFLAG;
-	tp->c_oflag |= TTYDEF_OFLAG;
-	tp->c_lflag |= TTYDEF_LFLAG;
+	int fl = 0;
 
-	if ((op->flags & F_KEEPCFLAGS) == 0) {
-#ifdef CBAUD
-		tp->c_lflag &= ~CBAUD;
-#endif
-		tp->c_cflag |= (B38400 | TTYDEF_CFLAG);
-	}
+	fl |= (op->flags & F_KEEPCFLAGS) == 0 ? 0 : UL_TTY_KEEPCFLAGS;
+	fl |= (op->flags & F_UTF8)       == 0 ? 0 : UL_TTY_UTF8;
 
-	/* Sane setting, allow eight bit characters, no carriage return delay
-	 * the same result as `stty sane cr0 pass8'
-	 */
-	tp->c_iflag |=  (BRKINT | ICRNL | IMAXBEL);
-	tp->c_iflag &= ~(IGNBRK | INLCR | IGNCR | IXOFF | IUCLC | IXANY | ISTRIP);
-	tp->c_oflag |=  (OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0);
-	tp->c_oflag &= ~(OLCUC | OCRNL | ONOCR | ONLRET | OFILL | \
-			    NLDLY|CRDLY|TABDLY|BSDLY|VTDLY|FFDLY);
-	tp->c_lflag |=  (ISIG | ICANON | IEXTEN | ECHO|ECHOE|ECHOK|ECHOKE);
-	tp->c_lflag &= ~(ECHONL|ECHOCTL|ECHOPRT | NOFLSH | TOSTOP);
+	reset_virtual_console(tp, fl);
 
-	if ((op->flags & F_KEEPCFLAGS) == 0) {
-		tp->c_cflag |=  (CREAD | CS8 | HUPCL);
-		tp->c_cflag &= ~(PARODD | PARENB);
-	}
-#ifdef OFDEL
-	tp->c_oflag &= ~OFDEL;
-#endif
-#ifdef XCASE
-	tp->c_lflag &= ~XCASE;
-#endif
-#ifdef IUTF8
-	if (op->flags & F_UTF8)
-		tp->c_iflag |= IUTF8;	    /* Set UTF-8 input flag */
-	else
-		tp->c_iflag &= ~IUTF8;
-#endif
-	/* VTIME and VMIN can overlap with VEOF and VEOL since they are
-	 * only used for non-canonical mode. We just set the at the
-	 * beginning, so nothing bad should happen.
-	 */
-	tp->c_cc[VTIME]    = 0;
-	tp->c_cc[VMIN]     = 1;
-	tp->c_cc[VINTR]    = CINTR;
-	tp->c_cc[VQUIT]    = CQUIT;
-	tp->c_cc[VERASE]   = CERASE; /* ASCII DEL (0177) */
-	tp->c_cc[VKILL]    = CKILL;
-	tp->c_cc[VEOF]     = CEOF;
-#ifdef VSWTC
-	tp->c_cc[VSWTC]    = _POSIX_VDISABLE;
-#elif defined(VSWTCH)
-	tp->c_cc[VSWTCH]   = _POSIX_VDISABLE;
-#endif
-	tp->c_cc[VSTART]   = CSTART;
-	tp->c_cc[VSTOP]    = CSTOP;
-	tp->c_cc[VSUSP]    = CSUSP;
-	tp->c_cc[VEOL]     = _POSIX_VDISABLE;
-	tp->c_cc[VREPRINT] = CREPRINT;
-	tp->c_cc[VDISCARD] = CDISCARD;
-	tp->c_cc[VWERASE]  = CWERASE;
-	tp->c_cc[VLNEXT]   = CLNEXT;
-	tp->c_cc[VEOL2]    = _POSIX_VDISABLE;
 	if (tcsetattr(STDIN_FILENO, TCSADRAIN, tp))
 		log_warn("tcsetattr problem: %m");
 }
@@ -1323,9 +1267,8 @@ static void do_prompt(struct options *op, struct termios *tp)
 		if (ioctl(STDIN_FILENO, KDGKBLED, &kb) == 0) {
 			char hint[256] = { '\0' };
 			int nl = 0;
-			struct stat st;
 
-			if (stat("/var/run/numlock-on", &st) == 0)
+			if (access(_PATH_NUMLOCK_ON, F_OK) == 0)
 				nl = 1;
 
 			if (nl && (kb & 0x02) == 0)

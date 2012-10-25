@@ -54,6 +54,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <getopt.h>
+
+#include "closestream.h"
 #include "nls.h"
 #include "c.h"
 
@@ -66,6 +68,8 @@
 static void __attribute__ ((__noreturn__)) usage(FILE * out)
 {
 	fputs(_("\nUsage:\n"), out);
+	/* TRANSLATORS: this program uses for y and n rpmatch(3),
+	 * which means they can be translated.  */
 	fprintf(out,
 	      _(" %s [options] [y | n]\n"), program_invocation_short_name);
 
@@ -86,6 +90,7 @@ int main(int argc, char *argv[])
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	static const struct option longopts[] = {
 		{ "verbose",    no_argument,       0, 'v' },
@@ -116,7 +121,7 @@ int main(int argc, char *argv[])
 		err(MESG_EXIT_FAILURE, _("ttyname failed"));
 
 	if (stat(tty, &sb) < 0)
-		err(MESG_EXIT_FAILURE, _("stat %s failed"), tty);
+		err(MESG_EXIT_FAILURE, _("stat failed %s"), tty);
 
 	if (!*argv) {
 		if (sb.st_mode & (S_IWGRP | S_IWOTH)) {
@@ -127,8 +132,8 @@ int main(int argc, char *argv[])
 		return IS_NOT_ALLOWED;
 	}
 
-	switch (*argv[0]) {
-	case 'y':
+	switch (rpmatch(argv[0])) {
+	case 1:
 #ifdef USE_TTY_GROUP
 		if (chmod(tty, sb.st_mode | S_IWGRP) < 0)
 #else
@@ -138,14 +143,16 @@ int main(int argc, char *argv[])
 		if (verbose)
 			puts(_("write access to your terminal is allowed"));
 		return IS_ALLOWED;
-	case 'n':
+	case 0:
 		if (chmod(tty, sb.st_mode & ~(S_IWGRP|S_IWOTH)) < 0)
 			 err(MESG_EXIT_FAILURE, _("change %s mode failed"), tty);
 		if (verbose)
 			puts(_("write access to your terminal is denied"));
 		return IS_NOT_ALLOWED;
-	default:
-		warnx(_("invalid argument: %c"), *argv[0]);
+        case -1:
+		warnx(_("invalid argument: %s"), argv[0]);
 		usage(stderr);
+        default:
+                abort();
 	}
 }

@@ -52,6 +52,7 @@
 
 #include "c.h"
 #include "cyclades.h"
+#include "closestream.h"
 #include "strutils.h"
 
 #if 0
@@ -137,7 +138,7 @@ static void summary(int sig)
 	}
 	cc = &cmon[cmon_index];
 	if (cc->threshold_value > 0 && sig != -1) {
-		warnx(_("File %s, For threshold value %lu and timrout value %lu, Maximum characters in fifo were %d,\n"
+		warnx(_("File %s, For threshold value %lu and timeout value %lu, Maximum characters in fifo were %d,\n"
 			"and the maximum transfer rate in characters/second was %f"),
 		      argv[cmon_index + local_optind], cc->threshold_value,
 		      cc->timeout_value, cc->maxmax, cc->maxtran);
@@ -148,7 +149,7 @@ static void summary(int sig)
 	cc->timeout_value = 0;
 }
 
-void query_tty_stats(int argc, char **argv, int interval, int numfiles,
+static void query_tty_stats(int argc, char **argv, int interval, int numfiles,
 		     unsigned long *threshold_value,
 		     unsigned long *timeout_value)
 {
@@ -311,6 +312,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((i =
 		getopt_long(argc, argv, "qs:S:t:T:gGi:Vh", longopts,
@@ -320,8 +322,7 @@ int main(int argc, char **argv)
 			query = 1;
 			break;
 		case 'i':
-			interval =
-			    (int)strtoul_or_err(optarg,
+			interval = strtou32_or_err(optarg,
 						_("Invalid interval value"));
 			if (interval < 1) {
 				warnx(_("Invalid interval value: %d"),
@@ -331,8 +332,7 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			++set;
-			set_val =
-			    (int)strtoul_or_err(optarg, _("Invalid set value"));
+			set_val = strtou32_or_err(optarg, _("Invalid set value"));
 			if (set_val < 1 || 12 < set_val) {
 				warnx(_("Invalid set value: %d"), set_val);
 				errflg++;
@@ -340,8 +340,7 @@ int main(int argc, char **argv)
 			break;
 		case 'S':
 			++set_def;
-			set_def_val =
-			    (int)strtoul_or_err(optarg,
+			set_def_val = strtou32_or_err(optarg,
 						_("Invalid default value"));
 			if (set_def_val < 0 || 12 < set_def_val) {
 				warnx(_("Invalid default value: %d"),
@@ -351,8 +350,7 @@ int main(int argc, char **argv)
 			break;
 		case 't':
 			++set_time;
-			set_time_val =
-			    (int)strtoul_or_err(optarg,
+			set_time_val = strtou32_or_err(optarg,
 						_("Invalid set time value"));
 			if (set_time_val < 1 || 255 < set_time_val) {
 				warnx(_("Invalid set time value: %d"),
@@ -362,8 +360,7 @@ int main(int argc, char **argv)
 			break;
 		case 'T':
 			++set_def_time;
-			set_def_time_val =
-			    (int)strtoul_or_err(optarg,
+			set_def_time_val = strtou32_or_err(optarg,
 						_("Invalid default time value"));
 			if (set_def_time_val < 0 || 255 < set_def_time_val) {
 				warnx(_("Invalid default time value: %d"),

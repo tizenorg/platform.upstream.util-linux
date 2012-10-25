@@ -33,6 +33,7 @@
 
 #include "c.h"
 #include "env.h"
+#include "closestream.h"
 #include "islocal.h"
 #include "nls.h"
 #include "pamfail.h"
@@ -96,6 +97,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");	/* both for messages and for iscntrl() below */
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	/*
 	 *  "oldf" contains the users original finger information.
@@ -142,9 +144,9 @@ int main(int argc, char **argv)
 				     oldf.username);
 			}
 		}
-		if (setupDefaultContext("/etc/passwd"))
+		if (setupDefaultContext(_PATH_PASSWD))
 			errx(EXIT_FAILURE,
-			     _("can't set default context for /etc/passwd"));
+			     _("can't set default context for %s"), _PATH_PASSWD);
 	}
 #endif
 

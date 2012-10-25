@@ -44,10 +44,20 @@
  * - fixed strerr(errno) in gettext calls
  */
 
+/*
+ * This command is deprecated.  The utility is in maintenance mode,
+ * meaning we keep them in source tree for backward compatibility
+ * only.  Do not waste time making this command better, unless the
+ * fix is about security or other very critical issue.
+ *
+ * See Documentation/deprecated.txt for more information.
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <paths.h>
 #include <pwd.h>
+#include <shadow.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +72,8 @@
 #include <unistd.h>
 
 #include "c.h"
+#include "fileutils.h"
+#include "closestream.h"
 #include "nls.h"
 #include "setpwnam.h"
 #include "strutils.h"
@@ -79,8 +91,7 @@ enum {
 };
 int program;
 char orig_file[FILENAMELEN];	/* original file /etc/passwd or /etc/group */
-char tmp_file[FILENAMELEN];	/* tmp file */
-char tmptmp_file[FILENAMELEN];	/* very tmp file */
+char *tmp_file;			/* tmp file */
 
 void pw_error __P((char *, int, int));
 
@@ -128,55 +139,23 @@ static void pw_init(void)
 	(void)umask(0);
 }
 
-static int pw_lock(void)
+static FILE * pw_tmpfile(int lockfd)
 {
-	int lockfd, fd, ret;
+	FILE *fd;
+	char *tmpname = NULL;
+	char *dir = "/etc";
 
-	/*
-	 * If the password file doesn't exist, the system is hosed.  Might as
-	 * well try to build one.  Set the close-on-exec bit so that users
-	 * can't get at the encrypted passwords while editing.  Open should
-	 * allow flock'ing the file; see 4.4BSD.  XXX
-	 */
-#if 0
-	/* flock()ing is superfluous here, with the ptmp/ptmptmp system. */
-	if (flock(lockfd, LOCK_EX | LOCK_NB)) {
-		if (program == VIPW)
-			err(EXIT_FAILURE, _("cannot lock password file"));
-		else
-			err(EXIT_FAILURE, _("cannot lock group file"));
-	}
-#endif
-
-	if ((fd = open(tmptmp_file, O_WRONLY | O_CREAT, 0600)) == -1)
-		err(EXIT_FAILURE, _("%s: open failed"), tmptmp_file);
-
-	ret = link(tmptmp_file, tmp_file);
-	(void)unlink(tmptmp_file);
-	if (ret == -1) {
-		if (errno == EEXIST)
-			errx(EXIT_FAILURE,
-			     _("the %s file is busy (%s present)"),
-			     program == VIPW ? "password" : "group", tmp_file);
-		else
-			err(EXIT_FAILURE, _("can't link %s"), tmp_file);
+	if ((fd = xfmkstemp(&tmpname, dir)) == NULL) {
+		ulckpwdf();
+		err(EXIT_FAILURE, _("can't open temporary file"));
 	}
 
-	lockfd = open(orig_file, O_RDONLY, 0);
-
-	if (lockfd < 0) {
-		warn("%s", orig_file);
-		unlink(tmp_file);
-		exit(EXIT_FAILURE);
-	}
-
-	copyfile(lockfd, fd);
-	(void)close(lockfd);
-	(void)close(fd);
-	return 1;
+	copyfile(lockfd, fileno(fd));
+	tmp_file = tmpname;
+	return fd;
 }
 
-static void pw_unlock(void)
+static void pw_write(void)
 {
 	char tmp[FILENAMELEN + 4];
 
@@ -206,10 +185,11 @@ static void pw_unlock(void)
 	if (rename(tmp_file, orig_file) == -1) {
 		int errsv = errno;
 		errx(EXIT_FAILURE,
-		     ("can't unlock %s: %s (your changes are still in %s)"),
+		     ("cannot write %s: %s (your changes are still in %s)"),
 		     orig_file, strerror(errsv), tmp_file);
 	}
 	unlink(tmp_file);
+	free(tmp_file);
 }
 
 static void pw_edit(int notsetuid)
@@ -256,7 +236,8 @@ static void pw_edit(int notsetuid)
 	free(editor);
 }
 
-void pw_error(char *name, int err, int eval)
+void __attribute__((__noreturn__))
+pw_error(char *name, int err, int eval)
 {
 	if (err) {
 		if (name)
@@ -266,33 +247,62 @@ void pw_error(char *name, int err, int eval)
 	}
 	warnx(_("%s unchanged"), orig_file);
 	unlink(tmp_file);
+	ulckpwdf();
 	exit(eval);
 }
 
 static void edit_file(int is_shadow)
 {
 	struct stat begin, end;
+	int passwd_file, ch_ret;
+	FILE *tmp_fd;
 
 	pw_init();
-	pw_lock();
 
-	if (stat(tmp_file, &begin))
+	/* acquire exclusive lock */
+	if (lckpwdf() < 0)
+		err(EXIT_FAILURE, _("cannot get lock"));
+
+	passwd_file = open(orig_file, O_RDONLY, 0);
+	if (passwd_file < 0)
+		err(EXIT_FAILURE, _("cannot open %s"), orig_file);
+	tmp_fd = pw_tmpfile(passwd_file);
+
+	if (fstat(fileno(tmp_fd), &begin))
 		pw_error(tmp_file, 1, 1);
 
 	pw_edit(0);
 
-	if (stat(tmp_file, &end))
+	if (fstat(fileno(tmp_fd), &end))
 		pw_error(tmp_file, 1, 1);
+	/* Some editors, such as Vim with 'writebackup' mode enabled,
+	 * use "atomic save" in which the old file is deleted and a new
+	 * one with the same name created in its place.  */
+	if (end.st_nlink == 0) {
+		if (close_stream(tmp_fd) != 0)
+			err(EXIT_FAILURE, _("write error"));
+		tmp_fd = fopen(tmp_file, "r");
+		if (!tmp_file)
+			err(EXIT_FAILURE, _("cannot open %s"), tmp_file);
+		if (fstat(fileno(tmp_fd), &end))
+			pw_error(tmp_file, 1, 1);
+	}
 	if (begin.st_mtime == end.st_mtime) {
 		warnx(_("no changes made"));
 		pw_error((char *)NULL, 0, 0);
 	}
-	/* see pw_lock() where we create the file with mode 600 */
+	/* pw_tmpfile() will create the file with mode 600 */
 	if (!is_shadow)
-		chmod(tmp_file, 0644);
+		ch_ret = fchmod(fileno(tmp_fd), 0644);
 	else
-		chmod(tmp_file, 0400);
-	pw_unlock();
+		ch_ret = fchmod(fileno(tmp_fd), 0400);
+	if (ch_ret < 0)
+		err(EXIT_FAILURE, "%s: %s", _("cannot chmod file"), orig_file);
+	if (close_stream(tmp_fd) != 0)
+		err(EXIT_FAILURE, _("write error"));
+	pw_write();
+	close(passwd_file);
+	ulckpwdf();
 }
 
 int main(int argc, char *argv[])
@@ -300,18 +310,14 @@ int main(int argc, char *argv[])
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
-	memset(tmp_file, '\0', FILENAMELEN);
 	if (!strcmp(program_invocation_short_name, "vigr")) {
 		program = VIGR;
 		xstrncpy(orig_file, GROUP_FILE, sizeof(orig_file));
-		xstrncpy(tmp_file, GTMP_FILE, sizeof(tmp_file));
-		xstrncpy(tmptmp_file, GTMPTMP_FILE, sizeof(tmptmp_file));
 	} else {
 		program = VIPW;
 		xstrncpy(orig_file, PASSWD_FILE, sizeof(orig_file));
-		xstrncpy(tmp_file, PTMP_FILE, sizeof(tmp_file));
-		xstrncpy(tmptmp_file, PTMPTMP_FILE, sizeof(tmptmp_file));
 	}
 
 	if ((argc > 1) &&
@@ -324,12 +330,8 @@ int main(int argc, char *argv[])
 
 	if (program == VIGR) {
 		strncpy(orig_file, SGROUP_FILE, FILENAMELEN - 1);
-		strncpy(tmp_file, SGTMP_FILE, FILENAMELEN - 1);
-		strncpy(tmptmp_file, SGTMPTMP_FILE, FILENAMELEN - 1);
 	} else {
 		strncpy(orig_file, SHADOW_FILE, FILENAMELEN - 1);
-		strncpy(tmp_file, SPTMP_FILE, FILENAMELEN - 1);
-		strncpy(tmptmp_file, SPTMPTMP_FILE, FILENAMELEN - 1);
 	}
 
 	if (access(orig_file, F_OK) == 0) {
@@ -338,11 +340,12 @@ int main(int argc, char *argv[])
 		printf((program == VIGR)
 		       ? _("You are using shadow groups on this system.\n")
 		       : _("You are using shadow passwords on this system.\n"));
+		/* TRANSLATORS: this program uses for y and n rpmatch(3),
+		 * which means they can be translated. */
 		printf(_("Would you like to edit %s now [y/n]? "), orig_file);
 
-		/* EOF means no */
 		if (fgets(response, sizeof(response), stdin)) {
-			if (response[0] == 'y' || response[0] == 'Y')
+			if (rpmatch(response) == 1)
 				edit_file(1);
 		}
 	}

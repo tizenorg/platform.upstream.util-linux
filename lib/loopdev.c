@@ -37,6 +37,7 @@
 #include "pathnames.h"
 #include "loopdev.h"
 #include "canonicalize.h"
+#include "at.h"
 
 #define CONFIG_LOOPDEV_DEBUG
 
@@ -64,8 +65,12 @@ loopdev_debug(const char *mesg, ...)
 # define DBG(m,x) do { ; } while(0)
 #endif
 
-
+/*
+ * see loopcxt_init()
+ */
 #define loopcxt_ioctl_enabled(_lc)	(!((_lc)->flags & LOOPDEV_FL_NOIOCTL))
+#define loopcxt_sysfs_available(_lc)	(!((_lc)->flags & LOOPDEV_FL_NOSYSFS)) \
+					 && !loopcxt_ioctl_enabled(_lc)
 
 /*
  * @lc: context
@@ -143,6 +148,7 @@ int loopcxt_has_device(struct loopdev_cxt *lc)
  */
 int loopcxt_init(struct loopdev_cxt *lc, int flags)
 {
+	int rc;
 	struct stat st;
 	struct loopdev_cxt dummy = UL_LOOPDEVCXT_EMPTY;
 
@@ -151,7 +157,10 @@ int loopcxt_init(struct loopdev_cxt *lc, int flags)
 
 	memcpy(lc, &dummy, sizeof(dummy));
 	lc->flags = flags;
-	loopcxt_set_device(lc, NULL);
+
+	rc = loopcxt_set_device(lc, NULL);
+	if (rc)
+		return rc;
 
 	if (!(lc->flags & LOOPDEV_FL_NOSYSFS) &&
 	    get_linux_version() >= KERNEL_VERSION(2,6,37))
@@ -173,6 +182,8 @@ int loopcxt_init(struct loopdev_cxt *lc, int flags)
  */
 void loopcxt_deinit(struct loopdev_cxt *lc)
 {
+	int errsv = errno;
+
 	if (!lc)
 		return;
 
@@ -181,8 +192,10 @@ void loopcxt_deinit(struct loopdev_cxt *lc)
 	free(lc->filename);
 	lc->filename = NULL;
 
-	loopcxt_set_device(lc, NULL);
+	ignore_result( loopcxt_set_device(lc, NULL) );
 	loopcxt_deinit_iterator(lc);
+
+	errno = errsv;
 }
 
 /*
@@ -333,8 +346,11 @@ int loopcxt_deinit_iterator(struct loopdev_cxt *lc)
 	free(iter->minors);
 	if (iter->proc)
 		fclose(iter->proc);
+	if (iter->sysblock)
+		closedir(iter->sysblock);
 	iter->minors = NULL;
 	iter->proc = NULL;
+	iter->sysblock = NULL;
 	iter->done = 1;
 	return 0;
 }
@@ -366,8 +382,8 @@ static int loopiter_set_device(struct loopdev_cxt *lc, const char *device)
 	if ((lc->iter.flags & LOOPITER_FL_FREE) && !used)
 		return 0;
 
-	DBG(lc, loopdev_debug("iter: setting device"));
-	loopcxt_set_device(lc, NULL);
+	DBG(lc, loopdev_debug("iter: unset device"));
+	ignore_result( loopcxt_set_device(lc, NULL) );
 	return 1;
 }
 
@@ -444,6 +460,85 @@ static int loop_scandir(const char *dirname, int **ary, int hasprefix)
 }
 
 /*
+ * Set the next *used* loop device according to /proc/partitions.
+ *
+ * Loop devices smaller than 512 bytes are invisible for this function.
+ */
+static int loopcxt_next_from_proc(struct loopdev_cxt *lc)
+{
+	struct loopdev_iter *iter = &lc->iter;
+	char buf[BUFSIZ];
+
+	DBG(lc, loopdev_debug("iter: scan /proc/partitions"));
+
+	if (!iter->proc)
+		iter->proc = fopen(_PATH_PROC_PARTITIONS, "r");
+	if (!iter->proc)
+		return 1;
+
+	while (fgets(buf, sizeof(buf), iter->proc)) {
+		unsigned int m;
+		char name[128 + 1];
+
+
+		if (sscanf(buf, " %u %*s %*s %128[^\n ]",
+			   &m, name) != 2 || m != LOOPDEV_MAJOR)
+			continue;
+
+		DBG(lc, loopdev_debug("iter: check %s", name));
+
+		if (loopiter_set_device(lc, name) == 0)
+			return 0;
+	}
+
+	return 1;
+}
+
+/*
+ * Set the next *used* loop device according to
+ * /sys/block/loopN/loop/backing_file (kernel >= 2.6.37 is required).
+ *
+ * This is preferred method.
+ */
+static int loopcxt_next_from_sysfs(struct loopdev_cxt *lc)
+{
+	struct loopdev_iter *iter = &lc->iter;
+	struct dirent *d;
+	int fd;
+
+	DBG(lc, loopdev_debug("iter: scan /sys/block"));
+
+	if (!iter->sysblock)
+		iter->sysblock = opendir(_PATH_SYS_BLOCK);
+
+	if (!iter->sysblock)
+		return 1;
+
+	fd = dirfd(iter->sysblock);
+
+	while ((d = readdir(iter->sysblock))) {
+		char name[256];
+		struct stat st;
+
+		DBG(lc, loopdev_debug("iter: check %s", d->d_name));
+
+		if (strcmp(d->d_name, ".") == 0
+		    || strcmp(d->d_name, "..") == 0
+		    || strncmp(d->d_name, "loop", 4) != 0)
+			continue;
+
+		snprintf(name, sizeof(name), "%s/loop/backing_file", d->d_name);
+		if (fstat_at(fd, _PATH_SYS_BLOCK, name, &st, 0) != 0)
+			continue;
+
+		if (loopiter_set_device(lc, d->d_name) == 0)
+			return 0;
+	}
+
+	return 1;
+}
+
+/*
  * @lc: context, has to initialized by loopcxt_init_iterator()
  *
  * Returns: 0 on success, -1 on error, 1 at the end of scanning. The details
@@ -466,23 +561,14 @@ int loopcxt_next(struct loopdev_cxt *lc)
 	/* A) Look for used loop devices in /proc/partitions ("losetup -a" only)
 	 */
 	if (iter->flags & LOOPITER_FL_USED) {
-		char buf[BUFSIZ];
+		int rc;
 
-		if (!iter->proc)
-			iter->proc = fopen(_PATH_PROC_PARTITIONS, "r");
-
-		while (iter->proc && fgets(buf, sizeof(buf), iter->proc)) {
-			unsigned int m;
-			char name[128];
-
-			if (sscanf(buf, " %u %*s %*s %128[^\n ]",
-				   &m, name) != 2 || m != LOOPDEV_MAJOR)
-				continue;
-
-			if (loopiter_set_device(lc, name) == 0)
-				return 0;
-		}
-
+		if (loopcxt_sysfs_available(lc))
+			rc = loopcxt_next_from_sysfs(lc);
+		else
+			rc = loopcxt_next_from_proc(lc);
+		if (rc == 0)
+			return 0;
 		goto done;
 	}
 
@@ -1192,27 +1278,29 @@ int loopdev_is_autoclear(const char *device)
 	if (!device)
 		return 0;
 
-	loopcxt_init(&lc, 0);
-	loopcxt_set_device(&lc, device);
-	rc = loopcxt_is_autoclear(&lc);
-	loopcxt_deinit(&lc);
+	rc = loopcxt_init(&lc, 0);
+	if (!rc)
+		rc = loopcxt_set_device(&lc, device);
+	if (!rc)
+		rc = loopcxt_is_autoclear(&lc);
 
+	loopcxt_deinit(&lc);
 	return rc;
 }
 
 char *loopdev_get_backing_file(const char *device)
 {
 	struct loopdev_cxt lc;
-	char *res;
+	char *res = NULL;
 
 	if (!device)
 		return NULL;
+	if (loopcxt_init(&lc, 0))
+		return NULL;
+	if (loopcxt_set_device(&lc, device) == 0)
+		res = loopcxt_get_backing_file(&lc);
 
-	loopcxt_init(&lc, 0);
-	loopcxt_set_device(&lc, device);
-	res = loopcxt_get_backing_file(&lc);
 	loopcxt_deinit(&lc);
-
 	return res;
 }
 
@@ -1229,8 +1317,11 @@ int loopdev_is_used(const char *device, const char *filename,
 	if (!device || !filename)
 		return 0;
 
-	loopcxt_init(&lc, 0);
-	loopcxt_set_device(&lc, device);
+	rc = loopcxt_init(&lc, 0);
+	if (!rc)
+		rc = loopcxt_set_device(&lc, device);
+	if (rc)
+		return rc;
 
 	rc = !stat(filename, &st);
 	rc = loopcxt_is_used(&lc, rc ? &st : NULL, filename, offset, flags);
@@ -1247,8 +1338,9 @@ int loopdev_delete(const char *device)
 	if (!device)
 		return -EINVAL;
 
-	loopcxt_init(&lc, 0);
-	rc = loopcxt_set_device(&lc, device);
+	rc = loopcxt_init(&lc, 0);
+	if (!rc)
+		rc = loopcxt_set_device(&lc, device);
 	if (!rc)
 		rc = loopcxt_delete_device(&lc);
 	loopcxt_deinit(&lc);
@@ -1295,7 +1387,8 @@ char *loopdev_find_by_backing_file(const char *filename, uint64_t offset, int fl
 	if (!filename)
 		return NULL;
 
-	loopcxt_init(&lc, 0);
+	if (loopcxt_init(&lc, 0))
+		return NULL;
 	if (loopcxt_find_by_backing_file(&lc, filename, offset, flags))
 		res = loopcxt_strdup_device(&lc);
 	loopcxt_deinit(&lc);
@@ -1311,12 +1404,14 @@ char *loopdev_find_by_backing_file(const char *filename, uint64_t offset, int fl
 int loopdev_count_by_backing_file(const char *filename, char **loopdev)
 {
 	struct loopdev_cxt lc;
-	int count = 0;
+	int count = 0, rc;
 
 	if (!filename)
 		return -1;
 
-	loopcxt_init(&lc, 0);
+	rc = loopcxt_init(&lc, 0);
+	if (rc)
+		return rc;
 	if (loopcxt_init_iterator(&lc, LOOPITER_FL_USED))
 		return -1;
 
@@ -1354,7 +1449,8 @@ static void test_loop_info(const char *device, int flags, int debug)
 	char *p;
 	uint64_t u64;
 
-	loopcxt_init(&lc, flags);
+	if (loopcxt_init(&lc, flags))
+		return;
 	loopcxt_enable_debug(&lc, debug);
 
 	if (loopcxt_set_device(&lc, device))
@@ -1380,7 +1476,8 @@ static void test_loop_scan(int flags, int debug)
 	struct loopdev_cxt lc;
 	int rc;
 
-	loopcxt_init(&lc, 0);
+	if (loopcxt_init(&lc, 0))
+		return;
 	loopcxt_enable_debug(&lc, debug);
 
 	if (loopcxt_init_iterator(&lc, flags))
@@ -1406,9 +1503,11 @@ static void test_loop_scan(int flags, int debug)
 static int test_loop_setup(const char *filename, const char *device, int debug)
 {
 	struct loopdev_cxt lc;
-	int rc = 0;
+	int rc;
 
-	loopcxt_init(&lc, 0);
+	rc = loopcxt_init(&lc, 0);
+	if (rc)
+		return rc;
 	loopcxt_enable_debug(&lc, debug);
 
 	if (device) {

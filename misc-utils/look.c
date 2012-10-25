@@ -60,6 +60,7 @@
 #include "nls.h"
 #include "xalloc.h"
 #include "pathnames.h"
+#include "closestream.h"
 
 #define	EQUAL		0
 #define	GREATER		1
@@ -99,6 +100,7 @@ main(int argc, char *argv[])
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	setlocale(LC_ALL, "");
 
@@ -241,7 +243,7 @@ look(char *front, char *back)
  *	more trouble than it's worth.
  */
 #define	SKIP_PAST_NEWLINE(p, back) \
-	while (p < back && *p++ != '\n');
+	while (p < back && *p++ != '\n')
 
 char *
 binary_search(char *front, char *back)

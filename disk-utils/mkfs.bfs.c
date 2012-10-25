@@ -16,6 +16,7 @@
 
 #include "blkdev.h"
 #include "c.h"
+#include "closestream.h"
 #include "nls.h"
 #include "strutils.h"
 #include "xalloc.h"
@@ -118,6 +119,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	if (argc < 2)
 		usage(stderr);
@@ -172,7 +174,7 @@ int main(int argc, char **argv)
 	device = argv[optind++];
 
 	if (stat(device, &statbuf) < 0)
-		err(EXIT_FAILURE, _("cannot stat device %s"), device);
+		err(EXIT_FAILURE, _("stat failed %s"), device);
 
 	if (!S_ISBLK(statbuf.st_mode))
 		errx(EXIT_FAILURE, _("%s is not a block special device"), device);
@@ -183,7 +185,7 @@ int main(int argc, char **argv)
 
 	if (optind == argc - 1)
 		user_specified_total_blocks =
-			strtoll_or_err(argv[optind], _("invalid block-count"));
+			strtou64_or_err(argv[optind], _("invalid block-count"));
 	else if (optind != argc)
 		usage(stderr);
 

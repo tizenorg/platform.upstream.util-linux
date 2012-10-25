@@ -14,9 +14,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <stdio.h>
@@ -34,6 +34,7 @@
 #include "env.h"
 #include "optutils.h"
 #include "exitcodes.h"
+#include "closestream.h"
 
 static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)),
 			const char *filename, int line)
@@ -117,6 +118,25 @@ static void __attribute__((__noreturn__)) exit_non_root(const char *option)
 	if (option)
 		errx(MOUNT_EX_USAGE, _("only root can use \"--%s\" option"), option);
 	errx(MOUNT_EX_USAGE, _("only root can do that"));
+}
+
+static void success_message(struct libmnt_context *cxt)
+{
+	const char *tgt, *src;
+
+	if (mnt_context_helper_executed(cxt)
+	    || mnt_context_get_status(cxt) != 1)
+		return;
+
+	tgt = mnt_context_get_target(cxt);
+	if (!tgt)
+		return;
+
+	src = mnt_context_get_source(cxt);
+	if (src)
+		warnx(_("%s (%s) unmounted"), tgt, src);
+	else
+		warnx(_("%s unmounted"), tgt);
 }
 
 /*
@@ -273,6 +293,9 @@ static int umount_one(struct libmnt_context *cxt, const char *spec)
 	rc = mnt_context_umount(cxt);
 	rc = mk_exit_code(cxt, rc);
 
+	if (rc == MOUNT_EX_SUCCESS && mnt_context_is_verbose(cxt))
+		success_message(cxt);
+
 	mnt_reset_context(cxt);
 	return rc;
 }
@@ -309,6 +332,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	mnt_init_debug(0);
 	cxt = mnt_new_context();

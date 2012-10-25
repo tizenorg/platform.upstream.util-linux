@@ -35,6 +35,7 @@
 #include <sys/utsname.h>
 #include "nls.h"
 #include "c.h"
+#include "closestream.h"
 
 #define set_pers(pers) ((long)syscall(SYS_personality, pers))
 
@@ -121,7 +122,10 @@ show_help(void)
 static void __attribute__((__noreturn__))
 show_usage(const char *s)
 {
-  errx(EXIT_FAILURE, _("%s\nTry `%s --help' for more information."), s, program_invocation_short_name);
+  if (s)
+    errx(EXIT_FAILURE, _("%s\nTry `%s --help' for more information."), s, program_invocation_short_name);
+  else
+    errx(EXIT_FAILURE, _("Try `%s --help' for more information."), program_invocation_short_name);
 }
 
 static void __attribute__((__noreturn__))
@@ -131,7 +135,8 @@ show_version(void)
   exit(EXIT_SUCCESS);
 }
 
-int set_arch(const char *pers, unsigned long options)
+static int
+set_arch(const char *pers, unsigned long options)
 {
   struct utsname un;
   int i;
@@ -251,18 +256,19 @@ int main(int argc, char *argv[])
   setlocale(LC_ALL, "");
   bindtextdomain(PACKAGE, LOCALEDIR);
   textdomain(PACKAGE);
+  atexit(close_stdout);
 
   if (argc < 1)
     show_usage(_("Not enough arguments"));
 
   p = program_invocation_short_name;
   if (!strcmp(p, "setarch")) {
-    argv++;
     argc--;
     if (argc < 1)
       show_usage(_("Not enough arguments"));
-    p = argv[0];
-    argv[0] = argv[-1];      /* for getopt_long() to get the program name */
+    p = argv[1];
+    argv[1] = argv[0];		/* for getopt_long() to get the program name */
+    argv++;
     if (!strcmp(p, "-h") || !strcmp(p, "--help"))
       show_help();
     else if (!strcmp(p, "-V") || !strcmp(p, "--version"))
@@ -323,6 +329,8 @@ int main(int argc, char *argv[])
     case OPT_UNAME26:
 	turn_on(UNAME26, options);
 	break;
+    default:
+        show_usage(NULL);
     }
   }
 

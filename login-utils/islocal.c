@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "closestream.h"
 #include "islocal.h"
 #include "nls.h"
 #include "pathnames.h"
@@ -83,8 +84,7 @@ int is_local(const char *user)
 	int rv;
 	if ((rv = is_local_in_file(user, _PATH_PASSWD)) < 0) {
 		perror(_PATH_PASSWD);
-		fprintf(stderr, _("Failed to open %s for reading, exiting."),
-			_PATH_PASSWD);
+		fprintf(stderr, _("cannot open %s"), _PATH_PASSWD);
 		exit(1);
 	} else {
 		return rv;
@@ -94,6 +94,7 @@ int is_local(const char *user)
 #ifdef TEST_PROGRAM
 int main(int argc, char *argv[])
 {
+	atexit(close_stdout);
 	if (argc <= 2) {
 		fprintf(stderr, "usage: %s <passwdfile> <username> [...]\n",
 			argv[0]);

@@ -56,15 +56,14 @@
 #include <sys/stat.h>
 #include <sys/file.h>
 #include <sys/wait.h>
-#include "strutils.h"
 
+#include "strutils.h"
 #include "nls.h"
 #include "xalloc.h"
 #include "widechar.h"
+#include "closestream.h"
 
-#define _REGEX_RE_COMP
 #include <regex.h>
-#undef _REGEX_RE_COMP
 
 #ifndef XTABS
 #define XTABS TAB3
@@ -90,7 +89,7 @@ void doclear(void);
 void cleareol(void);
 void clreos(void);
 void home(void);
-void error (char *mess);
+void more_error (char *mess);
 void do_shell (char *filename);
 int  colon (char *filename, int cmd, int nlines);
 int  expand (char **outbuf, char *inbuf);
@@ -128,6 +127,7 @@ void prepare_line_buffer(void);
 #define INIT_BUF	80
 #define SHELL_LINE	1000
 #define COMMAND_BUF	200
+#define REGERR_BUF	NUM_COLUMNS
 
 struct termios	otty, savetty0;
 long		file_pos, file_size;
@@ -177,6 +177,7 @@ int		soglitch;		/* terminal has standout mode glitch */
 int		ulglitch;		/* terminal has underline mode glitch */
 int		pstate = 0;		/* current UL state */
 static int	magic(FILE *, char *);
+char		*previousre;		/* previous search() buf[] item */
 struct {
     long chrctr, line;
 } context, screen_start;
@@ -303,7 +304,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	      "  -d        display help instead of ring bell\n"
               "  -f        count logical, rather than screen lines\n"
               "  -l        suppress pause after form feed\n"
-              "  -p        suppress scroll, clean screen and disblay text\n"
+              "  -p        suppress scroll, clean screen and display text\n"
               "  -c        suppress scroll, display text and clean line ends\n"
               "  -u        suppress underlining\n"
               "  -s        squeeze multiple blank lines into one\n"
@@ -317,7 +318,6 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 int main(int argc, char **argv) {
     FILE	*f;
     char	*s;
-    char	*p;
     int		ch;
     int		left;
     int		prnames = 0;
@@ -325,11 +325,12 @@ int main(int argc, char **argv) {
     int		srchopt = 0;
     int		clearit = 0;
     int		initline = 0;
-    char	initbuf[INIT_BUF];
+    char	*initbuf = NULL;
 
     setlocale(LC_ALL, "");
     bindtextdomain(PACKAGE, LOCALEDIR);
     textdomain(PACKAGE);
+    atexit(close_stdout);
 
     nfiles = argc;
     fnames = argv;
@@ -357,9 +358,7 @@ int main(int argc, char **argv) {
 	    s = *fnames;
 	    if (*++s == '/') {
 		srchopt++;
-		for (++s, p = initbuf; p < initbuf + (INIT_BUF - 1) && *s != '\0';)
-		    *p++ = *s++;
-		*p = '\0';
+		initbuf = xstrdup(s + 1);
 	    }
 	    else {
 		initopt++;
@@ -419,6 +418,7 @@ int main(int argc, char **argv) {
 	    }
 	    if (srchopt)
 	    {
+		previousre = xstrdup(initbuf);
 		search (initbuf, stdin, 1);
 		if (noscroll)
 		    left--;
@@ -440,6 +440,7 @@ int main(int argc, char **argv) {
 	    if (firstf) {
 		firstf = 0;
 		if (srchopt) {
+		    previousre = xstrdup(initbuf);
 		    search (initbuf, f, 1);
 		    if (noscroll)
 			left--;
@@ -491,6 +492,8 @@ int main(int argc, char **argv) {
 	fnum++;
 	firstf = 0;
     }
+    free (previousre);
+    free (initbuf);
     reset_tty ();
     exit(EXIT_SUCCESS);
 }
@@ -752,7 +755,8 @@ void chgwinsz(int dummy __attribute__ ((__unused__)))
 ** Clean up terminal state and exit. Also come here if interrupt signal received
 */
 
-void end_it (int dummy __attribute__ ((__unused__)))
+void __attribute__((__noreturn__))
+end_it (int dummy __attribute__ ((__unused__)))
 {
     reset_tty ();
     if (clreol) {
@@ -846,7 +850,7 @@ int get_line(register FILE *f, int *length)
     mbstate_t state, state_bak;		/* Current status of the stream. */
     char mbc[MB_LEN_MAX];		/* Buffer for one multibyte char. */
     size_t mblength;			/* Byte length of multibyte char. */
-    size_t mbc_pos = 0;			/* Postion of the MBC. */
+    size_t mbc_pos = 0;			/* Position of the MBC. */
     int use_mbc_buffer_flag = 0;	/* If 1, mbc has data. */
     int break_flag = 0;			/* If 1, exit while(). */
     long file_pos_bak = Ftell (f);
@@ -1117,10 +1121,10 @@ void prbuf (register char *s, register int n)
 	    {
 		wchar_t wc;
 		size_t mblength;
-		mbstate_t state;
-		memset (&state, '\0', sizeof (mbstate_t));
+		mbstate_t mbstate;
+		memset (&mbstate, '\0', sizeof (mbstate_t));
 		s--; n++;
-		mblength = mbrtowc (&wc, s, n, &state);
+		mblength = mbrtowc (&wc, s, n, &mbstate);
 		if (mblength == (size_t) -2 || mblength == (size_t) -1)
 			mblength = 1;
 		while (mblength--)
@@ -1331,6 +1335,10 @@ int command (char *filename, register FILE *f)
 	    fflush (stdout);
 	    break;
 	case 'n':
+	    if (!previousre) {
+	        more_error (_("No previous regular expression"));
+	        break;
+            }
 	    lastp++;
 	    /* fallthrough */
 	case '/':
@@ -1341,11 +1349,13 @@ int command (char *filename, register FILE *f)
 	    fflush (stdout);
 	    if (lastp) {
 		putcerr('\r');
-		search (NULL, f, nlines);	/* Use previous r.e. */
+		search (previousre, f, nlines);
 	    }
 	    else {
 		ttyin (cmdbuf, sizeof(cmdbuf)-2, '/');
 		putcerr('\r');
+		free (previousre);
+		previousre = xstrdup(cmdbuf);
 		search (cmdbuf, f, nlines);
 	    }
 	    ret (dlines-1);
@@ -1572,7 +1582,7 @@ void do_shell (char *filename)
 }
 
 /*
-** Search for nth ocurrence of regular expression contained in buf in the file
+** Search for nth occurrence of regular expression contained in buf in the file
 */
 
 void search(char buf[], FILE *file, register int n)
@@ -1582,21 +1592,24 @@ void search(char buf[], FILE *file, register int n)
     register long line2 = startline;
     register long line3 = startline;
     register int lncount;
-    int saveln, rv;
-    char *s;
+    int saveln, rv, rc;
+    regex_t re;
 
     context.line = saveln = Currline;
     context.chrctr = startline;
     lncount = 0;
-    if ((s = re_comp (buf)) != 0)
-	error (s);
+    if ((rc = regcomp (&re, buf, REG_NOSUB)) != 0) {
+	char s[REGERR_BUF];
+	regerror (rc, &re, s, sizeof s);
+	more_error (s);
+    }
     while (!feof (file)) {
 	line3 = line2;
 	line2 = line1;
 	line1 = Ftell (file);
 	rdline (file);
 	lncount++;
-	if ((rv = re_exec (Line)) == 1) {
+	if ((rv = regexec (&re, Line, 0, NULL, 0)) == 0) {
 		if (--n == 0) {
 		    if (lncount > 3 || (lncount > 1 && no_intty))
 		    {
@@ -1631,8 +1644,7 @@ void search(char buf[], FILE *file, register int n)
 		    }
 		    break;
 		}
-	} else if (rv == -1)
-	    error (_("Regular expression botch"));
+	}
     }
     if (feof (file)) {
 	if (!no_intty) {
@@ -1643,7 +1655,9 @@ void search(char buf[], FILE *file, register int n)
 	    putsout(_("\nPattern not found\n"));
 	    end_it (0);
 	}
-	error (_("Pattern not found"));
+	more_error (_("Pattern not found"));
+	free (previousre);
+	previousre = NULL;
     }
 }
 
@@ -2025,7 +2039,7 @@ void ttyin (char buf[], register int nmax, char pchar) {
     *--sp = '\0';
     if (!eraseln) promptlen = maxlen;
     if (sp - buf >= nmax - 1)
-	error (_("Line too long"));
+	more_error (_("Line too long"));
 }
 
 /* return: 0 - unchanged, 1 - changed, -1 - overflow (unchanged) */
@@ -2060,7 +2074,7 @@ int expand (char **outbuf, char *inbuf) {
 	    break;
 	case '!':
 	    if (!shellp)
-		error (_("No previous command to substitute for"));
+		more_error (_("No previous command to substitute for"));
 	    strcpy (outstr, shell_line);
 	    outstr += strlen (shell_line);
 	    changed++;
@@ -2089,7 +2103,7 @@ void show (char c) {
     promptlen++;
 }
 
-void error (char *mess)
+void more_error (char *mess)
 {
     if (clreol)
 	cleareol ();
@@ -2126,7 +2140,7 @@ reset_tty () {
     if (no_tty)
 	return;
     if (pstate) {
-	tputs(ULexit, fileno(stdout), ourputch);	/* putchar - if that isnt a macro */
+	tputs(ULexit, fileno(stdout), ourputch);	/* putchar - if that isn't a macro */
 	fflush(stdout);
 	pstate = 0;
     }

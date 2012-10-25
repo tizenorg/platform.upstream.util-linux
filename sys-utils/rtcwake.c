@@ -41,6 +41,7 @@
 #include "usleep.h"
 #include "strutils.h"
 #include "c.h"
+#include "closestream.h"
 
 /* constants from legacy PC/AT hardware */
 #define	RTC_PF	0x40
@@ -63,7 +64,6 @@ enum ClockMode {
 
 static unsigned		verbose;
 static unsigned		dryrun;
-static unsigned		ioctl_aie_on;  // ioctl(AIE_ON) succeeded
 enum ClockMode		clock_mode = CM_AUTO;
 
 static struct option long_options[] = {
@@ -115,7 +115,7 @@ static int is_wakeup_enabled(const char *devname)
 	snprintf(buf, sizeof buf, RTC_PATH, devname + strlen("/dev/"));
 	f = fopen(buf, "r");
 	if (!f) {
-		warn(_("open failed: %s"), buf);
+		warn(_("cannot open %s"), buf);
 		return 0;
 	}
 	s = fgets(buf, sizeof buf, f);
@@ -242,7 +242,6 @@ static int setup_alarm(int fd, time_t *wakeup)
 				warn(_("enable rtc alarm failed"));
 				return -1;
 			}
-			ioctl_aie_on = 1;
 		} else {
 			warn(_("set rtc wake alarm failed"));
 			return -1;
@@ -275,7 +274,7 @@ static void suspend_system(const char *suspend)
 	FILE	*f = fopen(SYS_POWER_STATE_PATH, "w");
 
 	if (!f) {
-		warn(_("open failed: %s"), SYS_POWER_STATE_PATH);
+		warn(_("cannot open %s"), SYS_POWER_STATE_PATH);
 		return;
 	}
 
@@ -285,7 +284,8 @@ static void suspend_system(const char *suspend)
 	}
 
 	/* this executes after wake from suspend */
-	fclose(f);
+	if (close_stream(f))
+		errx(EXIT_FAILURE, _("write error"));
 }
 
 
@@ -394,6 +394,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((t = getopt_long(argc, argv, "ahd:lm:ns:t:uVv",
 					long_options, NULL)) != EOF) {
@@ -442,16 +443,14 @@ int main(int argc, char **argv)
 
 			/* alarm time, seconds-to-sleep (relative) */
 		case 's':
-			seconds = strtol_or_err(optarg,
-					_("failed to parse seconds value"));
+			seconds = strtou32_or_err(optarg, _("invalid seconds argument"));
 			break;
 
 			/* alarm time, time_t (absolute, seconds since
 			 * 1/1 1970 UTC)
 			 */
 		case 't':
-			alarm = strtol_or_err(optarg,
-					_("failed to parse time_t value"));
+			alarm = strtou32_or_err(optarg, _("invalid time argument"));
 			break;
 
 		case 'u':
@@ -513,7 +512,7 @@ int main(int argc, char **argv)
 	fd = open(devname, O_RDONLY);
 #endif
 	if (fd < 0)
-		err(EXIT_FAILURE, _("open failed: %s"), devname);
+		err(EXIT_FAILURE, _("cannot open %s"), devname);
 
 	/* relative or absolute alarm time, normalized to time_t */
 	if (get_basetimes(fd) < 0)
@@ -615,9 +614,25 @@ int main(int argc, char **argv)
 		suspend_system(suspend);
 	}
 
-	if (!dryrun && ioctl_aie_on && ioctl(fd, RTC_AIE_OFF, 0) < 0)
+	if (!dryrun) {
+		/* try to disable the alarm with the preferred RTC_WKALM_RD and
+		 * RTC_WKALM_SET calls, if it fails fall back to RTC_AIE_OFF
+		 */
+		struct rtc_wkalrm wake;
 
-		warn(_("disable rtc alarm interrupt failed"));
+		if (ioctl(fd, RTC_WKALM_RD, &wake) < 0) {
+			if (ioctl(fd, RTC_AIE_OFF, 0) < 0) {
+				warn(_("disable rtc alarm interrupt failed"));
+				rc = EXIT_FAILURE;
+			}
+		} else {
+			wake.enabled = 0;
+			if (ioctl(fd, RTC_WKALM_SET, &wake) < 0) {
+				warn(_("disable rtc alarm interrupt failed"));
+				rc = EXIT_FAILURE;
+			}
+		}
+	}
 
 	close(fd);
 	return rc;

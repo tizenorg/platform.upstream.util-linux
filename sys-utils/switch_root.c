@@ -35,6 +35,7 @@
 
 #include "c.h"
 #include "nls.h"
+#include "closestream.h"
 
 #ifndef MS_MOVE
 #define MS_MOVE 8192
@@ -61,7 +62,7 @@ static int recursiveRemove(int fd)
 	dfd = dirfd(dir);
 
 	if (fstat(dfd, &rb)) {
-		warn(_("failed to stat directory"));
+		warn(_("stat failed"));
 		goto done;
 	}
 
@@ -84,7 +85,7 @@ static int recursiveRemove(int fd)
 			struct stat sb;
 
 			if (fstatat(dfd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW)) {
-				warn(_("failed to stat %s"), d->d_name);
+				warn(_("stat failed %s"), d->d_name);
 				continue;
 			}
 
@@ -124,7 +125,7 @@ static int switchroot(const char *newroot)
 	struct stat newroot_stat, sb;
 
 	if (stat(newroot, &newroot_stat) != 0) {
-		warn(_("failed to stat directory %s"), newroot);
+		warn(_("stat failed %s"), newroot);
 		return -1;
 	}
 
@@ -153,6 +154,10 @@ static int switchroot(const char *newroot)
 	}
 
 	cfd = open("/", O_RDONLY);
+	if (cfd < 0) {
+		warn(_("cannot open %s"), "/");
+		return -1;
+	}
 
 	if (mount(newroot, "/", NULL, MS_MOVE, NULL) < 0) {
 		close(cfd);
@@ -194,6 +199,7 @@ static void __attribute__((__noreturn__)) usage(FILE *output)
 int main(int argc, char *argv[])
 {
 	char *newroot, *init, **initargs;
+	atexit(close_stdout);
 
 	if (argv[1] && (!strcmp(argv[1], "--help") || !strcmp(argv[1], "-h")))
 		usage(stdout);

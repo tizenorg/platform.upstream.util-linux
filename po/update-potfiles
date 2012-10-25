@@ -12,8 +12,7 @@
 [ ! -f "po/Makevars" ] && \
 	echo "You must run this script in the top-level directory"
 
-find -name "*.c" | \
+find -name "*.c" -or -name "*.h" | \
   sort | \
-  sed ':/samples/:d' | \
-  gawk '! /^\.\/tests\// { print gensub(/^\.\//, "", 1) }' \
+  sed '/samples/d; /config\.h/d; /util-linux-.*/d; /\.\/tests/d; s/^\.\///' \
   > po/POTFILES.in

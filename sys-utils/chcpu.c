@@ -14,9 +14,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <ctype.h>
@@ -40,6 +40,10 @@
 #include "strutils.h"
 #include "bitops.h"
 #include "path.h"
+#include "closestream.h"
+#include "optutils.h"
+
+#define EXCL_ERROR "--{configure,deconfigure,disable,dispatch,enable}"
 
 #define _PATH_SYS_CPU		"/sys/devices/system/cpu"
 #define _PATH_SYS_CPU_ONLINE	_PATH_SYS_CPU "/online"
@@ -136,11 +140,11 @@ static int cpu_set_dispatch(int mode)
 	if (mode == 0) {
 		if (path_writestr("0", _PATH_SYS_CPU_DISPATCH) == -1)
 			err(EXIT_FAILURE, _("Failed to set horizontal dispatch mode"));
-		printf(_("Succesfully set horizontal dispatching mode\n"));
+		printf(_("Successfully set horizontal dispatching mode\n"));
 	} else {
 		if (path_writestr("1", _PATH_SYS_CPU_DISPATCH) == -1)
 			err(EXIT_FAILURE, _("Failed to set vertical dispatch mode"));
-		printf(_("Succesfully set vertical dispatching mode\n"));
+		printf(_("Successfully set vertical dispatching mode\n"));
 	}
 	return EXIT_SUCCESS;
 }
@@ -243,9 +247,16 @@ int main(int argc, char *argv[])
 		{ NULL,		0, 0, 0 }
 	};
 
+	static const ul_excl_t excl[] = {       /* rows and cols in in ASCII order */
+		{ 'c','d','e','g','p' },
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
+
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	maxcpus = get_max_number_of_cpus();
 	if (maxcpus < 1)
@@ -258,10 +269,9 @@ int main(int argc, char *argv[])
 		err(EXIT_FAILURE, _("cpuset_alloc failed"));
 
 	while ((c = getopt_long(argc, argv, "c:d:e:g:hp:rV", longopts, NULL)) != -1) {
-		if (cmd != -1 && strchr("cdegpr", c))
-			errx(EXIT_FAILURE,
-			     _("configure, deconfigure, disable, dispatch, enable "
-			       "and rescan are mutually exclusive"));
+
+		err_exclusive_options(c, longopts, excl, excl_st);
+
 		switch (c) {
 		case 'c':
 			cmd = CMD_CPU_CONFIGURE;

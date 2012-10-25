@@ -27,6 +27,15 @@
   */
 
 /*
+ * This command is deprecated.  The utility is in maintenance mode,
+ * meaning we keep them in source tree for backward compatibility
+ * only.  Do not waste time making this command better, unless the
+ * fix is about security or other very critical issue.
+ *
+ * See Documentation/deprecated.txt for more information.
+ */
+
+/*
  * last
  */
 #include <sys/param.h>
@@ -47,6 +56,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include "closestream.h"
 #include "pathnames.h"
 #include "nls.h"
 #include "xalloc.h"
@@ -62,15 +72,11 @@ static struct utmp	utmpbuf;
 #define	LMAX	(int)sizeof(utmpbuf.ut_line)	/* size of utmp tty field */
 #define	NMAX	(int)sizeof(utmpbuf.ut_name)	/* size of utmp name field */
 
-#ifndef MIN
-#define MIN(a,b)	(((a) < (b)) ? (a) : (b))
-#endif
-
 /* maximum sizes used for printing */
 /* probably we want a two-pass version that computes the right length */
-int hmax = MIN(HMAX, 16);
-int lmax = MIN(LMAX, 8);
-int nmax = MIN(NMAX, 16);
+#define P_HMAX	min(HMAX, 16)
+#define P_LMAX	min(LMAX, 8)
+#define P_NMAX	min(NMAX, 16)
 
 typedef struct arg {
 	char	*name;				/* argument */
@@ -112,6 +118,7 @@ main(int argc, char **argv) {
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((ch = getopt(argc, argv, "0123456789yli:f:h:t:")) != -1)
 		switch((char)ch) {
@@ -176,19 +183,19 @@ print_partial_line(struct utmp *bp) {
     char *ct;
 
     ct = utmp_ctime(bp);
-    printf("%-*.*s  %-*.*s ", nmax, nmax, bp->ut_name, 
-	   lmax, lmax, bp->ut_line);
+    printf("%-*.*s  %-*.*s ", P_NMAX, P_NMAX, bp->ut_name,
+	   P_LMAX, P_LMAX, bp->ut_line);
 
     if (dolong) {
 	if (bp->ut_addr) {
 	    struct in_addr foo;
 	    foo.s_addr = bp->ut_addr;
-	    printf("%-*.*s ", hmax, hmax, inet_ntoa(foo));
+	    printf("%-*.*s ", P_HMAX, P_HMAX, inet_ntoa(foo));
 	} else {
-	    printf("%-*.*s ", hmax, hmax, "");
+	    printf("%-*.*s ", P_HMAX, P_HMAX, "");
 	}
     } else {
-	printf("%-*.*s ", hmax, hmax, bp->ut_host);
+	printf("%-*.*s ", P_HMAX, P_HMAX, bp->ut_host);
     }
 
     if (doyear) {
@@ -235,7 +242,7 @@ wtmp(void) {
 	(void)signal(SIGQUIT, onintr);
 
 	if ((fd = open(file,O_RDONLY)) < 0)
-		err(EXIT_FAILURE, _("%s: open failed"), file);
+		err(EXIT_FAILURE, _("cannot open %s"), file);
 
 	fstat(fd, &st);
 	utl_len = st.st_size;

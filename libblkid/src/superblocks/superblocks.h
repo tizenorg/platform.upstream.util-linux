@@ -50,6 +50,7 @@ extern const struct blkid_idinfo hpfs_idinfo;
 extern const struct blkid_idinfo lvm2_idinfo;
 extern const struct blkid_idinfo lvm1_idinfo;
 extern const struct blkid_idinfo snapcow_idinfo;
+extern const struct blkid_idinfo verity_hash_idinfo;
 extern const struct blkid_idinfo luks_idinfo;
 extern const struct blkid_idinfo highpoint37x_idinfo;
 extern const struct blkid_idinfo highpoint45x_idinfo;
@@ -74,14 +75,14 @@ extern const struct blkid_idinfo exfat_idinfo;
  */
 extern int blkid_probe_set_version(blkid_probe pr, const char *version);
 extern int blkid_probe_sprintf_version(blkid_probe pr, const char *fmt, ...)
-		__attribute__ ((format (printf, 2, 3)));
+		__attribute__ ((__format__ (__printf__, 2, 3)));
 
 extern int blkid_probe_set_label(blkid_probe pr, unsigned char *label, size_t len);
 extern int blkid_probe_set_utf8label(blkid_probe pr, unsigned char *label,
                 size_t len, int enc);
 extern int blkid_probe_sprintf_uuid(blkid_probe pr, unsigned char *uuid,
                 size_t len, const char *fmt, ...)
-		__attribute__ ((format (printf, 4, 5)));
+		__attribute__ ((__format__ (__printf__, 4, 5)));
 extern int blkid_probe_strncpy_uuid(blkid_probe pr, unsigned char *str, size_t len);
 
 extern int blkid_probe_set_uuid(blkid_probe pr, unsigned char *uuid);

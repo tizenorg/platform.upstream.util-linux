@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <errno.h>
@@ -27,6 +27,7 @@
 
 #include "nls.h"
 #include "c.h"
+#include "closestream.h"
 
 #ifndef CLONE_NEWSNS
 # define CLONE_NEWNS 0x00020000
@@ -91,6 +92,7 @@ int main(int argc, char *argv[])
 	setlocale(LC_MESSAGES, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while((c = getopt_long(argc, argv, "hVmuin", longopts, NULL)) != -1) {
 		switch(c) {

@@ -23,6 +23,7 @@
 
 #include "blkdev.h"
 #include "nls.h"
+#include "closestream.h"
 #include "c.h"
 
 static int freeze_f(int fd)
@@ -68,6 +69,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((c = getopt_long(argc, argv, "hfu", longopts, NULL)) != -1) {
 		switch(c) {
@@ -99,10 +101,10 @@ int main(int argc, char **argv)
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
-		err(EXIT_FAILURE, _("%s: open failed"), path);
+		err(EXIT_FAILURE, _("cannot open %s"), path);
 
 	if (fstat(fd, &sb) == -1) {
-		warn(_("%s: fstat failed"), path);
+		warn(_("stat failed %s"), path);
 		goto done;
 	}
 

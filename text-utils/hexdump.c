@@ -43,11 +43,12 @@
 
 #include "nls.h"
 #include "c.h"
+#include "closestream.h"
 
 FS *fshead;				/* head of format strings */
-int blocksize;				/* data block size */
+ssize_t blocksize;			/* data block size */
 int exitval;				/* final exit value */
-int length = -1;			/* max bytes to read */
+ssize_t length = -1;			/* max bytes to read */
 
 int main(int argc, char **argv)
 {
@@ -57,6 +58,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	if (!(p = strrchr(argv[0], 'o')) || strcmp(p, "od")) {
 		newsyntax(argc, &argv);
@@ -66,7 +68,7 @@ int main(int argc, char **argv)
 
 	/* figure out the data block size */
 	for (blocksize = 0, tfs = fshead; tfs; tfs = tfs->nextfs) {
-		tfs->bcnt = size(tfs);
+		tfs->bcnt = block_size(tfs);
 		if (blocksize < tfs->bcnt)
 			blocksize = tfs->bcnt;
 	}

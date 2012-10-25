@@ -14,9 +14,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <stdio.h>
@@ -30,19 +30,21 @@
 #include <sys/stat.h>
 #include <stdarg.h>
 #include <libmount.h>
+#include <ctype.h>
 
 #include "nls.h"
 #include "c.h"
 #include "env.h"
-#include "optutils.h"
 #include "strutils.h"
 #include "xgetpass.h"
 #include "exitcodes.h"
 #include "xalloc.h"
+#include "closestream.h"
+
+#define OPTUTILS_EXIT_CODE MOUNT_EX_USAGE
+#include "optutils.h"
 
 /*** TODO: DOCS:
- *
- *  --guess-fstype	is unsupported
  *
  *  --options-mode={ignore,append,prepend,replace}	MNT_OMODE_{IGNORE, ...}
  *  --options-source={fstab,mtab,disable}		MNT_OMODE_{FSTAB,MTAB,NOTAB}
@@ -129,6 +131,22 @@ static void encrypt_pass_release(struct libmnt_context *cxt
 	munlockall();
 }
 
+/*
+ * Replace control chars with '?' to be compatible with coreutils. For more
+ * robust solution use findmnt(1) where we use \x?? hex encoding.
+ */
+static void safe_fputs(const char *data)
+{
+	const char *p;
+
+	for (p = data; p && *p; p++) {
+		if (iscntrl((unsigned char) *p))
+			fputc('?', stdout);
+		else
+			fputc(*p, stdout);
+	}
+}
+
 static void print_all(struct libmnt_context *cxt, char *pattern, int show_label)
 {
 	struct libmnt_table *tb;
@@ -156,7 +174,9 @@ static void print_all(struct libmnt_context *cxt, char *pattern, int show_label)
 
 		if (!mnt_fs_is_pseudofs(fs))
 			xsrc = mnt_pretty_path(src, cache);
-		printf ("%s on %s", xsrc ? xsrc : src, mnt_fs_get_target(fs));
+		printf ("%s on ", xsrc ? xsrc : src);
+		safe_fputs(mnt_fs_get_target(fs));
+
 		if (type)
 			printf (" type %s", type);
 		if (optstr)
@@ -238,6 +258,29 @@ static int mount_all(struct libmnt_context *cxt)
 	return rc;
 }
 
+static void success_message(struct libmnt_context *cxt)
+{
+	unsigned long mflags = 0;
+	const char *tgt, *src;
+
+	if (mnt_context_helper_executed(cxt)
+	    || mnt_context_get_status(cxt) != 1)
+		return;
+
+	mnt_context_get_mflags(cxt, &mflags);
+	tgt = mnt_context_get_target(cxt);
+	src = mnt_context_get_source(cxt);
+
+	if (mflags & MS_MOVE)
+		warnx(_("%s moved to %s"), src, tgt);
+	else if (mflags & MS_BIND)
+		warnx(_("%s binded on %s"), src, tgt);
+	else if (mflags & MS_PROPAGATION)
+		warnx(_("%s propagation flags changed"), tgt);
+	else
+		warnx(_("%s mounted on %s"), src, tgt);
+}
+
 /*
  * Handles generic errors like ENOMEM, ...
  *
@@ -302,26 +345,6 @@ static void selinux_warning(struct libmnt_context *cxt, const char *tgt)
 # define selinux_warning(_x, _y)
 #endif
 
-/* temporary in mount(8) for v2.21.x releases, in v2.22 will be in libmount
- */
-static int mnt_fs_streq_srcpath(struct libmnt_fs *fs, const char *path)
-{
-	const char *p;
-
-	if (!fs)
-		return 0;
-
-	p = mnt_fs_get_srcpath(fs);
-
-	if (!mnt_fs_is_pseudofs(fs))
-		return streq_except_trailing_slash(p, path);
-
-	if (!p && !path)
-		return 1;
-
-	return p && path && strcmp(p, path) == 0;
-}
-
 /*
  * rc = 0 success
  *     <0 error (usually -errno or -1)
@@ -354,6 +377,9 @@ try_readonly:
 		return MOUNT_EX_SUCCESS;	/* mount(2) success */
 	}
 
+	mnt_context_get_mflags(cxt, &mflags);		/* mount(2) flags */
+	mnt_context_get_user_mflags(cxt, &uflags);	/* userspace flags */
+
 	if (!mnt_context_syscall_called(cxt)) {
 		/*
 		 * libmount errors (extra library checks)
@@ -365,32 +391,53 @@ try_readonly:
 		case -EBUSY:
 			warnx(_("%s is already mounted"), src);
 			return MOUNT_EX_USAGE;
-		}
-
-		/*
-		 * TODO: add mnt_context_fstab_applied() to check if we found
-		 *       target/source in the file.
-		 */
-		if (!tgt) {
-			if (mflags & MS_REMOUNT)
-				warnx(_("%s not mounted"), src ? src : tgt);
-			else
-				warnx(_("can't find %s in %s"), src ? src : tgt,
+		case -MNT_ERR_NOFSTAB:
+			if (mnt_context_is_swapmatch(cxt)) {
+				warnx(_("can't find %s in %s"),
+						src ? src : tgt,
 						mnt_get_fstab_path());
+				return MOUNT_EX_USAGE;
+			}
+			/* source/target explicitly defined */
+			if (tgt)
+				warnx(_("can't find mountpoint %s in %s"),
+						tgt, mnt_get_fstab_path());
+			else
+				warnx(_("can't find mount source %s in %s"),
+						src, mnt_get_fstab_path());
 			return MOUNT_EX_USAGE;
-		}
-
-		if (!mnt_context_get_fstype(cxt)) {
+		case -MNT_ERR_NOFSTYPE:
 			if (restricted)
 				warnx(_("I could not determine the filesystem type, "
 					"and none was specified"));
 			else
 				warnx(_("you must specify the filesystem type"));
 			return MOUNT_EX_USAGE;
-		}
-		return handle_generic_errors(rc, _("%s: mount failed"),
+		case -MNT_ERR_NOSOURCE:
+			if (src)
+				warnx(_("can't find %s"), src);
+			else
+				warnx(_("mount source not defined"));
+			return MOUNT_EX_USAGE;
+		case -MNT_ERR_MOUNTOPT:
+			if (errno)
+				warn(_("failed to parse mount options"));
+			else
+				warnx(_("failed to parse mount options"));
+			return MOUNT_EX_USAGE;
+		case -MNT_ERR_LOOPDEV:
+			if (errno == ENOENT
+			    && (uflags & MNT_MS_ENCRYPTION)
+			    && src && stat(src, &st) == 0)
+				warnx(_("%s: failed to setup loop device "
+					"(probably unknown encryption type)"), src);
+			else
+				warn(_("%s: failed to setup loop device"), src);
+			return MOUNT_EX_FAIL;
+		default:
+			return handle_generic_errors(rc, _("%s: mount failed"),
 					     tgt ? tgt : src);
-
+		}
 	} else if (mnt_context_get_syscall_errno(cxt) == 0) {
 		/*
 		 * mount(2) syscall success, but something else failed
@@ -410,8 +457,6 @@ try_readonly:
 	 */
 	syserr = mnt_context_get_syscall_errno(cxt);
 
-	mnt_context_get_mflags(cxt, &mflags);		/* mount(2) flags */
-	mnt_context_get_user_mflags(cxt, &uflags);	/* userspace flags */
 
 	switch(syserr) {
 	case EPERM:
@@ -485,6 +530,8 @@ try_readonly:
 	case EINVAL:
 		if (mflags & MS_REMOUNT)
 			warnx(_("%s not mounted or bad option"), tgt);
+		else if (mflags & MS_PROPAGATION)
+			warnx(_("%s is not mountpoint or bad option"), tgt);
 		else
 			warnx(_("wrong fs type, bad option, bad superblock on %s,\n"
 				"       missing codepage or helper program, or other error"),
@@ -596,7 +643,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fprintf(out, _(
 		" %1$s [-lhV]\n"
 		" %1$s -a [options]\n"
-		" %1$s [options] <source> | <directory>\n"
+		" %1$s [options] [--source] <source> | [--target] <directory>\n"
 		" %1$s [options] <source> <directory>\n"
 		" %1$s <operation> <mountpoint> [<target>]\n"),
 		program_invocation_short_name);
@@ -620,6 +667,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	" -r, --read-only         mount the filesystem read-only (same as -o ro)\n"
 	" -t, --types <list>      limit the set of filesystem types\n"));
 	fprintf(out, _(
+	"     --source <src>      explicitly specifies source (path, label, uuid)\n"
+	"     --target <target>   explicitly specifies mountpoint\n"));
+	fprintf(out, _(
 	" -v, --verbose           say what is being done\n"
 	" -V, --version           display version information and exit\n"
 	" -w, --read-write        mount the filesystem read-write (default)\n"));
@@ -633,7 +683,10 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	" -L, --label <label>     synonym for LABEL=<label>\n"
 	" -U, --uuid <uuid>       synonym for UUID=<uuid>\n"
 	" LABEL=<label>           specifies device by filesystem label\n"
-	" UUID=<uuid>             specifies device by filesystem UUID\n"));
+	" UUID=<uuid>             specifies device by filesystem UUID\n"
+	" PARTLABEL=<label>       specifies device by partition label\n"
+	" PARTUUID=<uuid>         specifies device by partition UUID\n"));
+
 	fprintf(out, _(
 	" <device>                specifies device by path\n"
 	" <directory>             mountpoint for bind mounts (see --bind/rbind)\n"
@@ -665,7 +718,7 @@ int main(int argc, char **argv)
 	int c, rc = MOUNT_EX_SUCCESS, all = 0, show_labels = 0;
 	struct libmnt_context *cxt;
 	struct libmnt_table *fstab = NULL;
-	char *source = NULL, *srcbuf = NULL;
+	char *srcbuf = NULL;
 	char *types = NULL;
 	unsigned long oper = 0;
 
@@ -677,7 +730,9 @@ int main(int argc, char **argv)
 		MOUNT_OPT_RSHARED,
 		MOUNT_OPT_RSLAVE,
 		MOUNT_OPT_RPRIVATE,
-		MOUNT_OPT_RUNBINDABLE
+		MOUNT_OPT_RUNBINDABLE,
+		MOUNT_OPT_TARGET,
+		MOUNT_OPT_SOURCE
 	};
 
 	static const struct option longopts[] = {
@@ -713,13 +768,28 @@ int main(int argc, char **argv)
 		{ "no-canonicalize", 0, 0, 'c' },
 		{ "internal-only", 0, 0, 'i' },
 		{ "show-labels", 0, 0, 'l' },
+		{ "target", 1, 0, MOUNT_OPT_TARGET },
+		{ "source", 1, 0, MOUNT_OPT_SOURCE },
 		{ NULL, 0, 0, 0 }
 	};
+
+	static const ul_excl_t excl[] = {       /* rows and cols in in ASCII order */
+		{ 'B','M','R',			/* bind,move,rbind */
+		   MOUNT_OPT_SHARED,   MOUNT_OPT_SLAVE,
+		   MOUNT_OPT_PRIVATE,  MOUNT_OPT_UNBINDABLE,
+		   MOUNT_OPT_RSHARED,  MOUNT_OPT_RSLAVE,
+		   MOUNT_OPT_RPRIVATE, MOUNT_OPT_RUNBINDABLE },
+
+		{ 'L','U', MOUNT_OPT_SOURCE },	/* label,uuid,source */
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
 
 	sanitize_env();
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	mnt_init_debug(0);
 	cxt = mnt_new_context();
@@ -732,8 +802,13 @@ int main(int argc, char **argv)
 					longopts, NULL)) != -1) {
 
 		/* only few options are allowed for non-root users */
-		if (mnt_context_is_restricted(cxt) && !strchr("hlLUVvpri", c))
+		if (mnt_context_is_restricted(cxt) &&
+		    !strchr("hlLUVvpris", c) &&
+		    c != MOUNT_OPT_TARGET &&
+		    c != MOUNT_OPT_SOURCE)
 			exit_non_root(option_to_longopt(c, longopts));
+
+		err_exclusive_options(c, longopts, excl, excl_st);
 
 		switch(c) {
 		case 'a':
@@ -782,17 +857,20 @@ int main(int argc, char **argv)
 				err(MOUNT_EX_SYSERR, _("failed to set options pattern"));
 			break;
 		case 'p':
-			passfd = strtol_or_err(optarg,
+			passfd = strtou32_or_err(optarg,
 					_("invalid passphrase file descriptor"));
 			break;
 		case 'L':
+			xasprintf(&srcbuf, "LABEL=\"%s\"", optarg);
+			mnt_context_disable_swapmatch(cxt, 1);
+			mnt_context_set_source(cxt, srcbuf);
+			free(srcbuf);
+			break;
 		case 'U':
-			if (source)
-				errx(MOUNT_EX_USAGE, _("only one <source> may be specified"));
-			if (asprintf(&srcbuf, "%s=\"%s\"",
-				     c == 'L' ? "LABEL" : "UUID", optarg) <= 0)
-				err(MOUNT_EX_SYSERR, _("failed to allocate source buffer"));
-			source = srcbuf;
+			xasprintf(&srcbuf, "UUID=\"%s\"", optarg);
+			mnt_context_disable_swapmatch(cxt, 1);
+			mnt_context_set_source(cxt, srcbuf);
+			free(srcbuf);
 			break;
 		case 'l':
 			show_labels = 1;
@@ -807,37 +885,45 @@ int main(int argc, char **argv)
 			mnt_context_enable_sloppy(cxt, TRUE);
 			break;
 		case 'B':
-			oper = MS_BIND;
+			oper |= MS_BIND;
 			break;
 		case 'M':
-			oper = MS_MOVE;
+			oper |= MS_MOVE;
 			break;
 		case 'R':
-			oper = (MS_BIND | MS_REC);
+			oper |= (MS_BIND | MS_REC);
 			break;
 		case MOUNT_OPT_SHARED:
-			oper = MS_SHARED;
+			oper |= MS_SHARED;
 			break;
 		case MOUNT_OPT_SLAVE:
-			oper = MS_SLAVE;
+			oper |= MS_SLAVE;
 			break;
 		case MOUNT_OPT_PRIVATE:
-			oper = MS_PRIVATE;
+			oper |= MS_PRIVATE;
 			break;
 		case MOUNT_OPT_UNBINDABLE:
-			oper = MS_UNBINDABLE;
+			oper |= MS_UNBINDABLE;
 			break;
 		case MOUNT_OPT_RSHARED:
-			oper = (MS_SHARED | MS_REC);
+			oper |= (MS_SHARED | MS_REC);
 			break;
 		case MOUNT_OPT_RSLAVE:
-			oper = (MS_SLAVE | MS_REC);
+			oper |= (MS_SLAVE | MS_REC);
 			break;
 		case MOUNT_OPT_RPRIVATE:
-			oper = (MS_PRIVATE | MS_REC);
+			oper |= (MS_PRIVATE | MS_REC);
 			break;
 		case MOUNT_OPT_RUNBINDABLE:
-			oper = (MS_UNBINDABLE | MS_REC);
+			oper |= (MS_UNBINDABLE | MS_REC);
+			break;
+		case MOUNT_OPT_TARGET:
+			mnt_context_disable_swapmatch(cxt, 1);
+			mnt_context_set_target(cxt, optarg);
+			break;
+		case MOUNT_OPT_SOURCE:
+			mnt_context_disable_swapmatch(cxt, 1);
+			mnt_context_set_source(cxt, optarg);
 			break;
 		default:
 			usage(stderr);
@@ -848,14 +934,17 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	if (!source && !argc && !all) {
+	if (!mnt_context_get_source(cxt) &&
+	    !mnt_context_get_target(cxt) &&
+	    !argc &&
+	    !all) {
 		if (oper)
 			usage(stderr);
 		print_all(cxt, types, show_labels);
 		goto done;
 	}
 
-	if (oper && (types || all || source))
+	if (oper && (types || all || mnt_context_get_source(cxt)))
 		usage(stderr);
 
 	if (types && (all || strchr(types, ',') ||
@@ -873,25 +962,31 @@ int main(int argc, char **argv)
 		rc = mount_all(cxt);
 		goto done;
 
-	} else if (argc == 0 && source) {
+	} else if (argc == 0 && (mnt_context_get_source(cxt) ||
+				 mnt_context_get_target(cxt))) {
 		/*
-		 * B) mount -L|-U
+		 * B) mount -L|-U|--source|--target
 		 */
-		mnt_context_set_source(cxt, source);
+		if (mnt_context_is_restricted(cxt) &&
+		    mnt_context_get_source(cxt) &&
+		    mnt_context_get_target(cxt))
+			exit_non_root(NULL);
 
 	} else if (argc == 1) {
 		/*
-		 * C) mount [-L|-U] <target>
+		 * C) mount [-L|-U|--source] <target>
 		 *    mount <source|target>
+		 *
+		 * non-root may specify source *or* target, but not both
 		 */
-		if (source) {
-			if (mnt_context_is_restricted(cxt))
-				exit_non_root(NULL);
-			 mnt_context_set_source(cxt, source);
-		}
+		if (mnt_context_is_restricted(cxt) &&
+		    mnt_context_get_source(cxt))
+			exit_non_root(NULL);
+
 		mnt_context_set_target(cxt, argv[0]);
 
-	} else if (argc == 2 && !source) {
+	} else if (argc == 2 && !mnt_context_get_source(cxt)
+			     && !mnt_context_get_target(cxt)) {
 		/*
 		 * D) mount <source> <target>
 		 */
@@ -899,6 +994,7 @@ int main(int argc, char **argv)
 			exit_non_root(NULL);
 		mnt_context_set_source(cxt, argv[0]);
 		mnt_context_set_target(cxt, argv[1]);
+
 	} else
 		usage(stderr);
 
@@ -913,8 +1009,9 @@ int main(int argc, char **argv)
 	rc = mnt_context_mount(cxt);
 	rc = mk_exit_code(cxt, rc);
 
+	if (rc == MOUNT_EX_SUCCESS && mnt_context_is_verbose(cxt))
+		success_message(cxt);
 done:
-	free(srcbuf);
 	mnt_free_context(cxt);
 	mnt_free_table(fstab);
 	return rc;

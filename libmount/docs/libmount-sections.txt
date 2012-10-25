@@ -24,6 +24,7 @@ mnt_context_apply_fstab
 mnt_context_disable_canonicalize
 mnt_context_disable_helpers
 mnt_context_disable_mtab
+mnt_context_disable_swapmatch
 mnt_context_enable_fake
 mnt_context_enable_force
 mnt_context_enable_fork
@@ -40,6 +41,7 @@ mnt_context_get_helper_status
 mnt_context_get_lock
 mnt_context_get_mflags
 mnt_context_get_mtab
+mnt_context_get_options
 mnt_context_get_optsmode
 mnt_context_get_source
 mnt_context_get_status
@@ -56,11 +58,15 @@ mnt_context_is_force
 mnt_context_is_fork
 mnt_context_is_fs_mounted
 mnt_context_is_lazy
+mnt_context_is_loopdel
+mnt_context_is_nocanonicalize
+mnt_context_is_nohelpers
 mnt_context_is_nomtab
 mnt_context_is_parent
 mnt_context_is_rdonly_umount
 mnt_context_is_restricted
 mnt_context_is_sloppy
+mnt_context_is_swapmatch
 mnt_context_is_verbose
 mnt_context_reset_status
 mnt_context_set_cache
@@ -81,6 +87,7 @@ mnt_context_set_target
 mnt_context_set_user_mflags
 mnt_context_strerror
 mnt_context_syscall_called
+mnt_context_tab_applied
 mnt_context_wait_for_children
 </SECTION>
 
@@ -165,18 +172,22 @@ mnt_fs_get_option
 mnt_fs_get_options
 mnt_fs_get_parent_id
 mnt_fs_get_passno
+mnt_fs_get_priority
 mnt_fs_get_root
+mnt_fs_get_size
 mnt_fs_get_source
 mnt_fs_get_srcpath
+mnt_fs_get_swaptype
 mnt_fs_get_tag
 mnt_fs_get_target
+mnt_fs_get_usedsize
 mnt_fs_get_userdata
 mnt_fs_get_user_options
 mnt_fs_get_vfs_options
 mnt_fs_is_kernel
-mnt_fs_is_swaparea
 mnt_fs_is_netfs
 mnt_fs_is_pseudofs
+mnt_fs_is_swaparea
 mnt_fs_match_fstype
 mnt_fs_match_options
 mnt_fs_match_source
@@ -195,6 +206,8 @@ mnt_fs_set_source
 mnt_fs_set_target
 mnt_fs_set_userdata
 mnt_fs_strdup_options
+mnt_fs_streq_srcpath
+mnt_fs_streq_target
 mnt_fs_to_mntent
 mnt_new_fs
 mnt_reset_fs
@@ -237,6 +250,7 @@ MNT_NOHLPS
 <FILE>optstr</FILE>
 mnt_optstr_append_option
 mnt_optstr_apply_flags
+mnt_optstr_deduplicate_option
 mnt_optstr_get_flags
 mnt_optstr_get_option
 mnt_optstr_get_options
@@ -256,6 +270,7 @@ mnt_reset_table
 mnt_new_table_from_dir
 mnt_new_table_from_file
 mnt_table_add_fs
+mnt_table_find_devno
 mnt_table_find_next_fs
 mnt_table_find_pair
 mnt_table_find_source
@@ -268,11 +283,12 @@ mnt_table_get_root_fs
 mnt_table_is_fs_mounted
 mnt_table_next_child_fs
 mnt_table_next_fs
-mnt_table_parse_file
 mnt_table_parse_dir
+mnt_table_parse_file
 mnt_table_parse_fstab
 mnt_table_parse_mtab
 mnt_table_parse_stream
+mnt_table_parse_swaps
 mnt_table_remove_fs
 mnt_table_set_cache
 mnt_table_set_iter
@@ -308,6 +324,7 @@ mnt_fstype_is_netfs
 mnt_fstype_is_pseudofs
 mnt_get_fstab_path
 mnt_get_mtab_path
+mnt_get_swaps_path
 mnt_has_regular_mtab
 mnt_mangle
 mnt_match_fstype

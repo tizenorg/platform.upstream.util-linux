@@ -68,7 +68,7 @@
  * Semantics:
  *
  * Setterm writes to standard output a character string that will
- * invoke the specified terminal capabilities.  Where possibile
+ * invoke the specified terminal capabilities.  Where possible
  * terminfo is consulted to find the string to use.  Some options
  * however do not correspond to a terminfo capability.  In this case if
  * the terminal type is "con*", or "linux*" the string that invokes
@@ -121,6 +121,7 @@
 #include "c.h"
 #include "xalloc.h"
 #include "nls.h"
+#include "closestream.h"
 
 #if __GNU_LIBRARY__ < 5
 #ifndef __alpha__
@@ -217,11 +218,11 @@ static void screendump(int vcnum, FILE *F);
  */
 
 static void
-parse_term(int argc, char **argv, int *option, char **opt_term, int *bad_arg) {
+parse_term(int argc, char **argv, int *option, char **ttyname, int *bad_arg) {
 	/* argc: Number of arguments for this option. */
 	/* argv: Arguments for this option. */
 	/* option: Term flag to set. */
-	/* opt_term: Terminal name to set. */
+	/* ttyname: Terminal name to set. */
 	/* bad_arg: Set to true if an error is detected. */
 
 /* Parse a -term specification. */
@@ -230,7 +231,7 @@ parse_term(int argc, char **argv, int *option, char **opt_term, int *bad_arg) {
 		*bad_arg = TRUE;
 	*option = TRUE;
 	if (argc == 1)
-		*opt_term = argv[0];
+		*ttyname = argv[0];
 }
 
 static void
@@ -1113,7 +1114,8 @@ perform_sequence(int vcterm) {
 			err(EXIT_DUMPFILE, _("can not open dump file %s for output"),
 				opt_sn_name); 
 		screendump(opt_sn_num, F);
-		fclose(F);
+		if (close_stream(F) != 0)
+			errx(EXIT_FAILURE, _("write error"));
 	}
 
 	/* -msg [on|off]. */
@@ -1206,9 +1208,13 @@ screendump(int vcnum, FILE * F)
 	close(fd);
 	return;
 
-      read_error:
-	warnx(_("Couldn't read %s"), infile);
-      error:
+read_error:
+	if (vcnum != 0)
+		warnx(_("Couldn't read %s"), infile);
+	else
+		warnx(_("Couldn't read neither /dev/vcsa0 nor /dev/vcsa"));
+
+error:
 	if (fd >= 0)
 		close(fd);
 	exit(EXIT_FAILURE);
@@ -1225,6 +1231,7 @@ main(int argc, char **argv) {
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	if (argc < 2)
 		bad_arg = TRUE;

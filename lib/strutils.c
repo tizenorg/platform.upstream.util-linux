@@ -9,10 +9,10 @@
 #include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
-#include <locale.h>
 #include <string.h>
 
 #include "c.h"
+#include "nls.h"
 #include "strutils.h"
 #include "bitops.h"
 
@@ -167,9 +167,89 @@ char *strndup(const char *s, size_t n)
 }
 #endif
 
-/*
- * same as strtod(3) but exit on failure instead of returning crap
- */
+int16_t strtos16_or_err(const char *str, const char *errmesg)
+{
+	int32_t num = strtos32_or_err(str, errmesg);
+
+	if (num < INT16_MIN || num > INT16_MAX)
+		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	return num;
+}
+
+uint16_t strtou16_or_err(const char *str, const char *errmesg)
+{
+	uint32_t num = strtou32_or_err(str, errmesg);
+
+	if (num > UINT16_MAX)
+		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	return num;
+}
+
+int32_t strtos32_or_err(const char *str, const char *errmesg)
+{
+	int64_t num = strtos64_or_err(str, errmesg);
+
+	if (num < INT32_MIN || num > INT32_MAX)
+		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	return num;
+}
+
+uint32_t strtou32_or_err(const char *str, const char *errmesg)
+{
+	uint64_t num = strtou64_or_err(str, errmesg);
+
+	if (num > UINT32_MAX)
+		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	return num;
+}
+
+int64_t strtos64_or_err(const char *str, const char *errmesg)
+{
+	int64_t num;
+	char *end = NULL;
+
+	if (str == NULL || *str == '\0')
+		goto err;
+	errno = 0;
+	num = strtoimax(str, &end, 10);
+
+	if (errno || str == end || (end && *end))
+		goto err;
+
+	return num;
+err:
+	if (errno)
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+}
+
+uint64_t strtou64_or_err(const char *str, const char *errmesg)
+{
+	uintmax_t num;
+	char *end = NULL;
+
+	if (str == NULL || *str == '\0')
+		goto err;
+	errno = 0;
+	num = strtoumax(str, &end, 10);
+
+	if (errno || str == end || (end && *end))
+		goto err;
+
+	return num;
+err:
+	if (errno)
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+}
+
+
 double strtod_or_err(const char *str, const char *errmesg)
 {
 	double num;
@@ -184,64 +264,33 @@ double strtod_or_err(const char *str, const char *errmesg)
 		goto err;
 
 	return num;
- err:
+err:
 	if (errno)
-		err(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-	else
-		errx(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-	return 0;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 }
-/*
- * same as strtol(3) but exit on failure instead of returning crap
- */
+
 long strtol_or_err(const char *str, const char *errmesg)
 {
-       long num;
-       char *end = NULL;
+	long num;
+	char *end = NULL;
 
-       if (str == NULL || *str == '\0')
-               goto err;
-       errno = 0;
-       num = strtol(str, &end, 10);
+	if (str == NULL || *str == '\0')
+		goto err;
+	errno = 0;
+	num = strtol(str, &end, 10);
 
-       if (errno || str == end || (end && *end))
-               goto err;
+	if (errno || str == end || (end && *end))
+		goto err;
 
-       return num;
+	return num;
 err:
-       if (errno)
-               err(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-       else
-               errx(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-       return 0;
+	if (errno)
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 }
-/*
- * same as strtoll(3) but exit on failure instead of returning crap
- */
-long long strtoll_or_err(const char *str, const char *errmesg)
-{
-       long long num;
-       char *end = NULL;
 
-       if (str == NULL || *str == '\0')
-               goto err;
-       errno = 0;
-       num = strtoll(str, &end, 10);
-
-       if (errno || str == end || (end && *end))
-               goto err;
-
-       return num;
-err:
-       if (errno)
-               err(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-       else
-               errx(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-       return 0;
-}
-/*
- * same as strtoul(3) but exit on failure instead of returning crap
- */
 unsigned long strtoul_or_err(const char *str, const char *errmesg)
 {
 	unsigned long num;
@@ -258,10 +307,22 @@ unsigned long strtoul_or_err(const char *str, const char *errmesg)
 	return num;
 err:
 	if (errno)
-		err(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-	else
-		errx(EXIT_FAILURE, "%s: '%s'", errmesg, str);
-	return 0;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+}
+
+uintmax_t strtosize_or_err(const char *str, const char *errmesg)
+{
+	uintmax_t num;
+
+	if (strtosize(str, &num) == 0)
+		return num;
+
+	if (errno)
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 }
 
 /*
@@ -418,10 +479,37 @@ int string_to_idarray(const char *list, int ary[], size_t arysz,
 }
 
 /*
+ * Parses the array like string_to_idarray but if format is "+aaa,bbb"
+ * it adds fields to array instead of replacing them.
+ */
+int string_add_to_idarray(const char *list, int ary[], size_t arysz,
+			int *ary_pos, int (name2id)(const char *, size_t))
+{
+	const char *list_add;
+	int r;
+
+	if (!list || !*list || !ary_pos ||
+	    *ary_pos < 0 || (size_t) *ary_pos > arysz)
+		return -1;
+
+	if (list[0] == '+')
+		list_add = &list[1];
+	else {
+		list_add = list;
+		*ary_pos = 0;
+	}
+
+	r = string_to_idarray(list_add, &ary[*ary_pos], arysz - *ary_pos, name2id);
+	if (r > 0)
+		*ary_pos += r;
+	return r;
+}
+
+/*
  * LIST ::= <item> [, <item>]
  *
  * The <item> is translated to 'id' by name2id() function and the 'id' is used
- * as a possition in the 'ary' bit array. It means that the 'id' has to be in
+ * as a position in the 'ary' bit array. It means that the 'id' has to be in
  * range <0..N> where N < sizeof(ary) * NBBY.
  *
  * Returns: 0 on success, <0 on error.
@@ -454,6 +542,49 @@ int string_to_bitarray(const char *list,
 		if (bit < 0)
 			return bit;
 		setbit(ary, bit);
+		begin = NULL;
+		if (end && !*end)
+			break;
+	}
+	return 0;
+}
+
+/*
+ * LIST ::= <item> [, <item>]
+ *
+ * The <item> is translated to 'id' by name2flag() function and the flags is
+ * set to the 'mask'
+*
+ * Returns: 0 on success, <0 on error.
+ */
+int string_to_bitmask(const char *list,
+		     unsigned long *mask,
+		     long (*name2flag)(const char *, size_t))
+{
+	const char *begin = NULL, *p;
+
+	if (!list || !name2flag || !mask)
+		return -EINVAL;
+
+	for (p = list; p && *p; p++) {
+		const char *end = NULL;
+		long flag;
+
+		if (!begin)
+			begin = p;		/* begin of the level name */
+		if (*p == ',')
+			end = p;		/* terminate the name */
+		if (*(p + 1) == '\0')
+			end = p + 1;		/* end of string */
+		if (!begin || !end)
+			continue;
+		if (end <= begin)
+			return -1;
+
+		flag = name2flag(begin, end - begin);
+		if (flag < 0)
+			return flag;	/* error */
+		*mask |= flag;
 		begin = NULL;
 		if (end && !*end)
 			break;
@@ -560,6 +691,6 @@ int main(int argc, char *argv[])
 	free(hum);
 	free(hum2);
 
-	return EXIT_FAILURE;
+	return EXIT_SUCCESS;
 }
 #endif /* TEST_PROGRAM */

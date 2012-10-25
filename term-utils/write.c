@@ -57,10 +57,11 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <paths.h>
-#include <asm/param.h>
 #include <getopt.h>
+
 #include "c.h"
 #include "carefulputc.h"
+#include "closestream.h"
 #include "nls.h"
 
 static void __attribute__ ((__noreturn__)) usage(FILE * out);
@@ -92,7 +93,7 @@ int main(int argc, char **argv)
 	time_t atime;
 	uid_t myuid;
 	int msgsok, myttyfd, c;
-	char tty[MAXPATHLEN], *mytty;
+	char tty[PATH_MAX], *mytty;
 
 	static const struct option longopts[] = {
 		{"version", no_argument, NULL, 'V'},
@@ -103,6 +104,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((c = getopt_long(argc, argv, "Vh", longopts, NULL)) != -1)
 		switch (c) {
@@ -285,7 +287,7 @@ void search_utmp(char *user, char *tty, char *mytty, uid_t myuid)
 int term_chk(char *tty, int *msgsokP, time_t * atimeP, int showerror)
 {
 	struct stat s;
-	char path[MAXPATHLEN];
+	char path[PATH_MAX];
 
 	if (strlen(tty) + 6 > sizeof(path))
 		return 1;
@@ -310,7 +312,7 @@ void do_write(char *tty, char *mytty, uid_t myuid)
 	char *login, *pwuid, *nows;
 	struct passwd *pwd;
 	time_t now;
-	char path[MAXPATHLEN], host[MAXHOSTNAMELEN], line[512];
+	char path[PATH_MAX], host[MAXHOSTNAMELEN], line[512];
 
 	/* Determine our login name(s) before the we reopen() stdout */
 	if ((pwd = getpwuid(myuid)) != NULL)

@@ -14,9 +14,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <errno.h>
@@ -33,8 +33,9 @@
 #include "c.h"
 #include "nls.h"
 #include "strutils.h"
+#include "closestream.h"
 
-key_t create_key(void)
+static key_t create_key(void)
 {
 	struct timeval now;
 	gettimeofday(&now, NULL);
@@ -42,19 +43,19 @@ key_t create_key(void)
 	return random();
 }
 
-int create_shm(size_t size, int permission)
+static int create_shm(size_t size, int permission)
 {
 	key_t key = create_key();
 	return shmget(key, size, permission | IPC_CREAT);
 }
 
-int create_msg(int permission)
+static int create_msg(int permission)
 {
 	key_t key = create_key();
 	return msgget(key, permission | IPC_CREAT);
 }
 
-int create_sem(int nsems, int permission)
+static int create_sem(int nsems, int permission)
 {
 	key_t key = create_key();
 	return semget(key, nsems, permission | IPC_CREAT);
@@ -98,18 +99,19 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while((opt = getopt_long(argc, argv, "hM:QS:p:Vh", longopts, NULL)) != -1) {
 		switch(opt) {
 		case 'M':
-			size = strtol_or_err(optarg, _("failed to parse size"));
+			size = strtou64_or_err(optarg, _("failed to parse size"));
 			ask_shm = 1;
 			break;
 		case 'Q':
 			ask_msg = 1;
 			break;
 		case 'S':
-			nsems = strtol_or_err(optarg, _("failed to parse elements"));
+			nsems = strtos32_or_err(optarg, _("failed to parse elements"));
 			ask_sem = 1;
 			break;
 		case 'p':

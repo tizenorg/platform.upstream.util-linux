@@ -84,6 +84,9 @@
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
 
+/* Define to 1 if have **environ prototype */
+#undef HAVE_ENVIRON_DECL
+
 /* Define to 1 if you have the `err' function. */
 #undef HAVE_ERR
 
@@ -104,9 +107,6 @@
 
 /* Define to 1 if fseeko (and presumably ftello) exists and is declared. */
 #undef HAVE_FSEEKO
-
-/* Define to 1 if you have the `fstat64' function. */
-#undef HAVE_FSTAT64
 
 /* Define to 1 if you have the `fstatat' function. */
 #undef HAVE_FSTATAT
@@ -138,14 +138,8 @@
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
 
-/* Define to 1 if you have the `get_current_dir_name' function. */
-#undef HAVE_GET_CURRENT_DIR_NAME
-
 /* Define if you have the iconv() function. */
 #undef HAVE_ICONV
-
-/* Define to 1 if you have the `inet_aton' function. */
-#undef HAVE_INET_ATON
 
 /* Define to 1 if you have the `inotify_init' function. */
 #undef HAVE_INOTIFY_INIT
@@ -176,9 +170,6 @@
 
 /* Do we need -lcrypt? */
 #undef HAVE_LIBCRYPT
-
-/* use libmount for mount(8) */
-#undef HAVE_LIBMOUNT_MOUNT
 
 /* Define to 1 if you have the `ncurses' library (-lncurses). */
 #undef HAVE_LIBNCURSES
@@ -230,6 +221,9 @@
 
 /* Define to 1 if you have the <linux/version.h> header file. */
 #undef HAVE_LINUX_VERSION_H
+
+/* Define to 1 if you have the <linux/watchdog.h> header file. */
+#undef HAVE_LINUX_WATCHDOG_H
 
 /* Define to 1 if you have the `llseek' function. */
 #undef HAVE_LLSEEK
@@ -300,9 +294,6 @@
 /* Define to 1 if you have the <pty.h> header file. */
 #undef HAVE_PTY_H
 
-/* Define to 1 if you have the <rpcsvc/nfs_prot.h> header file. */
-#undef HAVE_RPCSVC_NFS_PROT_H
-
 /* Define to 1 if you have the `rpmatch' function. */
 #undef HAVE_RPMATCH
 
@@ -351,6 +342,9 @@
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
 
+/* Define to 1 if you have the <stdio_ext.h> header file. */
+#undef HAVE_STDIO_EXT_H
+
 /* Define to 1 if you have the <stdlib.h> header file. */
 #undef HAVE_STDLIB_H
 
@@ -368,6 +362,9 @@
 
 /* Define to 1 if you have the `strnlen' function. */
 #undef HAVE_STRNLEN
+
+/* Define to 1 if have strsignal function prototype */
+#undef HAVE_STRSIGNAL_DECL
 
 /* Define to 1 if you have the `strtoull' function. */
 #undef HAVE_STRTOULL
@@ -435,9 +432,6 @@
 /* Define to 1 if you have the <sys/un.h> header file. */
 #undef HAVE_SYS_UN_H
 
-/* Define to 1 if you have the <sys/user.h> header file. */
-#undef HAVE_SYS_USER_H
-
 /* Define to 1 if the target supports thread-local storage. */
 #undef HAVE_TLS
 
@@ -473,6 +467,9 @@
 
 /* Do we have wide character support? */
 #undef HAVE_WIDECHAR
+
+/* Define to 1 if you have the `__fpending' function. */
+#undef HAVE___FPENDING
 
 /* Define if __progname is defined */
 #undef HAVE___PROGNAME
@@ -558,6 +555,9 @@
 
 /* Fallback syscall number for unshare */
 #undef SYS_unshare
+
+/* Should uuidd support socket activation? */
+#undef USE_SOCKET_ACTIVATION
 
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE

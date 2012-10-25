@@ -21,9 +21,17 @@ The command prints all block devices (except RAM disks) in a tree-like format
 by default.  Use
 .B "lsblk --help"
 to get a list of all available columns.
+.PP
+The default output as well as default output from options like --topology and
+--fs is subject to change, so whenever possible you should avoid using default
+outputs in your scripts. Always explicitly define expected columns by
+.B \-\-output
+.IR columns
+in environment where a stable output is required.
 .SH OPTIONS
 .IP "\fB\-a, \-\-all\fP"
-List all block devices.
+.B lsblk
+does not list empty devices by default. This option disables this restriction.
 .IP "\fB\-b, \-\-bytes\fP"
 Print the SIZE column in bytes rather than in human-readable format.
 .IP "\fB\-d, \-\-nodeps\fP"
@@ -33,7 +41,11 @@ information about the sda device only.
 Print information about the discard (TRIM, UNMAP) capabilities for each device.
 .IP "\fB\-e, \-\-exclude \fIlist\fP
 Exclude the devices specified by a comma-separated \fIlist\fR of major device numbers.
-Note that RAM disks (major=1) are excluded by default.
+Note that RAM disks (major=1) are excluded by default. The filter is applied to the top-level
+devices only.
+.IP "\fB\-I, \-\-include \fIlist\fP
+Include devices specified by a comma-separated \fIlist\fR of major device numbers only.
+The filter is applied to the top-level devices.
 .IP "\fB\-f, \-\-fs\fP
 Output info about filesystems.  This option is equivalent to "-o NAME,FSTYPE,LABEL,MOUNTPOINT".
 The authoritative information about filesystems and raids is provided by the
@@ -54,15 +66,21 @@ Specify which output columns to print.  Use
 .B "--help"
 to get a list of all supported columns.
 .IP "\fB\-P, \-\-pairs\fP"
-Use key="value" output format.
+Use key="value" output format. All potentially unsafe characters are hex-escaped (\\x<code>).
 .IP "\fB\-r, \-\-raw\fP"
-Use the raw output format.
+Use the raw output format. All potentially unsafe characters are hex-escaped
+(\\x<code>) in NAME, KNAME, LABEL, PARTLABEL and MOUNTPOINT columns.
+.IP "\fB\-s, \-\-inverse\fP"
+Print dependencies in inverse order.
 .IP "\fB\-t, \-\-topology\fP"
 Output info about block device topology.
 This option is equivalent to "-o NAME,ALIGNMENT,MIN-IO,OPT-IO,PHY-SEC,LOG-SEC,ROTA,SCHED,RQ-SIZE".
+.IP "\fB\-V, \-\-version\fP"
+Output version information and exit.
 .SH NOTES
 For partitions, some information (e.g. queue attributes) is inherited from the
 parent device.
+
 .PP
 The
 .B lsblk
@@ -77,6 +95,9 @@ the time of kernel build.
 Milan Broz <mbroz@redhat.com>
 Karel Zak <kzak@redhat.com>
 .fi
+.SH ENVIRONMENT
+.IP LIBMOUNT_DEBUG=0xffff
+enables debug output.
 .SH SEE ALSO
 .BR findmnt (8),
 .BR blkid (8),

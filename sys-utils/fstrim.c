@@ -40,6 +40,7 @@
 #include "nls.h"
 #include "strutils.h"
 #include "c.h"
+#include "closestream.h"
 
 #ifndef FITRIM
 struct fstrim_range {
@@ -52,19 +53,18 @@ struct fstrim_range {
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
-	fputs(_("\nUsage:\n"), out);
+	fputs(USAGE_HEADER, out);
 	fprintf(out,
 	      _(" %s [options] <mount point>\n"), program_invocation_short_name);
-
-	fputs(_("\nOptions:\n"), out);
-	fputs(_(" -h, --help          this help\n"
-		" -o, --offset <num>  offset in bytes to discard from\n"
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -o, --offset <num>  offset in bytes to discard from\n"
 		" -l, --length <num>  length of bytes to discard from the offset\n"
 		" -m, --minimum <num> minimum extent length to discard\n"
 		" -v, --verbose       print number of discarded bytes\n"), out);
-
-	fputs(_("\nFor more information see fstrim(8).\n"), out);
-
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
+	fprintf(out, USAGE_MAN_TAIL("fstrim(8)"));
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -77,6 +77,7 @@ int main(int argc, char **argv)
 
 	static const struct option longopts[] = {
 	    { "help",      0, 0, 'h' },
+	    { "version",   0, 0, 'V' },
 	    { "offset",    1, 0, 'o' },
 	    { "length",    1, 0, 'l' },
 	    { "minimum",   1, 0, 'm' },
@@ -87,30 +88,30 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	memset(&range, 0, sizeof(range));
 	range.len = ULLONG_MAX;
 
-	while ((c = getopt_long(argc, argv, "ho:l:m:v", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hVo:l:m:v", longopts, NULL)) != -1) {
 		switch(c) {
 		case 'h':
 			usage(stdout);
 			break;
+		case 'V':
+			printf(UTIL_LINUX_VERSION);
+			return EXIT_SUCCESS;
 		case 'l':
-			if (strtosize(optarg, (uint64_t *) &range.len))
-				errx(EXIT_FAILURE,
-				     _("failed to parse length: %s"), optarg);
+			range.len = strtosize_or_err(optarg,
+					_("failed to parse length"));
 			break;
 		case 'o':
-			if (strtosize(optarg, (uint64_t *) &range.start))
-				errx(EXIT_FAILURE,
-				     _("failed to parse offset: %s"), optarg);
+			range.start = strtosize_or_err(optarg,
+					_("failed to parse offset"));
 			break;
 		case 'm':
-			if (strtosize(optarg, (uint64_t *) &range.minlen))
-				errx(EXIT_FAILURE,
-				     _("failed to parse minimum extent length: %s"),
-				     optarg);
+			range.minlen = strtosize_or_err(optarg,
+					_("failed to parse minimum extent length"));
 			break;
 		case 'v':
 			verbose = 1;
@@ -132,13 +133,13 @@ int main(int argc, char **argv)
 	}
 
 	if (stat(path, &sb) == -1)
-		err(EXIT_FAILURE, _("%s: stat failed"), path);
+		err(EXIT_FAILURE, _("stat failed %s"), path);
 	if (!S_ISDIR(sb.st_mode))
 		errx(EXIT_FAILURE, _("%s: not a directory"), path);
 
 	fd = open(path, O_RDONLY);
 	if (fd < 0)
-		err(EXIT_FAILURE, _("%s: open failed"), path);
+		err(EXIT_FAILURE, _("cannot open %s"), path);
 
 	if (ioctl(fd, FITRIM, &range))
 		err(EXIT_FAILURE, _("%s: FITRIM ioctl failed"), path);

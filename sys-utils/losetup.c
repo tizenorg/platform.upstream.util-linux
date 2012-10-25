@@ -19,6 +19,8 @@
 #include "strutils.h"
 #include "loopdev.h"
 #include "xgetpass.h"
+#include "closestream.h"
+#include "optutils.h"
 
 enum {
 	A_CREATE = 1,		/* setup a new device */
@@ -113,7 +115,7 @@ static int set_capacity(struct loopdev_cxt *lc)
 	int fd = loopcxt_get_fd(lc);
 
 	if (fd < 0)
-		warn(_("%s: open failed"), loopcxt_get_device(lc));
+		warn(_("cannot open %s"), loopcxt_get_device(lc));
 	else if (ioctl(fd, LOOP_SET_CAPACITY) != 0)
 		warnx(_("%s: set capacity failed"), loopcxt_get_device(lc));
 	else
@@ -182,6 +184,26 @@ static void usage(FILE *out)
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
+static void warn_size(const char *filename, uint64_t size)
+{
+	struct stat st;
+
+	if (!size) {
+		if (stat(filename, &st))
+			return;
+		size = st.st_size;
+	}
+
+	if (size < 512)
+		warnx(_("%s: warning: file smaller than 512 bytes, the loop device "
+			"maybe be useless or invisible for system tools."),
+			filename);
+	else if (size % 512)
+		warnx(_("%s: warning: file does not fit into a 512-byte sector "
+		        "the end of the file will be ignored."),
+			filename);
+}
+
 int main(int argc, char **argv)
 {
 	struct loopdev_cxt lc;
@@ -214,20 +236,26 @@ int main(int argc, char **argv)
 		{ NULL, 0, 0, 0 }
 	};
 
+	static const ul_excl_t excl[] = {	/* rows and cols in ASCII order */
+		{ 'D','a','c','d','f','j' },
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
+
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
-	loopcxt_init(&lc, 0);
+	if (loopcxt_init(&lc, 0))
+		err(EXIT_FAILURE, _("failed to initialize loopcxt"));
+
 	loopcxt_enable_debug(&lc, getenv("LOOPDEV_DEBUG") ? TRUE : FALSE);
 
 	while ((c = getopt_long(argc, argv, "ac:d:De:E:fhj:o:p:PrvV",
 				longopts, NULL)) != -1) {
 
-		if (act && strchr("acdDfj", c))
-			errx(EXIT_FAILURE,
-				_("the options %s are mutually exclusive"),
-				"--{all,associated,set-capacity,detach,detach-all,find}");
+		err_exclusive_options(c, longopts, excl, excl_st);
 
 		switch (c) {
 		case 'a':
@@ -235,14 +263,18 @@ int main(int argc, char **argv)
 			break;
 		case 'c':
 			act = A_SET_CAPACITY;
-			loopcxt_set_device(&lc, optarg);
+			if (loopcxt_set_device(&lc, optarg))
+				err(EXIT_FAILURE, _("%s: failed to use device"),
+						optarg);
 			break;
 		case 'r':
 			lo_flags |= LO_FLAGS_READ_ONLY;
 			break;
 		case 'd':
 			act = A_DELETE;
-			loopcxt_set_device(&lc, optarg);
+			if (loopcxt_set_device(&lc, optarg))
+				err(EXIT_FAILURE, _("%s: failed to use device"),
+						optarg);
 			break;
 		case 'D':
 			act = A_DELETE_ALL;
@@ -262,13 +294,11 @@ int main(int argc, char **argv)
 			file = optarg;
 			break;
 		case 'o':
-			if (strtosize(optarg, &offset))
-				errx(EXIT_FAILURE,
-				     _("invalid offset '%s' specified"), optarg);
+			offset = strtosize_or_err(optarg, _("failed to parse offset"));
 			flags |= LOOPDEV_FL_OFFSET;
 			break;
 		case 'p':
-			passfd = strtol_or_err(optarg,
+			passfd = strtou32_or_err(optarg,
 					_("invalid passphrase file descriptor"));
 			break;
 		case 'P':
@@ -284,9 +314,7 @@ int main(int argc, char **argv)
 			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
 		case OPT_SIZELIMIT:			/* --sizelimit */
-			if (strtosize(optarg, &sizelimit))
-				errx(EXIT_FAILURE,
-				     _("invalid size '%s' specified"), optarg);
+			sizelimit = strtosize_or_err(optarg, _("failed to parse size"));
 			flags |= LOOPDEV_FL_SIZELIMIT;
                         break;
 		default:
@@ -309,7 +337,10 @@ int main(int argc, char **argv)
 		 * losetup <device>
 		 */
 		act = A_SHOW_ONE;
-		loopcxt_set_device(&lc, argv[optind++]);
+		if (loopcxt_set_device(&lc, argv[optind]))
+			err(EXIT_FAILURE, _("%s: failed to use device"),
+					argv[optind]);
+		optind++;
 	}
 	if (!act) {
 		/*
@@ -319,7 +350,10 @@ int main(int argc, char **argv)
 
 		if (optind >= argc)
 			errx(EXIT_FAILURE, _("no loop device specified"));
-		loopcxt_set_device(&lc, argv[optind++]);
+		if (loopcxt_set_device(&lc, argv[optind]))
+			err(EXIT_FAILURE, _("%s failed to use device"),
+					argv[optind]);
+		optind++;
 
 		if (optind >= argc)
 			errx(EXIT_FAILURE, _("no file specified"));
@@ -374,21 +408,29 @@ int main(int argc, char **argv)
 			if (res == 0)
 				break;			/* success */
 			if (errno != EBUSY) {
-				warn(_("failed to setup loop device"));
+				warn(_("%s: failed to setup loop device"),
+					hasdev && loopcxt_get_fd(&lc) < 0 ?
+					    loopcxt_get_device(&lc) : file);
 				break;
 			}
 		} while (hasdev == 0);
 
 		free(pass);
 
-		if (showdev && res == 0)
-			printf("%s\n", loopcxt_get_device(&lc));
+		if (res == 0) {
+			if (showdev)
+				printf("%s\n", loopcxt_get_device(&lc));
+			warn_size(file, sizelimit);
+		}
 		break;
 	}
 	case A_DELETE:
 		res = delete_loop(&lc);
 		while (optind < argc) {
-			loopcxt_set_device(&lc, argv[optind++]);
+			if (loopcxt_set_device(&lc, argv[optind]))
+				warn(_("%s: failed to use device"),
+						argv[optind]);
+			optind++;
 			res += delete_loop(&lc);
 		}
 		break;

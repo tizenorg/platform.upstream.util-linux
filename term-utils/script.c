@@ -59,6 +59,7 @@
 #include <locale.h>
 #include <stddef.h>
 
+#include "closestream.h"
 #include "nls.h"
 #include "c.h"
 
@@ -133,7 +134,7 @@ usage(FILE *out)
 	fputs(_("\nOptions:\n"), out);
 	fputs(_(" -a, --append            append the output\n"
 		" -c, --command <command> run command rather than interactive shell\n"
-		" -r, --return            return exit code of the child process\n"
+		" -e, --return            return exit code of the child process\n"
 		" -f, --flush             run flush after each write\n"
 		"     --force             use output file even when it is a link\n"
 		" -q, --quiet             be quiet\n"
@@ -157,7 +158,6 @@ int
 main(int argc, char **argv) {
 	sigset_t block_mask, unblock_mask;
 	struct sigaction sa;
-	extern int optind;
 	int ch;
 	FILE *timingfd = stderr;
 
@@ -180,6 +180,7 @@ main(int argc, char **argv) {
 	setlocale(LC_NUMERIC, "C");	/* see comment above */
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((ch = getopt_long(argc, argv, "ac:efqt::Vh", longopts, NULL)) != -1)
 		switch(ch) {
@@ -204,7 +205,7 @@ main(int argc, char **argv) {
 		case 't':
 			if (optarg)
 				if ((timingfd = fopen(optarg, "w")) == NULL)
-					err(EXIT_FAILURE, _("cannot open timing file %s"), optarg);
+					err(EXIT_FAILURE, _("cannot open %s"), optarg);
 			tflg = 1;
 			break;
 		case 'V':
@@ -229,7 +230,7 @@ main(int argc, char **argv) {
 		die_if_link(fname);
 	}
 	if ((fscript = fopen(fname, aflg ? "a" : "w")) == NULL) {
-		warn(_("open failed: %s"), fname);
+		warn(_("cannot open %s"), fname);
 		fail();
 	}
 
@@ -283,16 +284,18 @@ main(int argc, char **argv) {
 	}
 	doinput();
 
-	fclose(timingfd);
+	if (close_stream(timingfd) != 0)
+		errx(EXIT_FAILURE, _("write error"));
 	return EXIT_SUCCESS;
 }
 
-void
+void __attribute__((__noreturn__))
 doinput(void) {
 	ssize_t cc;
 	char ibuf[BUFSIZ];
 
-	fclose(fscript);
+	if (close_stream(fscript) != 0)
+		errx(EXIT_FAILURE, _("write error"));
 
 	while (die == 0) {
 		if ((cc = read(STDIN_FILENO, ibuf, BUFSIZ)) > 0) {
@@ -342,7 +345,7 @@ my_strftime(char *buf, size_t len, const char *fmt, const struct tm *tm) {
 	strftime(buf, len, fmt, tm);
 }
 
-void
+void __attribute__((__noreturn__))
 dooutput(FILE *timingfd) {
 	ssize_t cc;
 	time_t tvec;
@@ -404,26 +407,19 @@ dooutput(FILE *timingfd) {
 
 	if (flgs)
 		fcntl(master, F_SETFL, flgs);
+	if (close_stream(timingfd) != 0)
+		errx(EXIT_FAILURE, _("write error"));
 	done();
 }
 
-void
+void __attribute__((__noreturn__))
 doshell(void) {
 	char *shname;
 
-#if 0
-	int t;
-
-	t = open(_PATH_DEV_TTY, O_RDWR);
-	if (t >= 0) {
-		ioctl(t, TIOCNOTTY, (char *)0);
-		close(t);
-	}
-#endif
-
 	getslave();
 	close(master);
-	fclose(fscript);
+	if (close_stream(fscript) != 0)
+		errx(EXIT_FAILURE, _("write error"));
 	dup2(slave, STDIN_FILENO);
 	dup2(slave, STDOUT_FILENO);
 	dup2(slave, STDERR_FILENO);
@@ -466,14 +462,14 @@ fixtty(void) {
 	tcsetattr(STDIN_FILENO, TCSANOW, &rtt);
 }
 
-void
+void __attribute__((__noreturn__))
 fail(void) {
 
 	kill(0, SIGTERM);
 	done();
 }
 
-void
+void __attribute__((__noreturn__))
 done(void) {
 	time_t tvec;
 
@@ -484,7 +480,8 @@ done(void) {
 			my_strftime(buf, sizeof buf, "%c\n", localtime(&tvec));
 			fprintf(fscript, _("\nScript done on %s"), buf);
 		}
-		fclose(fscript);
+		if (close_stream(fscript) != 0)
+			errx(EXIT_FAILURE, _("write error"));
 		close(master);
 
 		master = -1;
@@ -560,7 +557,7 @@ getslave(void) {
 	line[strlen("/dev/")] = 't';
 	slave = open(line, O_RDWR);
 	if (slave < 0) {
-		warn(_("open failed: %s"), line);
+		warn(_("cannot open %s"), line);
 		fail();
 	}
 	tcsetattr(slave, TCSANOW, &tt);

@@ -67,6 +67,7 @@
 #include <errno.h>
 
 #include "c.h"
+#include "closestream.h"
 #include "nls.h"
 #include "mbsalign.h"
 #include "strutils.h"
@@ -278,6 +279,7 @@ main(int argc, char **argv) {
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 #if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW) || defined(HAVE_LIBTERMCAP)
 	if ((term = getenv("TERM"))) {
@@ -366,17 +368,17 @@ main(int argc, char **argv) {
 	day = month = year = 0;
 	switch(argc) {
 	case 3:
-		day = strtol_or_err(*argv++, _("illegal day value"));
+		day = strtos32_or_err(*argv++, _("illegal day value"));
                 if (day < 1 || 31 < day)
 			errx(EXIT_FAILURE, _("illegal day value: use 1-%d"), 31);
 		/* FALLTHROUGH */
 	case 2:
-		month = strtol_or_err(*argv++, _("illegal month value: use 1-12"));
+		month = strtos32_or_err(*argv++, _("illegal month value: use 1-12"));
 		if (month < 1 || 12 < month)
 			errx(EXIT_FAILURE, _("illegal month value: use 1-12"));
 		/* FALLTHROUGH */
 	case 1:
-		year = strtol_or_err(*argv++, _("illegal year value: use 1-9999"));
+		year = strtos32_or_err(*argv++, _("illegal year value: use 1-9999"));
 		if (year < 1 || 9999 < year)
 			errx(EXIT_FAILURE, _("illegal year value: use 1-9999"));
 		if (day) {

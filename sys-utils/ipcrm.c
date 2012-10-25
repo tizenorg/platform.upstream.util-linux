@@ -22,6 +22,7 @@
 #include "c.h"
 #include "nls.h"
 #include "strutils.h"
+#include "closestream.h"
 
 #ifndef HAVE_UNION_SEMUN
 /* according to X/OPEN we have to define it ourselves */
@@ -53,8 +54,8 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 	fputs(_(" -M, --shmem-key <key>      remove shared memory segment by key\n"), out);
 	fputs(_(" -q, --queue-id <id>        remove message queue by id\n"), out);
 	fputs(_(" -Q, --queue-key <key>      remove message queue by key\n"), out);
-	fputs(_(" -s, --semaphore-id <id>    remove semaprhore by id\n"), out);
-	fputs(_(" -S, --semaphore-key <key>  remove semaprhore by key\n"), out);
+	fputs(_(" -s, --semaphore-id <id>    remove semaphore by id\n"), out);
+	fputs(_(" -S, --semaphore-key <key>  remove semaphore by key\n"), out);
 	fputs(_(" -a, --all[=<shm|msg|sem>]  remove all\n"), out);
 	fputs(_(" -v, --verbose              explain what is being done\n"), out);
 	fprintf(out, USAGE_SEPARATOR);
@@ -293,7 +294,7 @@ int main(int argc, char **argv)
 	int id = -1;
 	int iskey;
 	int rm_all = 0;
-	type_id what_all;
+	type_id what_all = ALL;
 
 	static const struct option longopts[] = {
 		{"shmem-id", required_argument, NULL, 'm'},
@@ -316,6 +317,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	/* check to see if the command is being invoked in the old way if so
 	 * then remove argument list */
@@ -335,7 +337,7 @@ int main(int argc, char **argv)
 			}
 		case 'm':
 			if (!iskey)
-				id = strtoll_or_err(optarg, _("failed to parse argument"));
+				id = strtos32_or_err(optarg, _("failed to parse argument"));
 			if (remove_id(SHM, iskey, id))
 				ret++;
 			break;
@@ -348,7 +350,7 @@ int main(int argc, char **argv)
 			}
 		case 'q':
 			if (!iskey)
-				id = strtoll_or_err(optarg, _("failed to parse argument"));
+				id = strtos32_or_err(optarg, _("failed to parse argument"));
 			if (remove_id(MSG, iskey, id))
 				ret++;
 			break;
@@ -361,7 +363,7 @@ int main(int argc, char **argv)
 			}
 		case 's':
 			if (!iskey)
-				id = strtoll_or_err(optarg, _("failed to parse argument"));
+				id = strtos32_or_err(optarg, _("failed to parse argument"));
 			if (remove_id(SEM, iskey, id))
 				ret++;
 			break;

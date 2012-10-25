@@ -258,7 +258,8 @@ int mnt_cache_read_tags(struct libmnt_cache *cache, const char *devname)
 {
 	blkid_probe pr;
 	size_t i, ntags = 0;
-	const char *tags[] = { "LABEL", "UUID", "TYPE" };
+	const char *tags[] = { "LABEL", "UUID", "TYPE", "PARTUUID", "PARTLABEL" };
+	const char *blktags[] = { "LABEL", "UUID", "TYPE", "PART_ENTRY_UUID", "PART_ENTRY_NAME" };
 
 	assert(cache);
 	assert(devname);
@@ -304,7 +305,7 @@ int mnt_cache_read_tags(struct libmnt_cache *cache, const char *devname)
 					"\ntag %s already cached", tags[i]));
 			continue;
 		}
-		if (blkid_probe_lookup_value(pr, tags[i], &data, NULL))
+		if (blkid_probe_lookup_value(pr, blktags[i], &data, NULL))
 			continue;
 		dev = strdup(devname);
 		if (!dev)
@@ -486,8 +487,8 @@ char *mnt_pretty_path(const char *path, struct libmnt_cache *cache)
 	if (strncmp(pretty, "/dev/loop", 9) == 0) {
 		struct loopdev_cxt lc;
 
-		loopcxt_init(&lc, 0);
-		loopcxt_set_device(&lc, pretty);
+		if (loopcxt_init(&lc, 0) || loopcxt_set_device(&lc, pretty))
+			goto done;
 
 		if (loopcxt_is_autoclear(&lc)) {
 			char *tmp = loopcxt_get_backing_file(&lc);
@@ -501,6 +502,7 @@ char *mnt_pretty_path(const char *path, struct libmnt_cache *cache)
 
 	}
 
+done:
 	/* don't return pointer to the cache, allocate a new string */
 	return cache ? strdup(pretty) : pretty;
 }
@@ -594,7 +596,7 @@ int test_resolve_path(struct libmnt_test *ts, int argc, char *argv[])
 		size_t sz = strlen(line);
 		char *p;
 
-		if (line[sz - 1] == '\n')
+		if (sz > 0 && line[sz - 1] == '\n')
 			line[sz - 1] = '\0';
 
 		p = mnt_resolve_path(line, cache);
@@ -617,7 +619,7 @@ int test_resolve_spec(struct libmnt_test *ts, int argc, char *argv[])
 		size_t sz = strlen(line);
 		char *p;
 
-		if (line[sz - 1] == '\n')
+		if (sz > 0 && line[sz - 1] == '\n')
 			line[sz - 1] = '\0';
 
 		p = mnt_resolve_spec(line, cache);
@@ -631,7 +633,7 @@ int test_read_tags(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char line[BUFSIZ];
 	struct libmnt_cache *cache;
-	int i;
+	size_t i;
 
 	cache = mnt_new_cache();
 	if (!cache)
@@ -640,7 +642,7 @@ int test_read_tags(struct libmnt_test *ts, int argc, char *argv[])
 	while(fgets(line, sizeof(line), stdin)) {
 		size_t sz = strlen(line);
 
-		if (line[sz - 1] == '\n')
+		if (sz > 0 && line[sz - 1] == '\n')
 			line[sz - 1] = '\0';
 
 		if (!strcmp(line, "quit"))

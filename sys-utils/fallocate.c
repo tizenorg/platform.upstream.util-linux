@@ -17,9 +17,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -51,23 +51,22 @@
 #include "nls.h"
 #include "strutils.h"
 #include "c.h"
-
+#include "closestream.h"
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
-
-	fputs(_("\nUsage:\n"), out);
+	fputs(USAGE_HEADER, out);
 	fprintf(out,
 	      _(" %s [options] <filename>\n"), program_invocation_short_name);
-
-	fputs(_("\nOptions:\n"), out);
-	fputs(_(" -h, --help          this help\n"
-		" -n, --keep-size     don't modify the length of the file\n"
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -n, --keep-size     don't modify the length of the file\n"
 		" -p, --punch-hole    punch holes in the file\n"
 		" -o, --offset <num>  offset of the allocation, in bytes\n"
 		" -l, --length <num>  length of the allocation, in bytes\n"), out);
-
-	fprintf(out, _("\nFor more information see fallocate(1).\n"));
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
+	fprintf(out, USAGE_MAN_TAIL("fallocate(1)"));
 
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
@@ -94,6 +93,7 @@ int main(int argc, char **argv)
 
 	static const struct option longopts[] = {
 	    { "help",      0, 0, 'h' },
+	    { "version",   0, 0, 'V' },
 	    { "keep-size", 0, 0, 'n' },
 	    { "punch-hole", 0, 0, 'p' },
 	    { "offset",    1, 0, 'o' },
@@ -104,12 +104,16 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "hnpl:o:", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hVnpl:o:", longopts, NULL)) != -1) {
 		switch(c) {
 		case 'h':
 			usage(stdout);
 			break;
+		case 'V':
+			printf(UTIL_LINUX_VERSION);
+			return EXIT_SUCCESS;
 		case 'p':
 			mode |= FALLOC_FL_PUNCH_HOLE;
 			/* fall through */
@@ -146,7 +150,7 @@ int main(int argc, char **argv)
 
 	fd = open(fname, O_WRONLY|O_CREAT, 0644);
 	if (fd < 0)
-		err(EXIT_FAILURE, _("%s: open failed"), fname);
+		err(EXIT_FAILURE, _("cannot open %s"), fname);
 
 #ifdef HAVE_FALLOCATE
 	error = fallocate(fd, mode, offset, length);

@@ -6,23 +6,23 @@ AC_PREREQ(2.60)
 
 AC_CONFIG_AUX_DIR(config)
 AC_CONFIG_MACRO_DIR([m4])
-AM_INIT_AUTOMAKE([-Wall foreign 1.10 tar-pax dist-bzip2 no-dist-gzip dist-xz -Wno-portability])
+AM_INIT_AUTOMAKE([-Wall foreign 1.10 tar-pax dist-bzip2 no-dist-gzip dist-xz -Wno-portability subdir-objects])
 
 m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])],
-                            [AC_SUBST([AM_DEFAULT_VERBOSITY], [1])])
+			    [AC_SUBST([AM_DEFAULT_VERBOSITY], [1])])
 
-AC_CONFIG_SRCDIR(mount/mount.c)
+AC_CONFIG_SRCDIR(sys-utils/mount.c)
 AC_PREFIX_DEFAULT([/usr])
 
 dnl version details from <major>.<minor>[-<suffix>]
 PACKAGE_VERSION_MAJOR=$(echo $PACKAGE_VERSION | awk -F. '{print $1}')
 PACKAGE_VERSION_MINOR=$(echo $PACKAGE_VERSION | awk -F. '{print $2}' \
-                                              | awk -F- '{print $1}')
+					      | awk -F- '{print $1}')
 PACKAGE_VERSION_RELEASE=0
 
 dnl libblkid version
 LIBBLKID_VERSION="$PACKAGE_VERSION_MAJOR.$PACKAGE_VERSION_MINOR.$PACKAGE_VERSION_RELEASE"
-LIBBLKID_DATE="25-May-2012"
+LIBBLKID_DATE="10-Oct-2012"
 LIBBLKID_LT_MAJOR=1
 LIBBLKID_LT_MINOR=1
 LIBBLKID_LT_MICRO=0
@@ -60,8 +60,14 @@ NONE:NONE | NONE:/usr | /usr:*)
   esac ;;
 esac
 
-libdirname=`basename "$libdir"`
-AC_SUBST([libdirname])
+case $prefix:$localstatedir in
+  NONE:'${prefix}/var' | /usr:'${prefix}/var')
+    localstatedir=/run
+    AC_MSG_NOTICE([  --localstatedir defaults to /run])
+    ;;
+esac
+AC_SUBST([localstatedir])
+
 
 # The original default values of {bin,sbin,lib}dir
 usrbin_execdir='${exec_prefix}/bin'
@@ -70,8 +76,14 @@ AC_SUBST([usrbin_execdir])
 usrsbin_execdir='${exec_prefix}/sbin'
 AC_SUBST([usrsbin_execdir])
 
-usrlib_execdir='${exec_prefix}/'$libdirname
+case $libdir in
+ '${exec_prefix}/'* | '${prefix}/'* | /usr/*)
+    usrlib_execdir=$libdir ;;
+ *)
+    usrlib_execdir='${exec_prefix}'$libdir ;;
+esac
 AC_SUBST([usrlib_execdir])
+
 
 AM_PROG_CC_C_O
 AC_PROG_CC_STDC
@@ -80,6 +92,26 @@ AC_CANONICAL_HOST
 AC_C_CONST
 AC_C_VOLATILE
 AC_C_BIGENDIAN
+
+dnl Compiler warnings
+UL_WARN_ADD([-fno-common])
+UL_WARN_ADD([-Wall])
+UL_WARN_ADD([-Werror=sequence-point])
+UL_WARN_ADD([-Wextra])
+UL_WARN_ADD([-Wmissing-declarations])
+UL_WARN_ADD([-Wmissing-parameter-type])
+UL_WARN_ADD([-Wmissing-prototypes])
+UL_WARN_ADD([-Wno-missing-field-initializers])
+UL_WARN_ADD([-Wredundant-decls])
+UL_WARN_ADD([-Wsign-compare])
+UL_WARN_ADD([-Wtype-limits])
+UL_WARN_ADD([-Wuninitialized])
+UL_WARN_ADD([-Wunused-but-set-parameter])
+UL_WARN_ADD([-Wunused-but-set-variable])
+UL_WARN_ADD([-Wunused-parameter])
+UL_WARN_ADD([-Wunused-result])
+UL_WARN_ADD([-Wunused-variable])
+AC_SUBST([WARN_CFLAGS])
 
 dnl libtool-2
 LT_INIT
@@ -130,51 +162,51 @@ AC_CHECK_HEADERS([linux/compiler.h linux/blkpg.h linux/major.h], [], [], [
 #include <linux/compiler.h>
 #endif
 ])
-AC_CHECK_HEADERS(
-	[err.h \
+AC_CHECK_HEADERS([ \
+	asm/io.h \
+	err.h \
 	errno.h \
+	fcntl.h \
 	getopt.h \
+	inttypes.h \
+	linux/cdrom.h \
+	linux/falloc.h \
+	linux/watchdog.h \
 	linux/fd.h \
+	linux/raw.h \
 	linux/tiocl.h \
 	linux/version.h \
-	linux/falloc.h \
-	linux/cdrom.h \
-	fcntl.h \
 	locale.h \
-	stdint.h \
-	inttypes.h \
+	mntent.h \
+	net/if.h \
+	net/if_dl.h \
+	netinet/in.h \
 	paths.h \
 	pty.h \
-	mntent.h \
-        net/if.h \
-	net/if_dl.h \
-        netinet/in.h \
-	rpcsvc/nfs_prot.h \
+	security/pam_misc.h \
+	stdint.h \
+	stdio_ext.h \
 	stdlib.h \
-	asm/io.h \
 	sys/disk.h \
 	sys/disklabel.h \
-	sys/ioctl.h \
-	sys/ioccom.h \
+	sys/file.h \
 	sys/io.h \
-	sys/time.h \
+	sys/ioccom.h \
+	sys/ioctl.h \
 	sys/mkdev.h \
 	sys/prctl.h \
 	sys/queue.h \
-	sys/sockio.h \
+	sys/resource.h \
 	sys/socket.h \
-	sys/syscall.h \
-	sys/file.h \
-	sys/ioctl.h \
+	sys/sockio.h \
 	sys/stat.h \
+	sys/swap.h \
+	sys/syscall.h \
+	sys/time.h \
 	sys/types.h \
 	sys/un.h \
-	sys/user.h \
-	sys/swap.h \
-	sys/resource.h \
-	security/pam_misc.h \
-	linux/raw.h \
-	unistd.h ])
+	unistd.h \
+])
 
 AC_CHECK_HEADERS([langinfo.h],
 		[AM_CONDITIONAL([HAVE_LANGINFO], [true])],
@@ -183,6 +215,7 @@ AC_CHECK_HEADERS([langinfo.h],
 dnl Convert some ac_cv_header_* variables to have_*
 dnl
 have_linux_raw_h=$ac_cv_header_linux_raw_h
+have_linux_watchdog_h=$ac_cv_header_linux_watchdog_h
 have_security_pam_misc_h=$ac_cv_header_security_pam_misc_h
 
 
@@ -193,7 +226,7 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
     int a = 0;
     struct tm *tm = localtime(0);
     if (a == -1)  /* false */
-        sleep(tm->tm_gmtoff);
+	sleep(tm->tm_gmtoff);
 ]])],
 [AC_DEFINE(HAVE_TM_GMTOFF,1,[Does struct tm have a field tm_gmtoff?])
 ])
@@ -246,44 +279,53 @@ AC_CHECK_DECL([lseek64],
 	 #define _LARGEFILE64_SOURCE
 	 #include <unistd.h>])
 
-AC_CHECK_FUNCS(
-	[inet_aton \
+AC_CHECK_DECL([environ],
+	[AC_DEFINE(HAVE_ENVIRON_DECL, 1,
+		[Define to 1 if have **environ prototype])],
+)
+
+AC_CHECK_DECL([strsignal],
+	[AC_DEFINE(HAVE_STRSIGNAL_DECL, 1,
+		[Define to 1 if have strsignal function prototype])],
+)
+
+AC_CHECK_FUNCS([ \
+	__fpending \
+	__secure_getenv \
 	err \
 	errx \
-	futimens \
-	fstat64 \
 	fsync \
+	futimens \
 	getdomainname \
-	get_current_dir_name \
-	usleep \
-	nanosleep \
-	personality \
-	updwtmp \
+	getdtablesize \
+	getexecname \
+	getmntinfo \
+	getrlimit \
+	inotify_init \
 	jrand48 \
 	lchown \
 	llseek \
 	lseek64 \
+	nanosleep \
+	personality \
+	posix_fadvise \
+	prctl \
+	rpmatch \
 	scandirat \
-	strtoull \
-	sysconf \
-	getdtablesize \
-	getexecname \
-	getrlimit \
-	sigqueue \
-	srandom \
 	setresgid \
 	setresuid \
+	sigqueue \
+	srandom \
+	strnchr \
 	strndup \
 	strnlen \
-	strnchr \
-	inotify_init \
-	prctl \
-	posix_fadvise \
-	getmntinfo \
-	__secure_getenv \
+	strtoull \
+	sysconf \
+	updwtmp \
+	usleep \
 	warn \
 	warnx \
-	rpmatch])
+])
 AC_FUNC_FSEEKO
 
 AC_CHECK_FUNCS([openat fstatat unlinkat], [have_openat=yes], [have_openat=no])
@@ -331,18 +373,18 @@ esac
 
 AC_MSG_CHECKING(whether program_invocation_short_name is defined)
 AC_TRY_COMPILE([#include <argp.h>],
-               [program_invocation_short_name = "test";],
-               AC_DEFINE(HAVE_PROGRAM_INVOCATION_SHORT_NAME, 1,
-                         [Define if program_invocation_short_name is defined])
-               AC_MSG_RESULT(yes),
-               AC_MSG_RESULT(no))
+	       [program_invocation_short_name = "test";],
+	       AC_DEFINE(HAVE_PROGRAM_INVOCATION_SHORT_NAME, 1,
+			 [Define if program_invocation_short_name is defined])
+	       AC_MSG_RESULT(yes),
+	       AC_MSG_RESULT(no))
 
 AC_MSG_CHECKING([whether __progname is defined])
 AC_LINK_IFELSE([AC_LANG_PROGRAM([extern char *__progname;],
-           [if (*__progname == 0) return;])],
-           AC_DEFINE(HAVE___PROGNAME, 1, [Define if __progname is defined])
-           AC_MSG_RESULT(yes),
-           AC_MSG_RESULT(no))
+	   [if (*__progname == 0) return;])],
+	   AC_DEFINE(HAVE___PROGNAME, 1, [Define if __progname is defined])
+	   AC_MSG_RESULT(yes),
+	   AC_MSG_RESULT(no))
 
 dnl Static compilation
 m4_define([UL_STATIC_PROGRAMS], [losetup, mount, umount, fdisk, sfdisk, blkid])
@@ -552,7 +594,7 @@ fi
 
 AC_ARG_WITH([ncurses],
   AS_HELP_STRING([--with-ncurses], [build with non-wide ncurses, default is wide version
-                                    (--without-ncurses disables all ncurses(w) support)]),
+				    (--without-ncurses disables all ncurses(w) support)]),
   [], with_ncurses=auto
 )
 AM_CONDITIONAL(HAVE_NCURSES, false)
@@ -563,14 +605,14 @@ if test "x$with_ncurses" != xno; then
     if test "x$with_ncurses" = xauto; then
       UL_CHECK_LIB(ncursesw, initscr, ncurses)
       if test "x$have_ncurses" = xyes; then
-        AC_CHECK_HEADERS([ncursesw/ncurses.h])
-        NCURSES_LIBS="-lncursesw"
+	AC_CHECK_HEADERS([ncursesw/ncurses.h])
+	NCURSES_LIBS="-lncursesw"
       fi
     fi
     if test "x$have_ncurses" = xno; then
       UL_CHECK_LIB(ncurses, initscr)
       if test "x$have_ncurses" = xyes; then
-        NCURSES_LIBS="-lncurses"
+	NCURSES_LIBS="-lncurses"
       fi
     fi
   ])
@@ -585,27 +627,30 @@ AC_ARG_WITH([slang],
   AS_HELP_STRING([--with-slang], [compile cfdisk with slang]),
   [], with_slang=no
 )
-
-have_tinfo=no
-AC_CHECK_LIB(tinfo, tgetent, [have_tinfo=yes])
-AM_CONDITIONAL(HAVE_TINFO, test "x$have_tinfo" = xyes)
-
-use_slang=no
+have_slang=no
 if test "x$with_slang" = xyes; then
   AC_CHECK_HEADERS([slang.h slang/slang.h])
   AC_CHECK_HEADERS([slcurses.h slang/slcurses.h],
-                   [use_slang=yes], [], [
+		   [have_slang=yes], [], [
 #ifdef HAVE_SLANG_H
 #include <slang.h>
 #elif defined(HAVE_SLANG_SLANG_H)
 #include <slang/slang.h>
 #endif
 ])
-  if test "x$use_slang" = xno; then
+  if test "x$have_slang" = xno; then
     AC_MSG_ERROR([slang selected but slcurses.h not found])
   fi
 fi
-AM_CONDITIONAL(USE_SLANG, test "x$use_slang" = xyes)
+AM_CONDITIONAL(HAVE_SLANG, test "x$have_slang" = xyes)
+
+
+AM_CONDITIONAL(BUILD_CFDISK, test "x$have_slang" = xyes -o "x$have_ncurses" = xyes)
+
+
+have_tinfo=no
+AC_CHECK_LIB(tinfo, tgetent, [have_tinfo=yes])
+AM_CONDITIONAL(HAVE_TINFO, test "x$have_tinfo" = xyes)
 
 
 AC_ARG_WITH([utempter],
@@ -624,21 +669,20 @@ fi
 
 
 AC_ARG_ENABLE([most-builds],
-  AS_HELP_STRING([--enable-most-builds], [build everthing other than experimental code]),
+  AS_HELP_STRING([--enable-most-builds], [build everything other than experimental code]),
   [], enable_most_builds=no
 )
 if test "x$enable_most_builds" = xyes; then
-  enable_arch=yes
+  enable_arch=check
   enable_ddate=yes
-  enable_elvtune=yes
-  enable_kill=yes
+  enable_elvtune=check
   enable_last=yes
   enable_line=yes
   enable_mesg=yes
-  enable_raw=yes
-  enable_rename=yes
   enable_reset=yes
-  enable_login_utils=yes
+  enable_vipw=yes
+  enable_chfn_chsh=yes
+  enable_newgrp=yes
   enable_write=yes
 fi
 
@@ -677,6 +721,7 @@ if test "x$build_libblkid" = xyes; then
   AC_DEFINE(HAVE_LIBBLKID, 1, [Define to 1 if you have the -lblkid.])
 fi
 AM_CONDITIONAL(BUILD_LIBBLKID, test "x$build_libblkid" = xyes)
+AM_CONDITIONAL(BUILD_LIBBLKID_TESTS, test "x$build_libblkid" = xyes -a "x$enable_static" = xyes)
 
 dnl
 dnl libmount
@@ -690,19 +735,30 @@ UL_REQUIRES_LINUX([libmount])
 UL_REQUIRES_BUILD([libmount], [libblkid])
 UL_REQUIRES_HAVE([libmount], [scanf_alloc_modifier], [scanf string alloc modifier])
 AM_CONDITIONAL(BUILD_LIBMOUNT, test "x$build_libmount" = xyes)
+AM_CONDITIONAL(BUILD_LIBMOUNT_TESTS, test "x$build_libmount" = xyes -a "x$enable_static" = xyes)
 
 AC_SUBST([LIBMOUNT_VERSION])
 AC_SUBST([LIBMOUNT_VERSION_INFO])
 AC_DEFINE_UNQUOTED(LIBMOUNT_VERSION, "$LIBMOUNT_VERSION", [libmount version string])
 
 
+AC_ARG_ENABLE([deprecated-mount],
+  AS_HELP_STRING([--enable-deprecated-mount], [build old mount utilities]),
+  [], enable_deprecated_mount=no
+)
+UL_BUILD_INIT([deprecated_mount])
+UL_REQUIRES_LINUX([deprecated_mount])
+UL_REQUIRES_BUILD([deprecated_mount], [libblkid])
+AM_CONDITIONAL(BUILD_DEPRECATED_MOUNT, test "x$build_deprecated_mount" = xyes)
+
+
 AC_ARG_ENABLE([mount],
-  AS_HELP_STRING([--disable-mount], [do not build mount utilities]),
+  AS_HELP_STRING([--disable-mount], [do not build mount(8) and umount(8)]),
   [], enable_mount=check
 )
 UL_BUILD_INIT([mount])
-UL_REQUIRES_LINUX([mount])
-UL_REQUIRES_BUILD([mount], [libblkid])
+UL_REQUIRES_BUILD([mount], [libmount])
+UL_CONFLICTS_BUILD([mount], [deprecated_mount], [old deprecated mount version])
 AM_CONDITIONAL(BUILD_MOUNT, test "x$build_mount" = xyes)
 
 
@@ -715,37 +771,12 @@ UL_REQUIRES_LINUX([losetup])
 AM_CONDITIONAL(BUILD_LOSETUP, test "x$build_losetup" = xyes)
 
 
-AC_ARG_ENABLE([libmount-mount],
-  AS_HELP_STRING([--enable-libmount-mount], [link old mount(8) with libmount]),
-  [], enable_libmount_mount=no
-)
-UL_BUILD_INIT([libmount_mount])
-UL_REQUIRES_BUILD([libmount_mount], [mount])
-UL_REQUIRES_BUILD([libmount_mount], [libmount])
-if test "x$build_libmount_mount" = xyes; then
-  AC_DEFINE(HAVE_LIBMOUNT_MOUNT, 1, [use libmount for mount(8)])
-fi
-AM_CONDITIONAL(BUILD_LIBMOUNT_MOUNT, test "x$build_libmount_mount" = xyes)
-
-
-AC_ARG_ENABLE([new-mount],
-  AS_HELP_STRING([--enable-new-mount], [build new pure libmount based mount(8) (EXPERIMENTAL)]),
-  [], enable_new_mount=no
-)
-UL_BUILD_INIT([new_mount])
-UL_REQUIRES_BUILD([new_mount], [libmount])
-if test "x$build_new_mount" = xyes; then
-  AM_CONDITIONAL(BUILD_MOUNT, [false])
-fi
-AM_CONDITIONAL(BUILD_NEW_MOUNT, test "x$build_new_mount" = xyes)
-
-
 AC_ARG_ENABLE([fsck],
   AS_HELP_STRING([--disable-fsck], [do not build fsck]),
   [], enable_fsck=check
 )
 UL_BUILD_INIT([fsck])
-UL_REQUIRES_BUILD([fsck], [libblkid])
+UL_REQUIRES_BUILD([fsck], [libmount])
 AM_CONDITIONAL(BUILD_FSCK, test "x$build_fsck" = xyes)
 
 
@@ -855,6 +886,16 @@ ruman1dir='${mandir}/ru/man1'
 AC_SUBST([ruman1dir])
 
 
+AC_ARG_ENABLE([eject],
+  AS_HELP_STRING([--disable-eject], [do not build eject]),
+  [], enable_eject=check
+)
+UL_BUILD_INIT([eject])
+UL_REQUIRES_LINUX([eject])
+UL_REQUIRES_BUILD([eject], [libmount])
+AM_CONDITIONAL(BUILD_EJECT, test "x$build_eject" = xyes)
+
+
 AC_ARG_ENABLE([agetty],
   AS_HELP_STRING([--disable-agetty], [do not build agetty]),
   [], enable_agetty=yes
@@ -882,12 +923,14 @@ AM_CONDITIONAL(BUILD_HWCLOCK, test "x$build_hwclock" = xyes)
 UL_BUILD_INIT([swapon], [check])
 UL_REQUIRES_LINUX([swapon])
 UL_REQUIRES_BUILD([swapon], [libblkid])
+UL_REQUIRES_BUILD([swapon], [libmount])
 AM_CONDITIONAL(BUILD_SWAPON, test "x$build_swapon" = xyes)
 
 
 UL_BUILD_INIT([lsblk], [check])
 UL_REQUIRES_LINUX([lsblk])
 UL_REQUIRES_BUILD([lsblk], [libblkid])
+UL_REQUIRES_BUILD([lsblk], [libmount])
 AM_CONDITIONAL(BUILD_LSBLK, test "x$build_lsblk" = xyes)
 
 
@@ -903,6 +946,21 @@ UL_REQUIRES_HAVE([chcpu], [cpu_set_t], [cpu_set_t type])
 AM_CONDITIONAL(BUILD_CHCPU, test "x$build_chcpu" = xyes)
 
 
+AC_ARG_ENABLE([wdctl],
+  AS_HELP_STRING([--disable-wdctl], [do not build wdctl]),
+  [], enable_wdctl=check
+)
+UL_BUILD_INIT([wdctl])
+UL_REQUIRES_LINUX([wdctl])
+UL_REQUIRES_HAVE([wdctl], [linux_watchdog_h], [linux/watchdog.h header file])
+AM_CONDITIONAL(BUILD_WDCTL, test "x$build_wdctl" = xyes)
+
+
+UL_BUILD_INIT([swaplabel], [check])
+UL_REQUIRES_BUILD([swaplabel], [libblkid])
+AM_CONDITIONAL(BUILD_SWAPLABEL, test "x$build_swaplabel" = xyes)
+
+
 UL_BUILD_INIT([prlimit], [check])
 UL_REQUIRES_LINUX([prlimit])
 UL_REQUIRES_SYSCALL_CHECK([prlimit], [UL_CHECK_SYSCALL([prlimit64])], [prlimit64])
@@ -910,6 +968,11 @@ AM_CONDITIONAL(BUILD_PRLIMIT, test "x$build_prlimit" = xyes)
 if test "x$build_prlimit" = xyes; then
   AC_CHECK_FUNCS([prlimit])
 fi
+
+
+UL_BUILD_INIT([lslocks], [check])
+UL_REQUIRES_LINUX([lslocks])
+AM_CONDITIONAL(BUILD_LSLOCKS, test "x$build_lslocks" = xyes)
 
 
 AC_ARG_ENABLE([switch_root],
@@ -947,7 +1010,7 @@ AC_ARG_ENABLE([kill],
 )
 UL_BUILD_INIT([kill])
 UL_REQUIRES_LINUX([kill])
-AM_CONDITIONAL(BUILD_KILL, test "x$enable_kill" = xyes)
+AM_CONDITIONAL(BUILD_KILL, test "x$build_kill" = xyes)
 
 
 AC_ARG_ENABLE([last],
@@ -956,6 +1019,14 @@ AC_ARG_ENABLE([last],
 )
 UL_BUILD_INIT([last])
 AM_CONDITIONAL(BUILD_LAST, test "x$build_last" = xyes)
+
+
+AC_ARG_ENABLE([utmpdump],
+  AS_HELP_STRING([--disable-utmpdump], [do not build utmpdump]),
+  [], enable_utmpdump=yes
+)
+UL_BUILD_INIT([utmpdump])
+AM_CONDITIONAL(BUILD_UTMPDUMP, test "x$build_utmpdump" = xyes)
 
 
 AC_ARG_ENABLE([line],
@@ -1000,14 +1071,82 @@ UL_BUILD_INIT([reset])
 AM_CONDITIONAL(BUILD_RESET, test "x$build_reset" = xyes)
 
 
-AC_ARG_ENABLE([login-utils],
-  AS_HELP_STRING([--enable-login-utils], [build chfn, chsh, login, newgrp, vipw]),
-  [], enable_login_utils=no
+AC_ARG_ENABLE([vipw],
+  AS_HELP_STRING([--enable-vipw], [build vipw]),
+  [], enable_vipw=no
 )
-UL_BUILD_INIT([login_utils])
-UL_REQUIRES_HAVE([login_utils], [security_pam_misc_h], [PAM header file])
-AM_CONDITIONAL(BUILD_LOGIN_UTILS, test "x$build_login_utils" = xyes)
+UL_BUILD_INIT([vipw])
+AM_CONDITIONAL(BUILD_VIPW, test "x$build_vipw" = xyes)
 
+
+AC_ARG_ENABLE([newgrp],
+  AS_HELP_STRING([--enable-newgrp], [build newgrp]),
+  [], enable_newgrp=no
+)
+UL_BUILD_INIT([newgrp])
+AM_CONDITIONAL(BUILD_NEWGRP, test "x$build_newgrp" = xyes)
+
+
+AC_ARG_ENABLE([chfn-chsh],
+  AS_HELP_STRING([--enable-chfn-chsh], [build chfn and chsh]),
+  [], enable_chfn_chsh=no
+)
+UL_BUILD_INIT([chfn_chsh])
+UL_REQUIRES_HAVE([chfn_chsh], [security_pam_misc_h], [PAM header file])
+AM_CONDITIONAL(BUILD_CHFN_CHSH, test "x$build_chfn_chsh" = xyes)
+
+AC_ARG_ENABLE([chsh-only-listed],
+AS_HELP_STRING([--disable-chsh-only-listed], [chsh: allow shells not in /etc/shells]),
+[], enable_chsh_only_listed=yes
+)
+
+if test "x$enable_chsh_only_listed" = xyes; then
+AC_DEFINE(ONLY_LISTED_SHELLS, 1, [Should chsh allow only shells in /etc/shells?])
+fi
+
+
+AC_ARG_ENABLE([login],
+  AS_HELP_STRING([--disable-login], [do not build login]),
+  [], enable_login=yes
+)
+UL_BUILD_INIT([login])
+UL_REQUIRES_HAVE([login], [security_pam_misc_h], [PAM header file])
+AM_CONDITIONAL(BUILD_LOGIN, test "x$build_login" = xyes)
+
+AC_ARG_ENABLE([login-chown-vcs],
+  AS_HELP_STRING([--enable-login-chown-vcs], [let login chown /dev/vcsN]),
+  [], enable_login_chown_vcs=no
+)
+
+if test "x$enable_login_chown_vcs" = xyes; then
+  AC_DEFINE(LOGIN_CHOWN_VCS, 1, [Should login chown /dev/vcsN?])
+fi
+
+AC_ARG_ENABLE([login-stat-mail],
+  AS_HELP_STRING([--enable-login-stat-mail], [let login stat() the mailbox]),
+  [], enable_login_stat_mail=no
+)
+
+if test "x$enable_login_stat_mail" = xyes; then
+  AC_DEFINE(LOGIN_STAT_MAIL, 1, [Should login stat() the mailbox?])
+fi
+
+
+AC_ARG_ENABLE([sulogin],
+  AS_HELP_STRING([--disable-sulogin], [do not build sulogin]),
+  [], enable_sulogin=yes
+)
+UL_BUILD_INIT([sulogin])
+AM_CONDITIONAL(BUILD_SULOGIN, test "x$build_sulogin" = xyes)
+
+
+AC_ARG_ENABLE([su],
+  AS_HELP_STRING([--disable-su], [do not build su]),
+  [], enable_su=yes
+)
+UL_BUILD_INIT([su])
+UL_REQUIRES_HAVE([su], [security_pam_misc_h], [PAM header file])
+AM_CONDITIONAL(BUILD_SU, test "x$build_su" = xyes)
 
 
 AC_ARG_ENABLE([schedutils],
@@ -1021,26 +1160,26 @@ UL_BUILD_INIT([ionice], [check])
 UL_REQUIRES_BUILD([ionice], [schedutils])
 UL_REQUIRES_SYSCALL_CHECK([ionice],
 	[UL_CHECK_SYSCALL([ioprio_set],
-	  [alpha],    [442],
-	  [i*86],     [289],
-	  [ia64*],    [1274],
-	  [powerpc*], [273],
-	  [s390*],    [282],
-	  [sparc*],   [196],
-	  [sh*],      [288],
-	  [x86_64*],  [251])],
+	  [alpha],	[442],
+	  [i*86],	[289],
+	  [ia64*],	[1274],
+	  [powerpc*],	[273],
+	  [s390*],	[282],
+	  [sparc*],	[196],
+	  [sh*],	[288],
+	  [x86_64*],	[251])],
 	[ioprio_set])
 
 UL_REQUIRES_SYSCALL_CHECK([ionice],
 	[UL_CHECK_SYSCALL([ioprio_get],
-	  [alpha],    [443],
-	  [i*86],     [290],
-	  [ia64*],    [1275],
-	  [powerpc*], [274],
-	  [s390*],    [283],
-	  [sparc*],   [218],
-	  [sh*],      [289],
-	  [x86_64*],  [252])],
+	  [alpha],	[443],
+	  [i*86],	[290],
+	  [ia64*],	[1275],
+	  [powerpc*],	[274],
+	  [s390*],	[283],
+	  [sparc*],	[218],
+	  [sh*],	[289],
+	  [x86_64*],	[252])],
 	[ioprio_get])
 
 AM_CONDITIONAL(BUILD_IONICE, test "x$build_ionice" = xyes)
@@ -1069,34 +1208,39 @@ UL_BUILD_INIT([write])
 AM_CONDITIONAL(BUILD_WRITE, test "x$build_write" = xyes)
 
 
-AC_ARG_ENABLE([chsh-only-listed],
-  AS_HELP_STRING([--disable-chsh-only-listed], [chsh: allow shells not in /etc/shells]),
-  [], enable_chsh_only_listed=yes
+AC_ARG_ENABLE([chkdupexe],
+  AS_HELP_STRING([--enable-chkdupexe], [build deprecated chkdupexe]),
+  [], enable_chkdupexe=no
 )
+UL_BUILD_INIT([chkdupexe])
+AM_CONDITIONAL(BUILD_CHKDUPEXE, test "x$build_chkdupexe" = xyes)
 
-if test "x$enable_chsh_only_listed" = xyes; then
-  AC_DEFINE(ONLY_LISTED_SHELLS, 1, [Should chsh allow only shells in /etc/shells?])
+if test "x$build_chkdupexe" = xyes; then
+	AC_PATH_PROG(PERL, perl)
+	AC_CONFIG_FILES([misc-utils/chkdupexe:misc-utils/chkdupexe.pl])
 fi
 
 
-AC_ARG_ENABLE([login-chown-vcs],
-  AS_HELP_STRING([--enable-login-chown-vcs], [let login chown /dev/vcsN]),
-  [], enable_login_chown_vcs=no
+AC_ARG_ENABLE([socket-activation],
+  AS_HELP_STRING([--enable-socket-activation], [build uuidd with support for systemd socket activation]),
+  [], enable_socket_activation=no
 )
 
-if test "x$enable_login_chown_vcs" = xyes; then
-  AC_DEFINE(LOGIN_CHOWN_VCS, 1, [Should login chown /dev/vcsN?])
+AM_CONDITIONAL(USE_SOCKET_ACTIVATION, test "x$enable_socket_activation" = xyes)
+
+if test "x$enable_socket_activation" = xyes; then
+  AC_DEFINE(USE_SOCKET_ACTIVATION, 1, [Should uuidd support socket activation?])
 fi
 
+AC_ARG_WITH([systemdsystemunitdir],
+  AS_HELP_STRING([--with-systemdsystemunitdir=DIR], [directory for systemd service files]),
+  [], [with_systemdsystemunitdir=$($PKG_CONFIG --variable=systemdsystemunitdir systemd)])
 
-AC_ARG_ENABLE([login-stat-mail],
-  AS_HELP_STRING([--enable-login-stat-mail], [let login stat() the mailbox]),
-  [], enable_login_stat_mail=no
-)
-
-if test "x$enable_login_stat_mail" = xyes; then
-  AC_DEFINE(LOGIN_STAT_MAIL, 1, [Should login stat() the mailbox?])
+if test "x$with_systemdsystemunitdir" != "xno"; then
+  AC_SUBST([systemdsystemunitdir], [$with_systemdsystemunitdir])
 fi
+
+AM_CONDITIONAL(HAVE_SYSTEMD, [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != "xno" ])
 
 
 AC_ARG_ENABLE([pg-bell],
@@ -1133,7 +1277,7 @@ AC_ARG_ENABLE([fs-paths-extra],
   AS_HELP_STRING([--enable-fs-paths-extra=paths], [additional search paths for fs helpers]),
   [case "$enableval" in
      yes|no) fs_paths_extra="" ;;
-          *) fs_paths_extra="$enableval" ;;
+	  *) fs_paths_extra="$enableval" ;;
     esac],
   [fs_paths_extra=""]
 )
@@ -1180,49 +1324,19 @@ LIBS=""
 
 AC_CONFIG_HEADERS(config.h)
 
+#
+# Don't use configure.ac to replace install paths! See Makefile PATHFILES for
+# more details.
+#
 AC_CONFIG_FILES([
-disk-utils/Makefile
-fdisk/Makefile
-fsck/Makefile
-getopt/Makefile
-hwclock/Makefile
-include/Makefile
-lib/Makefile
-login-utils/Makefile
 Makefile
-man/ru/Makefile
-misc-utils/chkdupexe:misc-utils/chkdupexe.pl
-misc-utils/Makefile
-mount/Makefile
-partx/Makefile
-po/Makefile.in
-schedutils/Makefile
-libblkid/blkid.pc
-libblkid/Makefile
 libblkid/docs/Makefile
 libblkid/docs/version.xml
-libblkid/src/Makefile
 libblkid/src/blkid.h
-libblkid/src/superblocks/Makefile
-libblkid/src/topology/Makefile
-libblkid/src/partitions/Makefile
-libblkid/samples/Makefile
-libmount/mount.pc
-libmount/Makefile
-libmount/src/Makefile
-libmount/src/libmount.h
 libmount/docs/Makefile
 libmount/docs/version.xml
-libuuid/uuid.pc
-libuuid/Makefile
-libuuid/man/Makefile
-libuuid/src/Makefile
-sys-utils/Makefile
-term-utils/Makefile
-tests/commands.sh
-tests/helpers/Makefile
-tests/Makefile
-text-utils/Makefile
+libmount/src/libmount.h
+po/Makefile.in
 ])
 
 

@@ -32,8 +32,8 @@ extern char *sysfs_devno_path(dev_t devno, char *buf, size_t bufsiz);
 extern char *sysfs_devno_to_devpath(dev_t devno, char *buf, size_t bufsiz);
 extern dev_t sysfs_devname_to_devno(const char *name, const char *parent);
 
-extern int sysfs_init(struct sysfs_cxt *cxt, dev_t devno,
-				struct sysfs_cxt *parent);
+extern int sysfs_init(struct sysfs_cxt *cxt, dev_t devno, struct sysfs_cxt *parent)
+					__attribute__ ((warn_unused_result));
 extern void sysfs_deinit(struct sysfs_cxt *cxt);
 
 extern DIR *sysfs_opendir(struct sysfs_cxt *cxt, const char *attr);
@@ -57,9 +57,12 @@ extern char *sysfs_strdup(struct sysfs_cxt *cxt, const char *attr);
 
 extern int sysfs_count_dirents(struct sysfs_cxt *cxt, const char *attr);
 extern int sysfs_count_partitions(struct sysfs_cxt *cxt, const char *devname);
+extern dev_t sysfs_partno_to_devno(struct sysfs_cxt *cxt, int partno);
 extern char *sysfs_get_slave(struct sysfs_cxt *cxt);
 
 extern int sysfs_is_partition_dirent(DIR *dir, struct dirent *d,
 			const char *parent_name);
 
+extern int sysfs_devno_to_wholedisk(dev_t dev, char *diskname,
+            size_t len, dev_t *diskdevno);
 #endif /* UTIL_LINUX_SYSFS_H */

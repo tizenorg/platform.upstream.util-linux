@@ -37,6 +37,7 @@
 #include "nls.h"
 #include "widechar.h"
 #include "strutils.h"
+#include "closestream.h"
 
 #ifndef MAXSYMLINKS
 #define MAXSYMLINKS 256
@@ -122,7 +123,7 @@ add_id(struct idcache **ic, char *name, unsigned long int id, int *width)
 	/* note, we ignore names with non-printable widechars */
 	if (w > 0)
 		nc->name = xstrdup(name);
-	else if (asprintf(&nc->name, "%lu", id) == -1)
+	else if (xasprintf(&nc->name, "%lu", id) == -1)
 		nc->name = NULL;
 
 	for (x = *ic; x && x->next; x = x->next);
@@ -188,7 +189,7 @@ readlink_to_namei(struct namei *nm, const char *path)
 
 		if (p) {
 			isrel = 1;
-			nm->relstart = p ? p - path : 0;
+			nm->relstart = p - path;
 			sz += nm->relstart + 1;
 		}
 	}
@@ -227,7 +228,7 @@ dotdot_stat(const char *dirname, struct stat *st)
 	memcpy(path + len, DOTDOTDIR, sizeof(DOTDOTDIR));
 
 	if (stat(path, st))
-		err(EXIT_FAILURE, _("could not stat '%s'"), path);
+		err(EXIT_FAILURE, _("stat failed %s"), path);
 	free(path);
 	return st;
 }
@@ -454,6 +455,7 @@ main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((c = getopt_long(argc, argv, "hVlmnovx", longopts, NULL)) != -1) {
 		switch(c) {

@@ -52,6 +52,7 @@
 #include "c.h"
 #include "kill.h"
 #include "nls.h"
+#include "closestream.h"
 #include "strutils.h"
 
 struct signv {
@@ -138,17 +139,14 @@ struct signv {
 #endif
 };
 
-int main (int argc, char *argv[]);
 extern char *mybasename(char *);
-int signame_to_signum (char *sig);
-int arg_to_signum (char *arg, int mask);
-void nosig (char *name);
-void printsig (int sig);
-void printsignals (FILE *fp);
-int usage (int status);
-int kill_verbose (char *procname, int pid, int sig);
 
-extern int *get_pids (char *, int);
+static int arg_to_signum (char *arg, int mask);
+static void nosig (char *name);
+static void printsig (int sig);
+static void printsignals (FILE *fp);
+static int usage (int status);
+static int kill_verbose (char *procname, int pid, int sig);
 
 static char *progname;
 
@@ -171,6 +169,7 @@ int main (int argc, char *argv[])
     setlocale(LC_ALL, "");
     bindtextdomain(PACKAGE, LOCALEDIR);
     textdomain(PACKAGE);
+    atexit(close_stdout);
 
     numsig = SIGTERM;
     do_pid = (! strcmp (progname, "pid")); 	/* Yecch */
@@ -242,7 +241,7 @@ int main (int argc, char *argv[])
 	    argc--, argv++;
 	    arg = *argv;
 #ifdef HAVE_SIGQUEUE
-	    sigdata.sival_int = strtol_or_err(arg, _("failed to parse sigval"));
+	    sigdata.sival_int = strtos32_or_err(arg, _("invalid sigval argument"));
 	    use_sigval = 1;
 #endif
 	    continue;
@@ -296,7 +295,7 @@ int main (int argc, char *argv[])
 }
 
 #ifdef SIGRTMIN
-int rtsig_to_signum(char *sig)
+static int rtsig_to_signum(char *sig)
 {
 	int num, maxi = 0;
 	char *ep = NULL;
@@ -325,7 +324,7 @@ int rtsig_to_signum(char *sig)
 }
 #endif
 
-int signame_to_signum (char *sig)
+static int signame_to_signum (char *sig)
 {
     size_t n;
 
@@ -345,7 +344,7 @@ int signame_to_signum (char *sig)
     return (-1);
 }
 
-int arg_to_signum (char *arg, int maskbit)
+static int arg_to_signum (char *arg, int maskbit)
 {
     int numsig;
     char *ep;
@@ -358,16 +357,16 @@ int arg_to_signum (char *arg, int maskbit)
 	    return (-1);
 	return (numsig);
     }
-    return (signame_to_signum (arg));
+    return signame_to_signum (arg);
 }
 
-void nosig (char *name)
+static void nosig (char *name)
 {
     fprintf (stderr, _("%s: unknown signal %s; valid signals:\n"), progname, name);
     printsignals (stderr);
 }
 
-void printsig (int sig)
+static void printsig (int sig)
 {
     size_t n;
 
@@ -386,7 +385,7 @@ void printsig (int sig)
     printf("%d\n", sig);
 }
 
-void printsignals (FILE *fp)
+static void printsignals (FILE *fp)
 {
     size_t n, lth, lpos = 0;
 
@@ -406,7 +405,7 @@ void printsignals (FILE *fp)
     fputc ('\n', fp);
 }
 
-int usage (int status)
+static int usage (int status)
 {
     FILE *fp;
 
@@ -416,7 +415,7 @@ int usage (int status)
     return status;
 }
 
-int kill_verbose (char *procname, int pid, int sig)
+static int kill_verbose (char *procname, int pid, int sig)
 {
     int rc;
 

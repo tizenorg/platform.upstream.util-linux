@@ -69,9 +69,10 @@ has two main forms of operation: either searching for a device with a
 specific NAME=value pair, or displaying NAME=value pairs for one or
 more specified devices.
 .SH OPTIONS
-The \fIsize\fR and \fIoffset\fR arguments may be followed by binary (2^N) 
-suffixes KiB, MiB, GiB, TiB, PiB and EiB (the "iB" is optional, e.g. "K" has the
-same meaning as "KiB") or decimal (10^N) suffixes KB, MB, GB, PB and EB.
+The \fIsize\fR and \fIoffset\fR arguments may be followed by the multiplicative
+suffixes KiB=1024, MiB=1024*1024, and so on for GiB, TiB, PiB, EiB, ZiB and YiB
+(the "iB" is optional, e.g. "K" has the same meaning as "KiB") or the suffixes
+KB=1000, MB=1000*1000, and so on for GB, PB, EB, ZB and YB.
 .TP
 .BI \-c " cachefile"
 Read from
@@ -84,7 +85,7 @@ devices previously scanned but not necessarily available at this time), specify
 .B \-d
 Don't encode non-printing characters. The non-printing characters are encoded
 by ^ and M- notation by default. Note that \fB-o udev\fR output format uses
-a diffrent encoding and this encoding cannot be disabled.
+a different encoding and this encoding cannot be disabled.
 .TP
 .B \-g
 Perform a garbage collection pass on the blkid cache to remove
@@ -113,7 +114,7 @@ block devices.  If this option is not specified,
 will print all of the devices that match the search parameter.
 .TP
 .BI \-L " label"
-Look up the device that uses this \fIlabel\fR (equal to: -l -o device -t
+Look up the device that uses this filesystem \fIlabel\fR (equal to: -l -o device -t
 LABEL=<label>).  This lookup method is able to reliably use /dev/disk/by-label
 udev symlinks (dependent on a setting in /etc/blkid.conf).  Avoid using the
 symlinks directly; it is not reliable to use the symlinks without verification.
@@ -157,7 +158,10 @@ print the value of the tags
 .TP
 .B list
 print the devices in a user-friendly format; this output format is unsupported
-for low-level probing (\fB-p\fR or \fB-i\fR)
+for low-level probing (\fB-p\fR or \fB-i\fR). This output format is \fBDEPRECATED\fR
+in favour of
+.BR lsblk (8)
+command.
 .TP
 .B device
 print the device name only; this output format is always enabled for \fB-L\fR
@@ -169,7 +173,7 @@ prefixed by ID_FS_ or ID_PART_ prefixes
 
 The udev output returns the ID_FS_AMBIVALENT tag if more superblocks are detected,
 and ID_PART_ENTRY_* tags are always returned for all partitions including empty
-partitions.
+partitions. This output format is \fBDEPRECATED\fR.
 .TP
 .B export
 print key=value pairs for easy import into the environment; this output format
@@ -231,7 +235,7 @@ probes for all supported formats except RAIDs.
 This option is only useful together with \fB-p\fR.
 .TP
 .BI \-U " uuid "
-Look up the device that uses this \fIuuid\fR.  For more details see the \fB-L\fR option.
+Look up the device that uses this filesystem \fIuuid\fR.  For more details see the \fB-L\fR option.
 .TP
 .B \-v
 Display version number and exit.
@@ -263,8 +267,8 @@ The following options control the libblkid library:
 .TP
 .I SEND_UEVENT=<yes|not>
 Sends uevent when
-.I /dev/disk/by-{label,uuid}/
-symlink does not match with LABEL or UUID on the device. Default is "yes".
+.I /dev/disk/by-{label,uuid,partuuid,partlabel}/
+symlink does not match with LABEL, UUID, PARTUUID or PARTLABEL on the device. Default is "yes".
 .TP
 .I CACHE_FILE=<path>
 Overrides the standard location of the cache file. This setting can be
@@ -272,7 +276,7 @@ overridden by the environment variable BLKID_FILE. Default is
 .I /run/blkid/blkid.tab
 or
 .I /etc/blkid.tab
-on systems without /run direcotry
+on systems without /run directory
 .TP
 .I EVALUATE=<methods>
 Defines LABEL and UUID evaluation method(s). Currently, the libblkid library
@@ -286,6 +290,9 @@ file.
 .B blkid
 was written by Andreas Dilger for libblkid and improved by Theodore Ts'o
 and Karel Zak.
+.SH ENVIRONMENT
+.IP LIBBLKID_DEBUG=0xffff
+enables debug output.
 .SH AVAILABILITY
 The blkid command is part of the util-linux package and is available from
 ftp://ftp.kernel.org/pub/linux/utils/util-linux/.

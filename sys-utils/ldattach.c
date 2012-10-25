@@ -27,6 +27,7 @@
 #include "c.h"
 #include "nls.h"
 #include "strutils.h"
+#include "closestream.h"
 
 #ifndef N_GIGASET_M101
 # define N_GIGASET_M101 16
@@ -93,7 +94,7 @@ static const struct ld_table ld_iflags[] =
 	{ NULL,		0 }
 };
 
-void dbg(char *fmt, ...)
+static void dbg(char *fmt, ...)
 {
 	va_list args;
 
@@ -140,7 +141,7 @@ static int parse_iflag(char *str, int *set_iflag, int *clr_iflag)
 		if (*s == '-')
 			s++;
 		if ((iflag = lookup_table(ld_iflags, s)) < 0)
-			iflag = strtol_or_err(s, _("invalid iflag"));
+			iflag = strtos32_or_err(s, _("invalid iflag"));
 		if (s > str && *(s - 1) == '-')
 			*clr_iflag |= iflag;
 		else
@@ -234,6 +235,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	/* parse options */
 	progname = program_invocation_short_name;
@@ -261,7 +263,7 @@ int main(int argc, char **argv)
 			parity = optc;
 			break;
 		case 's':
-			speed = strtol_or_err(optarg, _("invalid speed"));
+			speed = strtos32_or_err(optarg, _("invalid speed argument"));
 			break;
 		case 'i':
 			parse_iflag(optarg, &set_iflag, &clr_iflag);
@@ -283,7 +285,7 @@ int main(int argc, char **argv)
 	/* parse line discipline specification */
 	ldisc = lookup_table(ld_discs, argv[optind]);
 	if (ldisc < 0)
-		ldisc = strtol_or_err(argv[optind], _("invalid line discipline"));
+		ldisc = strtos32_or_err(argv[optind], _("invalid line discipline argument"));
 
 	/* open device */
 	dev = argv[optind + 1];

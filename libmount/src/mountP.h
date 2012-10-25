@@ -139,7 +139,6 @@ extern int mnt_get_uid(const char *username, uid_t *uid);
 extern int mnt_get_gid(const char *groupname, gid_t *gid);
 extern int mnt_in_group(gid_t gid);
 
-extern char *mnt_get_mountpoint(const char *path);
 extern char *mnt_get_fs_root(const char *path, const char *mountpoint);
 extern int mnt_open_uniq_filename(const char *filename, char **name);
 extern int mnt_has_regular_utab(const char **utab, int *writable);
@@ -149,6 +148,10 @@ extern int mnt_get_filesystems(char ***filesystems, const char *pattern);
 extern void mnt_free_filesystems(char **filesystems);
 
 /* tab.c */
+extern int mnt_table_set_parser_fltrcb(	struct libmnt_table *tb,
+					int (*cb)(struct libmnt_fs *, void *),
+					void *data);
+
 extern struct libmnt_fs *mnt_table_get_fs_root(struct libmnt_table *tb,
                                         struct libmnt_fs *fs,
                                         unsigned long mountflags,
@@ -194,7 +197,7 @@ struct libmnt_fs {
 
 	char		*bindsrc;	/* utab, full path from fstab[1] for bind mounts */
 
-	char		*source;	/* fstab[1], mountinfo[10]:
+	char		*source;	/* fstab[1], mountinfo[10], swaps[1]:
                                          * source dev, file, dir or TAG */
 	char		*tagname;	/* fstab[1]: tag name - "LABEL", "UUID", ..*/
 	char		*tagval;	/*           tag value */
@@ -212,7 +215,14 @@ struct libmnt_fs {
 	int		freq;		/* fstab[5]: dump frequency in days */
 	int		passno;		/* fstab[6]: pass number on parallel fsck */
 
+	/* /proc/swaps */
+	char		*swaptype;	/* swaps[2]: device type (partition, file, ...) */
+	off_t		size;		/* swaps[3]: swaparea size */
+	off_t		usedsize;	/* swaps[4]: used size */
+	int		priority;	/* swaps[5]: swap priority */
+
 	int		flags;		/* MNT_FS_* flags */
+	pid_t		tid;		/* /proc/<tid>/mountinfo otherwise zero */
 
 	void		*userdata;	/* library independent data */
 };
@@ -242,6 +252,10 @@ struct libmnt_table {
         int		(*errcb)(struct libmnt_table *tb,
 				 const char *filename, int line);
 
+	int		(*fltrcb)(struct libmnt_fs *fs, void *data);
+	void		*fltrcb_data;
+
+
 	struct list_head	ents;	/* list of entries (libmnt_fs) */
 };
 
@@ -255,7 +269,8 @@ enum {
 	MNT_FMT_FSTAB,			/* /etc/{fs,m}tab */
 	MNT_FMT_MTAB = MNT_FMT_FSTAB,	/* alias */
 	MNT_FMT_MOUNTINFO,		/* /proc/#/mountinfo */
-	MNT_FMT_UTAB			/* /dev/.mount/utab */
+	MNT_FMT_UTAB,			/* /run/mount/utab */
+	MNT_FMT_SWAPS			/* /proc/swaps */
 };
 
 
@@ -277,6 +292,9 @@ struct libmnt_context
 
 	int	(*table_errcb)(struct libmnt_table *tb,	/* callback for libmnt_table structs */
 			 const char *filename, int line);
+
+	int	(*table_fltrcb)(struct libmnt_fs *fs, void *data);	/* callback for libmnt_table structs */
+	void	*table_fltrcb_data;
 
 	char	*(*pwd_get_cb)(struct libmnt_context *);		/* get encryption password */
 	void	(*pwd_release_cb)(struct libmnt_context *, char *);	/* release password */
@@ -328,6 +346,7 @@ struct libmnt_context
 #define MNT_FL_NOCANONICALIZE	(1 << 9)
 #define MNT_FL_RDONLY_UMOUNT	(1 << 11)	/* remount,ro after EBUSY umount(2) */
 #define MNT_FL_FORK		(1 << 12)
+#define MNT_FL_NOSWAPMATCH	(1 << 13)
 
 #define MNT_FL_EXTERN_FS	(1 << 15)	/* cxt->fs is not private */
 #define MNT_FL_EXTERN_FSTAB	(1 << 16)	/* cxt->fstab is not private */
@@ -367,11 +386,6 @@ extern struct libmnt_fs *mnt_copy_mtab_fs(const struct libmnt_fs *fs);
 extern int __mnt_fs_set_source_ptr(struct libmnt_fs *fs, char *source);
 extern int __mnt_fs_set_fstype_ptr(struct libmnt_fs *fs, char *fstype);
 
-/* exported in v2.22 */
-extern int mnt_fs_streq_srcpath(struct libmnt_fs *fs, const char *path);
-extern int mnt_fs_streq_target(struct libmnt_fs *fs, const char *path);
-
-
 /* context.c */
 extern int mnt_context_prepare_srcpath(struct libmnt_context *cxt);
 extern int mnt_context_prepare_target(struct libmnt_context *cxt);
@@ -379,7 +393,6 @@ extern int mnt_context_guess_fstype(struct libmnt_context *cxt);
 extern int mnt_context_prepare_helper(struct libmnt_context *cxt,
 				      const char *name, const char *type);
 extern int mnt_context_prepare_update(struct libmnt_context *cxt);
-extern struct libmnt_fs *mnt_context_get_fs(struct libmnt_context *cxt);
 extern int mnt_context_merge_mflags(struct libmnt_context *cxt);
 extern int mnt_context_update_tabs(struct libmnt_context *cxt);
 
@@ -393,8 +406,11 @@ extern int mnt_context_clear_loopdev(struct libmnt_context *cxt);
 
 extern int mnt_fork_context(struct libmnt_context *cxt);
 
+extern int mnt_context_set_tabfilter(struct libmnt_context *cxt,
+			int (*fltr)(struct libmnt_fs *, void *),
+			void *data);
+
 /* tab_update.c */
-extern struct libmnt_fs *mnt_update_get_fs(struct libmnt_update *upd);
 extern int mnt_update_set_filename(struct libmnt_update *upd,
 				   const char *filename, int userspace_only);
 

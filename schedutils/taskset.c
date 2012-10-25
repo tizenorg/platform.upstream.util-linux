@@ -11,9 +11,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  *
  * Copyright (C) 2004 Robert Love
  * Copyright (C) 2010 Karel Zak <kzak@redhat.com>
@@ -34,6 +34,7 @@
 #include "xalloc.h"
 #include "procutils.h"
 #include "c.h"
+#include "closestream.h"
 
 struct taskset {
 	pid_t		pid;		/* task PID */
@@ -146,6 +147,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	memset(&ts, 0, sizeof(ts));
 
@@ -155,8 +157,8 @@ int main(int argc, char **argv)
 			all_tasks = 1;
 			break;
 		case 'p':
-			pid = strtol_or_err(argv[argc - 1],
-					    _("failed to parse pid"));
+			pid = strtos32_or_err(argv[argc - 1],
+					    _("invalid PID argument"));
 			break;
 		case 'c':
 			ts.use_list = 1;

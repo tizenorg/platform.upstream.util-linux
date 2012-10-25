@@ -14,9 +14,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <ctype.h>
@@ -41,6 +41,8 @@
 #include "bitops.h"
 #include "tt.h"
 #include "path.h"
+#include "closestream.h"
+#include "optutils.h"
 
 #define CACHE_MAX 100
 
@@ -244,7 +246,8 @@ static struct lscpu_coldesc coldescs[] =
 	[COL_ONLINE]       = { "ONLINE", N_("shows if Linux currently makes use of the CPU") }
 };
 
-static int column_name_to_id(const char *name, size_t namesz)
+static int
+column_name_to_id(const char *name, size_t namesz)
 {
 	size_t i;
 
@@ -263,7 +266,8 @@ static int column_name_to_id(const char *name, size_t namesz)
  *
  *	"<pattern>   : <key>"
  */
-int lookup(char *line, char *pattern, char **value)
+static int
+lookup(char *line, char *pattern, char **value)
 {
 	char *p, *v;
 	int len = strlen(pattern);
@@ -404,10 +408,10 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 }
 
 static int
-has_pci_device(int vendor, int device)
+has_pci_device(unsigned int vendor, unsigned int device)
 {
 	FILE *f;
-	int num, fn, ven, dev;
+	unsigned int num, fn, ven, dev;
 	int res = 1;
 
 	f = path_fopen("r", 0, _PATH_PROC_PCIDEVS);
@@ -543,7 +547,7 @@ read_hypervisor(struct lscpu_desc *desc)
 			str = strchr(buf, ':');
 			if (!str)
 				continue;
-			if (asprintf(&str, "%s", str + 1) == -1)
+			if (xasprintf(&str, "%s", str + 1) == -1)
 				errx(EXIT_FAILURE, _("failed to allocate memory"));
 			/* remove leading, trailing and repeating whitespace */
 			while (*str == ' ')
@@ -559,7 +563,7 @@ read_hypervisor(struct lscpu_desc *desc)
 	}
 }
 
-/* add @set to the @ary, unnecesary set is deallocated. */
+/* add @set to the @ary, unnecessary set is deallocated. */
 static int add_cpuset_to_array(cpu_set_t **ary, int *items, cpu_set_t *set)
 {
 	int i;
@@ -1077,7 +1081,7 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 	print_s(_("Architecture:"), desc->arch);
 
 	if (desc->mode) {
-		char buf[64], *p = buf;
+		char mbuf[64], *p = mbuf;
 
 		if (desc->mode & MODE_32BIT) {
 			strcpy(p, "32-bit, ");
@@ -1088,7 +1092,7 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 			p += 8;
 		}
 		*(p - 2) = '\0';
-		print_s(_("CPU op-mode(s):"), buf);
+		print_s(_("CPU op-mode(s):"), mbuf);
 	}
 #if !defined(WORDS_BIGENDIAN)
 	print_s(_("Byte Order:"), "Little Endian");
@@ -1137,11 +1141,11 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		 */
 		if (path_exist(_PATH_PROC_SYSINFO)) {
 			FILE *fd = path_fopen("r", 0, _PATH_PROC_SYSINFO);
-			char buf[BUFSIZ];
+			char pbuf[BUFSIZ];
 			int t0, t1, t2;
 
-			while (fd && fgets(buf, sizeof(buf), fd) != NULL) {
-				if (sscanf(buf, "CPU Topology SW:%d%d%d%d%d%d",
+			while (fd && fgets(pbuf, sizeof(pbuf), fd) != NULL) {
+				if (sscanf(pbuf, "CPU Topology SW:%d%d%d%d%d%d",
 					   &t0, &t1, &t2, &books, &sockets_per_book,
 					   &cores_per_socket) == 6)
 					break;
@@ -1189,13 +1193,12 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 	if (desc->dispatching >= 0)
 		print_s(_("Dispatching mode:"), _(disp_modes[desc->dispatching]));
 	if (desc->ncaches) {
-		char buf[512];
-		int i;
+		char cbuf[512];
 
 		for (i = desc->ncaches - 1; i >= 0; i--) {
-			snprintf(buf, sizeof(buf),
+			snprintf(cbuf, sizeof(cbuf),
 					_("%s cache:"), desc->caches[i].name);
-			print_s(buf, desc->caches[i].size);
+			print_s(cbuf, desc->caches[i].size);
 		}
 	}
 
@@ -1240,6 +1243,7 @@ int main(int argc, char *argv[])
 	struct lscpu_desc _desc = { .flags = 0 }, *desc = &_desc;
 	int c, i;
 	int columns[ARRAY_SIZE(coldescs)], ncolumns = 0;
+	int cpu_modifier_specified = 0;
 
 	static const struct option longopts[] = {
 		{ "all",        no_argument,       0, 'a' },
@@ -1254,33 +1258,41 @@ int main(int argc, char *argv[])
 		{ NULL,		0, 0, 0 }
 	};
 
+	static const ul_excl_t excl[] = {	/* rows and cols in ASCII order */
+		{ 'a','b','c' },
+		{ 'e','p' },
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
+
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((c = getopt_long(argc, argv, "abce::hp::s:xV", longopts, NULL)) != -1) {
 
-		if (mod->mode != OUTPUT_SUMMARY && strchr("ep", c))
-			errx(EXIT_FAILURE,
-			     _("extended and parsable formats are mutually exclusive"));
-		if ((mod->online || mod->offline) && strchr("abc", c))
-			errx(EXIT_FAILURE,
-			     _("--all, --online and --offline options are mutually exclusive"));
+		err_exclusive_options(c, longopts, excl, excl_st);
 
 		switch (c) {
 		case 'a':
 			mod->online = mod->offline = 1;
+			cpu_modifier_specified = 1;
 			break;
 		case 'b':
 			mod->online = 1;
+			cpu_modifier_specified = 1;
 			break;
 		case 'c':
 			mod->offline = 1;
+			cpu_modifier_specified = 1;
 			break;
 		case 'h':
 			usage(stdout);
 		case 'p':
+			goto hop_over;
 		case 'e':
+			hop_over:
 			if (optarg) {
 				if (*optarg == '=')
 					optarg++;
@@ -1306,6 +1318,14 @@ int main(int argc, char *argv[])
 		default:
 			usage(stderr);
 		}
+	}
+
+	if (cpu_modifier_specified && mod->mode == OUTPUT_SUMMARY) {
+		fprintf(stderr,
+			_("%s: options --all, --online and --offline may only "
+			  "be used with options --extended or --parsable.\n"),
+			program_invocation_short_name);
+		return EXIT_FAILURE;
 	}
 
 	if (argc != optind)

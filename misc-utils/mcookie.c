@@ -21,6 +21,8 @@
 #include "c.h"
 #include "md5.h"
 #include "nls.h"
+#include "closestream.h"
+
 #include <fcntl.h>
 #include <getopt.h>
 #include <stddef.h>
@@ -102,6 +104,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((c =
 		getopt_long(argc, argv, "f:vVh", longopts, NULL)) != -1)
@@ -141,7 +144,7 @@ int main(int argc, char **argv)
 			fd = open(file, O_RDONLY);
 
 		if (fd < 0) {
-			warn(_("Could not open %s"), file);
+			warn(_("cannot open %s"), file);
 		} else {
 			count = hash_file(&ctx, fd);
 			if (verbose)
@@ -175,21 +178,13 @@ int main(int argc, char **argv)
 			if (rngs[i].minlength && r >= rngs[i].minlength)
 				break;
 		} else if (verbose)
-			warn(_("Could not open %s"), rngs[i].path);
+			warn(_("cannot open %s"), rngs[i].path);
 	}
 
 	MD5Final(digest, &ctx);
 	for (i = 0; i < MD5LENGTH; i++)
 		printf("%02x", digest[i]);
 	putchar('\n');
-
-	/*
-	 * The following is important for cases like disk full,
-	 * so shell scripts can bomb out properly rather than
-	 * think they succeeded.
-	 */
-	if (fflush(stdout) < 0 || fclose(stdout) < 0)
-		return EXIT_FAILURE;
 
 	return EXIT_SUCCESS;
 }

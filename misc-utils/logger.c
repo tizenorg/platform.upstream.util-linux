@@ -51,17 +51,52 @@
 #include <getopt.h>
 
 #include "c.h"
+#include "closestream.h"
 #include "nls.h"
 #include "strutils.h"
 
 #define	SYSLOG_NAMES
 #include <syslog.h>
 
-int	decode (char *, CODE *);
-int	pencode (char *);
-
 static int optd = 0;
-static int udpport = 514;
+static uint16_t udpport = 514;
+
+static int decode(char *name, CODE *codetab)
+{
+	register CODE *c;
+
+	if (isdigit(*name))
+		return (atoi(name));
+
+	for (c = codetab; c->c_name; c++)
+		if (!strcasecmp(name, c->c_name))
+			return (c->c_val);
+
+	return -1;
+}
+
+static int pencode(char *s)
+{
+	char *save;
+	int fac, lev;
+
+	for (save = s; *s && *s != '.'; ++s);
+	if (*s) {
+		*s = '\0';
+		fac = decode(save, facilitynames);
+		if (fac < 0)
+			errx(EXIT_FAILURE, _("unknown facility name: %s."), save);
+		*s++ = '.';
+	}
+	else {
+		fac = LOG_USER;
+		s = save;
+	}
+	lev = decode(s, prioritynames);
+	if (lev < 0)
+		errx(EXIT_FAILURE, _("unknown priority name: %s."), save);
+	return ((lev & LOG_PRIMASK) | (fac & LOG_FACMASK));
+}
 
 static int
 myopenlog(const char *sock) {
@@ -84,7 +119,7 @@ myopenlog(const char *sock) {
 }
 
 static int
-udpopenlog(const char *servername,int port) {
+udpopenlog(const char *servername, uint16_t port) {
 	int fd;
 	struct sockaddr_in s_addr;
 	struct hostent *serverhost;
@@ -95,7 +130,7 @@ udpopenlog(const char *servername,int port) {
 	if ((fd = socket(AF_INET, SOCK_DGRAM , 0)) == -1)
 		err(EXIT_FAILURE, _("socket"));
 
-	bcopy(serverhost->h_addr,&s_addr.sin_addr,serverhost->h_length);
+	memcpy(&s_addr.sin_addr, serverhost->h_addr, serverhost->h_length);
         s_addr.sin_family=AF_INET;
         s_addr.sin_port=htons(port);
 
@@ -167,7 +202,6 @@ main(int argc, char **argv) {
 	char *usock = NULL;
 	char *udpserver = NULL;
 	int LogSock = -1;
-	long tmpport;
 
 	static const struct option longopts[] = {
 		{ "id",		no_argument,	    0, 'i' },
@@ -187,6 +221,7 @@ main(int argc, char **argv) {
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	tag = NULL;
 	pri = LOG_NOTICE;
@@ -222,12 +257,8 @@ main(int argc, char **argv) {
 			udpserver = optarg;
 			break;
 		case 'P':		/* change udp port */
-			tmpport = strtol_or_err(optarg,
-						_("failed to parse port number"));
-			if (tmpport < 0 || 65535 < tmpport)
-				errx(EXIT_FAILURE, _("port `%ld' out of range"),
-						tmpport);
-			udpport = (int) tmpport;
+			udpport = strtou16_or_err(optarg,
+						_("invalid port number argument"));
 			break;
 		case 'V':
 			printf(_("%s from %s\n"), program_invocation_short_name,
@@ -250,8 +281,6 @@ main(int argc, char **argv) {
 		LogSock = udpopenlog(udpserver,udpport);
 	else
 		LogSock = myopenlog(usock);
-
-	(void) fclose(stdout);
 
 	/* log input line if appropriate */
 	if (argc > 0) {
@@ -306,48 +335,4 @@ main(int argc, char **argv) {
 		close(LogSock);
 
 	return EXIT_SUCCESS;
-}
-
-/*
- *  Decode a symbolic name to a numeric value
- */
-int
-pencode(char *s)
-{
-	char *save;
-	int fac, lev;
-
-	for (save = s; *s && *s != '.'; ++s);
-	if (*s) {
-		*s = '\0';
-		fac = decode(save, facilitynames);
-		if (fac < 0)
-			errx(EXIT_FAILURE,
-			    _("unknown facility name: %s."), save);
-		*s++ = '.';
-	}
-	else {
-		fac = LOG_USER;
-		s = save;
-	}
-	lev = decode(s, prioritynames);
-	if (lev < 0)
-		errx(EXIT_FAILURE,
-		    _("unknown priority name: %s."), save);
-	return ((lev & LOG_PRIMASK) | (fac & LOG_FACMASK));
-}
-
-int
-decode(char *name, CODE *codetab)
-{
-	register CODE *c;
-
-	if (isdigit(*name))
-		return (atoi(name));
-
-	for (c = codetab; c->c_name; c++)
-		if (!strcasecmp(name, c->c_name))
-			return (c->c_val);
-
-	return (-1);
 }

@@ -15,7 +15,17 @@
  *
  * You should have received a copy of the GNU General Public License along
  * with this program; if not, write to the Free Software Foundation, Inc.,
- * 675 Mass Ave, Cambridge, MA 02139, USA.  */
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+/*
+ * This command is deprecated.  The utility is in maintenance mode,
+ * meaning we keep them in source tree for backward compatibility
+ * only.  Do not waste time making this command better, unless the
+ * fix is about security or other very critical issue.
+ *
+ * See Documentation/deprecated.txt for more information.
+ */
 
 #include <err.h>
 #include <errno.h>
@@ -24,6 +34,7 @@
 #include <sys/utsname.h>
 
 #include "c.h"
+#include "closestream.h"
 #include "nls.h"
 
 static void __attribute__ ((__noreturn__)) usage(FILE * out)
@@ -51,6 +62,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((ch = getopt_long(argc, argv, "Vh", longopts, NULL)) != -1)
 		switch (ch) {

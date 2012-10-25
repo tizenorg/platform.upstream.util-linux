@@ -62,8 +62,12 @@ int mnt_context_is_loopdev(struct libmnt_context *cxt)
 		struct stat st;
 
 		if (stat(src, &st) == 0 && S_ISREG(st.st_mode) &&
-		    st.st_size > 1024)
+		    st.st_size > 1024) {
+			DBG(CXT, mnt_debug_h(cxt, "automatically enabling loop= option"));
+			cxt->user_mountflags |= MNT_MS_LOOP;
+			mnt_optstr_append_option(&cxt->fs->user_optstr, "loop", NULL);
 			return 1;
+		}
 	}
 
 	return 0;
@@ -155,7 +159,9 @@ int mnt_context_setup_loopdev(struct libmnt_context *cxt)
 		lo_flags |= LO_FLAGS_READ_ONLY;
 	}
 
-	loopcxt_init(&lc, 0);
+	rc = loopcxt_init(&lc, 0);
+	if (rc)
+		return rc;
 
 	ON_DBG(CXT, loopcxt_enable_debug(&lc, 1));
 
@@ -181,8 +187,10 @@ int mnt_context_setup_loopdev(struct libmnt_context *cxt)
 	if (rc == 0 && (cxt->user_mountflags & MNT_MS_OFFSET) &&
 	    mnt_optstr_get_option(optstr, "offset", &val, &len) == 0) {
 		rc = mnt_parse_offset(val, len, &offset);
-		if (rc)
+		if (rc) {
 			DBG(CXT, mnt_debug_h(cxt, "failed to parse offset="));
+			rc = -MNT_ERR_MOUNTOPT;
+		}
 	}
 
 	/*
@@ -191,8 +199,10 @@ int mnt_context_setup_loopdev(struct libmnt_context *cxt)
 	if (rc == 0 && (cxt->user_mountflags & MNT_MS_SIZELIMIT) &&
 	    mnt_optstr_get_option(optstr, "sizelimit", &val, &len) == 0) {
 		rc = mnt_parse_offset(val, len, &sizelimit);
-		if (rc)
+		if (rc) {
 			DBG(CXT, mnt_debug_h(cxt, "failed to parse sizelimit="));
+			rc = -MNT_ERR_MOUNTOPT;
+		}
 	}
 
 	/*
@@ -261,6 +271,7 @@ int mnt_context_setup_loopdev(struct libmnt_context *cxt)
 
 		if (loopdev || rc != -EBUSY) {
 			DBG(CXT, mnt_debug_h(cxt, "failed to setup device"));
+			rc = -MNT_ERR_LOOPDEV;
 			goto done;
 		}
 		DBG(CXT, mnt_debug_h(cxt, "loopdev stolen...trying again"));

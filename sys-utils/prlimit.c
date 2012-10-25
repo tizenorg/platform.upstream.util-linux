@@ -13,9 +13,9 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <errno.h>
@@ -33,6 +33,7 @@
 #include "xalloc.h"
 #include "strutils.h"
 #include "list.h"
+#include "closestream.h"
 
 #ifndef RLIMIT_RTTIME
 # define RLIMIT_RTTIME 15
@@ -228,20 +229,20 @@ static void add_tt_line(struct tt *tt, struct prlimit *l)
 
 		switch (get_column_id(i)) {
 		case COL_RES:
-			rc = asprintf(&str, "%s", l->desc->name);
+			rc = xasprintf(&str, "%s", l->desc->name);
 			break;
 		case COL_HELP:
-			rc = asprintf(&str, "%s", l->desc->help);
+			rc = xasprintf(&str, "%s", l->desc->help);
 			break;
 		case COL_SOFT:
 			rc = l->rlim.rlim_cur == RLIM_INFINITY ?
-				asprintf(&str, "%s", "unlimited") :
-				asprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_cur);
+				xasprintf(&str, "%s", "unlimited") :
+				xasprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_cur);
 			break;
 		case COL_HARD:
 			rc = l->rlim.rlim_max == RLIM_INFINITY ?
-				asprintf(&str, "%s", "unlimited") :
-				asprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_max);
+				xasprintf(&str, "%s", "unlimited") :
+				xasprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_max);
 			break;
 		case COL_UNITS:
 			str = l->desc->unit ? xstrdup(_(l->desc->unit)) : NULL;
@@ -513,6 +514,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	INIT_LIST_HEAD(&lims);
 
@@ -576,14 +578,12 @@ int main(int argc, char **argv)
 			break;
 
 		case 'p':
-			if (pid) /* we only work one pid at a time */
-				errx(EXIT_FAILURE, _("only use one PID at a time"));
-
-			pid = strtol_or_err(optarg, _("cannot parse PID"));
+			if (pid)
+				errx(EXIT_FAILURE, _("option --pid may be specified only once"));
+			pid = strtos32_or_err(optarg, _("invalid PID argument"));
 			break;
 		case 'h':
 			usage(stdout);
-			break;
 		case 'o':
 			ncolumns = string_to_idarray(optarg,
 						     columns, ARRAY_SIZE(columns),
@@ -607,13 +607,10 @@ int main(int argc, char **argv)
 
 		default:
 			usage(stderr);
-			break;
 		}
 	}
 	if (argc > optind && pid)
-		errx(EXIT_FAILURE,
-			_("--pid option and COMMAND are mutually exclusive"));
-
+		errx(EXIT_FAILURE, _("options --pid and COMMAND are mutually exclusive"));
 	if (!ncolumns) {
 		/* default columns */
 		columns[ncolumns++] = COL_RES;

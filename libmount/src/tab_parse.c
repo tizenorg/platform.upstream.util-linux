@@ -269,6 +269,56 @@ enomem:
 }
 
 /*
+ * Parses one line from /proc/swaps
+ */
+static int mnt_parse_swaps_line(struct libmnt_fs *fs, char *s)
+{
+	uintmax_t fsz, usz;
+	int rc;
+	char *src = NULL;
+
+	rc = sscanf(s,	UL_SCNsA" "	/* (1) source */
+			UL_SCNsA" "	/* (2) type */
+			"%jd"		/* (3) size */
+			"%jd"		/* (4) used */
+			"%d",		/* priority */
+
+			&src,
+			&fs->swaptype,
+			&fsz,
+			&usz,
+			&fs->priority);
+
+	if (rc == 5) {
+		size_t sz;
+
+		fs->size = fsz;
+		fs->usedsize = usz;
+
+		unmangle_string(src);
+
+		/* remove "(deleted)" suffix */
+		sz = strlen(src);
+		if (sz > PATH_DELETED_SUFFIX_SZ) {
+			char *p = src + (sz - PATH_DELETED_SUFFIX_SZ);
+			if (strcmp(p, PATH_DELETED_SUFFIX) == 0)
+				*p = '\0';
+		}
+
+		rc = mnt_fs_set_source(fs, src);
+		if (!rc)
+			mnt_fs_set_fstype(fs, "swap");
+		free(src);
+	} else {
+		DBG(TAB, mnt_debug("tab parse error: [sscanf rc=%d]: '%s'", rc, s));
+		rc = -EINVAL;
+	}
+
+	return rc;
+}
+
+
+/*
  * Returns {m,fs}tab or mountinfo file format (MNT_FMT_*)
  *
  * Note that we aren't trying to guess utab file format, because this file has
@@ -281,8 +331,13 @@ static int guess_table_format(char *line)
 {
 	unsigned int a, b;
 
+	DBG(TAB, mnt_debug("trying to guess table type"));
+
 	if (sscanf(line, "%u %u", &a, &b) == 2)
 		return MNT_FMT_MOUNTINFO;
+
+	if (strncmp(line, "Filename\t", 9) == 0)
+		return MNT_FMT_SWAPS;
 
 	return MNT_FMT_FSTAB;		/* fstab, mtab or /proc/mounts */
 }
@@ -295,12 +350,14 @@ static int mnt_table_parse_next(struct libmnt_table *tb, FILE *f, struct libmnt_
 {
 	char buf[BUFSIZ];
 	char *s;
+	int rc;
 
 	assert(tb);
 	assert(f);
 	assert(fs);
 
 	/* read the next non-blank non-comment line */
+next_line:
 	do {
 		if (fgets(buf, sizeof(buf), f) == NULL)
 			return -EINVAL;
@@ -326,35 +383,73 @@ static int mnt_table_parse_next(struct libmnt_table *tb, FILE *f, struct libmnt_
 		s = skip_spaces(buf);
 	} while (*s == '\0' || *s == '#');
 
-	if (tb->fmt == MNT_FMT_GUESS)
+	if (tb->fmt == MNT_FMT_GUESS) {
 		tb->fmt = guess_table_format(s);
-
-	if (tb->fmt == MNT_FMT_FSTAB) {
-		if (mnt_parse_table_line(fs, s) != 0)
-			goto err;
-
-	} else if (tb->fmt == MNT_FMT_MOUNTINFO) {
-		if (mnt_parse_mountinfo_line(fs, s) != 0)
-			goto err;
-
-	} else if (tb->fmt == MNT_FMT_UTAB) {
-		if (mnt_parse_utab_line(fs, s) != 0)
-			goto err;
+		if (tb->fmt == MNT_FMT_SWAPS)
+			goto next_line;			/* skip swap header */
 	}
 
+	switch (tb->fmt) {
+	case MNT_FMT_FSTAB:
+		rc = mnt_parse_table_line(fs, s);
+		break;
+	case MNT_FMT_MOUNTINFO:
+		rc = mnt_parse_mountinfo_line(fs, s);
+		break;
+	case MNT_FMT_UTAB:
+		rc = mnt_parse_utab_line(fs, s);
+		break;
+	case MNT_FMT_SWAPS:
+		if (strncmp(s, "Filename\t", 9) == 0)
+			goto next_line;			/* skip swap header */
+		rc = mnt_parse_swaps_line(fs, s);
+		break;
+	default:
+		rc = -1;	/* unknown format */
+		break;
+	}
 
-	/*DBG(TAB, mnt_fs_print_debug(fs, stderr));*/
-
-	return 0;
+	if (rc == 0)
+		return 0;
 err:
 	DBG(TAB, mnt_debug_h(tb, "%s:%d: %s parse error", filename, *nlines,
 				tb->fmt == MNT_FMT_MOUNTINFO ? "mountinfo" :
+				tb->fmt == MNT_FMT_SWAPS ? "swaps" :
 				tb->fmt == MNT_FMT_FSTAB ? "tab" : "utab"));
 
 	/* by default all errors are recoverable, otherwise behavior depends on
 	 * errcb() function. See mnt_table_set_parser_errcb().
 	 */
 	return tb->errcb ? tb->errcb(tb, filename, *nlines) : 1;
+}
+
+static pid_t path_to_tid(const char *filename)
+{
+	char *path = mnt_resolve_path(filename, NULL);
+	char *p, *end = NULL;
+	pid_t tid = 0;
+
+	if (!path)
+		goto done;
+	p = strrchr(path, '/');
+	if (!p)
+		goto done;
+	*p = '\0';
+	p = strrchr(path, '/');
+	if (!p)
+		goto done;
+	p++;
+
+	errno = 0;
+	tid = strtol(p, &end, 10);
+	if (errno || p == end || (end && *end)) {
+		tid = 0;
+		goto done;
+	}
+	DBG(TAB, mnt_debug("TID for %s is %d", filename, tid));
+done:
+	free(path);
+	return tid;
 }
 
 /**
@@ -370,6 +465,7 @@ int mnt_table_parse_stream(struct libmnt_table *tb, FILE *f, const char *filenam
 	int nlines = 0;
 	int rc = -1;
 	int flags = 0;
+	pid_t tid = -1;
 
 	assert(tb);
 	assert(f);
@@ -391,9 +487,18 @@ int mnt_table_parse_stream(struct libmnt_table *tb, FILE *f, const char *filenam
 			goto err;
 
 		rc = mnt_table_parse_next(tb, f, fs, filename, &nlines);
+
+		if (!rc && tb->fltrcb && tb->fltrcb(fs, tb->fltrcb_data))
+			rc = 1;	/* filtered out by callback... */
+
 		if (!rc) {
 			rc = mnt_table_add_fs(tb, fs);
 			fs->flags |= flags;
+			if (tb->fmt == MNT_FMT_MOUNTINFO && filename) {
+				if (tid == -1)
+					tid = path_to_tid(filename);
+				fs->tid = tid;
+			}
 		}
 		if (rc) {
 			mnt_free_fs(fs);
@@ -655,6 +760,50 @@ int mnt_table_set_parser_errcb(struct libmnt_table *tb,
 	return 0;
 }
 
+/*
+ * Filter out entries during tab file parsing. If @cb returns 1 then the entry
+ * is ignored.
+ */
+int mnt_table_set_parser_fltrcb(struct libmnt_table *tb,
+		int (*cb)(struct libmnt_fs *, void *),
+		void *data)
+{
+	assert(tb);
+
+	DBG(TAB, mnt_debug_h(tb, "set table parser filter"));
+	tb->fltrcb = cb;
+	tb->fltrcb_data = data;
+	return 0;
+}
+
+/**
+ * mnt_table_parse_swaps:
+ * @tb: table
+ * @filename: overwrites default (/proc/swaps or $LIBMOUNT_SWAPS) or NULL
+ *
+ * This function parses /proc/swaps and appends new lines to the @tab.
+ *
+ * See also mnt_table_set_parser_errcb().
+ *
+ * Returns: 0 on success or negative number in case of error.
+ */
+int mnt_table_parse_swaps(struct libmnt_table *tb, const char *filename)
+{
+	assert(tb);
+
+	if (!tb)
+		return -EINVAL;
+	if (!filename) {
+		filename = mnt_get_swaps_path();
+		if (!filename)
+			return -EINVAL;
+	}
+
+	tb->fmt = MNT_FMT_SWAPS;
+
+	return mnt_table_parse_file(tb, filename);
+}
+
 /**
  * mnt_table_parse_fstab:
  * @tb: table
@@ -796,7 +945,16 @@ int mnt_table_parse_mtab(struct libmnt_table *tb, const char *filename)
 	 */
 	utab = mnt_get_utab_path();
 	if (utab) {
-		struct libmnt_table *u_tb = __mnt_new_table_from_file(utab, MNT_FMT_UTAB);
+		struct libmnt_table *u_tb = mnt_new_table();
+		if (u_tb) {
+			u_tb->fmt = MNT_FMT_UTAB;
+			mnt_table_set_parser_fltrcb(u_tb, tb->fltrcb, tb->fltrcb_data);
+
+			if (mnt_table_parse_file(u_tb, utab) != 0) {
+				mnt_free_table(u_tb);
+				u_tb = NULL;
+			}
+		}
 
 		if (u_tb) {
 			struct libmnt_fs *u_fs;

@@ -13,9 +13,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 /*
@@ -40,11 +40,12 @@
 
 #include "c.h"
 #include "cramfs.h"
+#include "closestream.h"
 #include "md5.h"
 #include "nls.h"
 #include "exitcodes.h"
 #include "strutils.h"
-#define XALLOC_EXIT_CODE MKFS_ERROR
+#define XALLOC_EXIT_CODE MKFS_EX_ERROR
 #include "xalloc.h"
 
 /* The kernel only supports PAD_SIZE of 0 and 512. */
@@ -65,7 +66,7 @@ static int cramfs_is_big_endian = 0; /* target is big endian */
  * Note that kernels up to at least 2.3.39 don't support cramfs holes,
  * which is why this is turned off by default.
  */
-static int opt_edition = 0;
+static unsigned int opt_edition = 0;
 static int opt_errors = 0;
 static int opt_holes = 0;
 static int opt_pad = 0;
@@ -78,10 +79,6 @@ static int warn_namelen = 0;
 static int warn_skip = 0;
 static int warn_size = 0;
 static int warn_uid = 0;
-
-#ifndef MIN
-# define MIN(_a,_b) ((_a) < (_b) ? (_a) : (_b))
-#endif
 
 /* entry.flags */
 #define CRAMFS_EFLAG_MD5	1
@@ -171,7 +168,7 @@ do_mmap(char *path, unsigned int size, unsigned int mode){
 
 	start = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
 	if (-1 == (int) (long) start)
-		err(MKFS_ERROR, "mmap");
+		err(MKFS_EX_ERROR, "mmap");
 	close(fd);
 
 	return start;
@@ -295,7 +292,7 @@ static unsigned int parse_directory(struct entry *root_entry, const char *name, 
 	dircount = scandir(name, &dirlist, 0, cramsort);
 
 	if (dircount < 0)
-		err(MKFS_ERROR, _("could not read directory %s"), name);
+		err(MKFS_EX_ERROR, _("could not read directory %s"), name);
 
 	/* process directory */
 	for (dirindex = 0; dirindex < dircount; dirindex++) {
@@ -319,7 +316,7 @@ static unsigned int parse_directory(struct entry *root_entry, const char *name, 
 		}
 		namelen = strlen(dirent->d_name);
 		if (namelen > MAX_INPUT_NAMELEN)
-			errx(MKFS_ERROR,
+			errx(MKFS_EX_ERROR,
 				_("Very long (%zu bytes) filename `%s' found.\n"
 				  " Please increase MAX_INPUT_NAMELEN in "
 				  "mkcramfs.c and recompile.  Exiting."),
@@ -442,7 +439,7 @@ static void set_data_offset(struct entry *entry, char *base, unsigned long offse
 	struct cramfs_inode *inode = (struct cramfs_inode *) (base + entry->dir_offset);
 	inode_to_host(cramfs_is_big_endian, inode, inode);
 	if (offset >= (1 << (2 + CRAMFS_OFFSET_WIDTH)))
-		errx(MKFS_ERROR, _("filesystem too big.  Exiting."));
+		errx(MKFS_EX_ERROR, _("filesystem too big.  Exiting."));
 	inode->offset = (offset >> 2);
 	inode_from_host(cramfs_is_big_endian, inode, inode);
 }
@@ -604,7 +601,7 @@ do_compress(char *base, unsigned int offset, unsigned char const *name,
 			printf(_("AIEEE: block \"compressed\" to > "
 				 "2*blocklength (%ld)\n"),
 			       len);
-			exit(MKFS_ERROR);
+			exit(MKFS_EX_ERROR);
 		}
 
 		*(uint32_t *) (base + offset) = u32_toggle_endianness(cramfs_is_big_endian, curr);
@@ -660,12 +657,12 @@ static unsigned int write_file(char *file, char *base, unsigned int offset)
 
 	fd = open(file, O_RDONLY);
 	if (fd < 0)
-		err(MKFS_ERROR, _("cannot open file %s"), file);
+		err(MKFS_EX_ERROR, _("cannot open %s"), file);
 	buf = mmap(NULL, image_length, PROT_READ, MAP_PRIVATE, fd, 0);
 	memcpy(base + offset, buf, image_length);
 	munmap(buf, image_length);
 	if (close (fd) < 0)
-		err(MKFS_ERROR, _("cannot close file %s"), file);
+		err(MKFS_EX_ERROR, _("cannot close file %s"), file);
 	/* Pad up the image_length to a 4-byte boundary */
 	while (image_length & 3) {
 		*(base + offset + image_length) = '\0';
@@ -718,27 +715,21 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	/* command line options */
 	while ((c = getopt(argc, argv, "hb:Ee:i:n:N:psVvz")) != EOF) {
 		switch (c) {
 		case 'h':
-			usage(MKFS_OK);
+			usage(MKFS_EX_OK);
 		case 'b':
-		{
-			long long tmp = strtoll_or_err(optarg,
-					_("failed to parse blocksize argument"));
-
-			if (tmp <= 0 || UINT_MAX < tmp)
-				errx(MKFS_USAGE, _("invalid block size"));
-			blksize = tmp;
+			blksize = strtou32_or_err(optarg, _("invalid blocksize argument"));
 			break;
-		}
 		case 'E':
 			opt_errors = 1;
 			break;
 		case 'e':
-			opt_edition = strtoll_or_err(optarg, _("edition number argument failed"));
+			opt_edition = strtou32_or_err(optarg, _("edition number argument failed"));
 			break;
 		case 'N':
 			if (strcmp(optarg, "big") == 0)
@@ -748,13 +739,13 @@ int main(int argc, char **argv)
 			else if (strcmp(optarg, "host") == 0)
 				/* default */ ;
 			else
-				errx(MKFS_USAGE, _("invalid endianness given."
+				errx(MKFS_EX_USAGE, _("invalid endianness given."
 						   " Must be 'big', 'little', or 'host'"));
 			break;
 		case 'i':
 			opt_image = optarg;
 			if (lstat(opt_image, &st) < 0)
-				err(MKFS_USAGE, _("cannot stat %s"), opt_image);
+				err(MKFS_EX_USAGE, _("stat failed %s"), opt_image);
 			image_length = st.st_size; /* may be padded later */
 			fslen_ub += (image_length + 3); /* 3 is for padding */
 			break;
@@ -771,26 +762,28 @@ int main(int argc, char **argv)
 		case 'V':
 			printf(_("%s from %s\n"),
 			       program_invocation_short_name, PACKAGE_STRING);
-			exit(MKFS_OK);
+			exit(MKFS_EX_OK);
 		case 'v':
 			verbose = 1;
 			break;
 		case 'z':
 			opt_holes = 1;
 			break;
+		default:
+			usage(FSCK_EX_USAGE);
 		}
 	}
 
 	if ((argc - optind) != 2)
-		usage(MKFS_USAGE);
+		usage(MKFS_EX_USAGE);
 	dirname = argv[optind];
 	outfile = argv[optind + 1];
 
 	if (stat(dirname, &st) < 0)
-		err(MKFS_USAGE, _("cannot stat %s"), dirname);
+		err(MKFS_EX_USAGE, _("stat failed %s"), dirname);
 	fd = open(outfile, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 	if (fd < 0)
-		err(MKFS_USAGE, _("cannot open %s"), outfile);
+		err(MKFS_EX_USAGE, _("cannot open %s"), outfile);
 
 	root_entry = xcalloc(1, sizeof(struct entry));
 	root_entry->mode = st.st_mode;
@@ -832,7 +825,7 @@ int main(int argc, char **argv)
 			 -1, 0);
 
 	if (-1 == (int) (long) rom_image)
-		err(MKFS_ERROR, _("ROM image map"));
+		err(MKFS_EX_ERROR, _("ROM image map"));
 
 	/* Skip the first opt_pad bytes for boot loader code */
 	offset = opt_pad;
@@ -874,7 +867,7 @@ int main(int argc, char **argv)
 
 	/* Check to make sure we allocated enough space. */
 	if (fslen_ub < offset)
-		errx(MKFS_ERROR,
+		errx(MKFS_EX_ERROR,
 			_("not enough space allocated for ROM image "
 			  "(%lld allocated, %zu used)"),
 			(long long) fslen_ub, offset);
@@ -882,9 +875,9 @@ int main(int argc, char **argv)
 	written = write(fd, rom_image, offset);
 	close(fd);
 	if (written < 0)
-		err(MKFS_ERROR, _("ROM image"));
+		err(MKFS_EX_ERROR, _("ROM image"));
 	if (offset != written)
-		errx(MKFS_ERROR, _("ROM image write failed (%zd %zd)"),
+		errx(MKFS_EX_ERROR, _("ROM image write failed (%zd %zd)"),
 			written, offset);
 
 	/*
@@ -914,7 +907,7 @@ int main(int argc, char **argv)
 		      CRAMFS_OFFSET_WIDTH);
 	if (opt_errors &&
 	    (warn_namelen|warn_skip|warn_size|warn_uid|warn_gid|warn_dev))
-		exit(MKFS_ERROR);
+		exit(MKFS_EX_ERROR);
 
 	return EXIT_SUCCESS;
 }

@@ -52,7 +52,6 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
-#include <malloc.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +63,7 @@
 #include "lp.h"
 #include "nls.h"
 #include "xalloc.h"
+#include "closestream.h"
 
 #define EXIT_BAD_VALUE	3
 #define EXIT_LP_IO_ERR	4
@@ -143,6 +143,7 @@ int main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	if (argc < 2)
 		print_usage(stderr);
@@ -197,6 +198,7 @@ int main(int argc, char **argv)
 			} else {
 				show_irq = 0;
 			}
+			break;
 #ifdef LPGETSTATUS
 		case 'o':
 			cmds->op = LPABORTOPEN;
@@ -263,7 +265,8 @@ int main(int argc, char **argv)
 	if (fd < 0)
 		err(EXIT_FAILURE, "%s", filename);
 
-	fstat(fd, &statbuf);
+	if (fstat(fd, &statbuf))
+		err(EXIT_FAILURE, "%s: stat() failed", filename);
 
 	if (!S_ISCHR(statbuf.st_mode)) {
 		warnx(_("%s not an lp device"), filename);

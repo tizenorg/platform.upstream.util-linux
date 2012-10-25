@@ -51,26 +51,19 @@
 /* used in login-utils/shutdown.c */
 
 /* used in login-utils/setpwnam.h and login-utils/islocal.c */
-#define _PATH_PASSWD            "/etc/passwd"
+#define _PATH_PASSWD		"/etc/passwd"
 
-/* used in login-utils/newgrp */
+/* used in login-utils/newgrp and login-utils/setpwnam.h*/
 #define _PATH_GSHADOW		"/etc/gshadow"
 
 /* used in login-utils/setpwnam.h */
-#define _PATH_PTMP              "/etc/ptmp"
-#define _PATH_PTMPTMP           "/etc/ptmptmp"
-#define _PATH_GROUP             "/etc/group"
-#define _PATH_GTMP              "/etc/gtmp"
-#define _PATH_GTMPTMP           "/etc/gtmptmp"
-#define _PATH_SHADOW_PASSWD     "/etc/shadow"
-#define _PATH_SHADOW_PTMP       "/etc/sptmp"
-#define _PATH_SHADOW_PTMPTMP    "/etc/sptmptmp"
-#define _PATH_SHADOW_GROUP      "/etc/gshadow"
-#define _PATH_SHADOW_GTMP       "/etc/sgtmp"
-#define _PATH_SHADOW_GTMPTMP    "/etc/sgtmptmp"
+#define _PATH_GROUP		"/etc/group"
+#define _PATH_SHADOW_PASSWD	"/etc/shadow"
+#define _PATH_SHELLS		"/etc/shells"
 
 /* used in term-utils/agetty.c */
 #define _PATH_ISSUE		"/etc/issue"
+#define _PATH_NUMLOCK_ON	_PATH_LOCALSTATEDIR "/numlock-on"
 
 #define _PATH_LOGINDEFS		"/etc/login.defs"
 
@@ -88,6 +81,8 @@
 #define _PATH_PROC_PARTITIONS	"/proc/partitions"
 #define _PATH_PROC_DEVICES	"/proc/devices"
 #define _PATH_PROC_MOUNTINFO	"/proc/self/mountinfo"
+#define _PATH_PROC_LOCKS        "/proc/locks"
+#define _PATH_PROC_CDROMINFO	"/proc/sys/dev/cdrom/info"
 
 #define _PATH_SYS_BLOCK		"/sys/block"
 #define _PATH_SYS_DEVBLOCK	"/sys/dev/block"
@@ -130,6 +125,8 @@
 #define _PATH_DEV_BYUUID	"/dev/disk/by-uuid"
 #define _PATH_DEV_BYID		"/dev/disk/by-id"
 #define _PATH_DEV_BYPATH	"/dev/disk/by-path"
+#define _PATH_DEV_BYPARTLABEL	"/dev/disk/by-partlabel"
+#define _PATH_DEV_BYPARTUUID	"/dev/disk/by-partuuid"
 
 /* hwclock paths */
 #define _PATH_ADJPATH		"/etc/adjtime"
@@ -143,6 +140,15 @@
 #ifndef _PATH_BTMP
 #define _PATH_BTMP		"/var/log/btmp"
 #endif
+
+/* raw paths*/
+#define _PATH_RAWDEVDIR		"/dev/raw/"
+#define _PATH_RAWDEVCTL		_PATH_RAWDEVDIR "rawctl"
+/* deprecated */
+#define _PATH_RAWDEVCTL_OLD	"/dev/rawctl"
+
+/* wdctl path */
+#define _PATH_WATCHDOG_DEV	"/dev/watchdog"
 
 #endif /* PATHNAMES_H */
 

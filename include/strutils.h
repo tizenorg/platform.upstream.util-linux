@@ -5,10 +5,27 @@
 #include <string.h>
 #include <sys/types.h>
 
+/* default strtoxx_or_err() exit code */
+#ifndef STRTOXX_EXIT_CODE
+# define STRTOXX_EXIT_CODE EXIT_FAILURE
+#endif
+
+
 extern int strtosize(const char *str, uintmax_t *res);
+extern uintmax_t strtosize_or_err(const char *str, const char *errmesg);
+
+extern int16_t strtos16_or_err(const char *str, const char *errmesg);
+extern uint16_t strtou16_or_err(const char *str, const char *errmesg);
+
+extern int32_t strtos32_or_err(const char *str, const char *errmesg);
+extern uint32_t strtou32_or_err(const char *str, const char *errmesg);
+
+extern int64_t strtos64_or_err(const char *str, const char *errmesg);
+extern uint64_t strtou64_or_err(const char *str, const char *errmesg);
+
 extern double strtod_or_err(const char *str, const char *errmesg);
+
 extern long strtol_or_err(const char *str, const char *errmesg);
-extern long long strtoll_or_err(const char *str, const char *errmesg);
 extern unsigned long strtoul_or_err(const char *str, const char *errmesg);
 
 #ifndef HAVE_STRNLEN
@@ -42,9 +59,16 @@ extern char *size_to_human_string(int options, uint64_t bytes);
 
 extern int string_to_idarray(const char *list, int ary[], size_t arysz,
 			   int (name2id)(const char *, size_t));
+extern int string_add_to_idarray(const char *list, int ary[],
+				 size_t arysz, int *ary_pos,
+				 int (name2id)(const char *, size_t));
+
 extern int string_to_bitarray(const char *list, char *ary,
 			    int (*name2bit)(const char *, size_t));
 
+extern int string_to_bitmask(const char *list,
+			     unsigned long *mask,
+			     long (*name2flag)(const char *, size_t));
 extern int parse_range(const char *str, int *lower, int *upper, int def);
 
 extern int streq_except_trailing_slash(const char *s1, const char *s2);

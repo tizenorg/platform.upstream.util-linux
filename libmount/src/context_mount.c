@@ -53,8 +53,15 @@ static int fix_optstr(struct libmnt_context *cxt)
 	if (cxt->mountflags & MS_PROPAGATION)
 		cxt->mountflags &= (MS_PROPAGATION | MS_REC | MS_SILENT);
 
-	if (!mnt_optstr_get_option(fs->user_optstr, "user", &val, &valsz)) {
-		if (val) {
+	/*
+	 * The "user" options is our business (so we can modify the option),
+	 * but exception is command line for /sbin/mount.<type> helpers. Let's
+	 * save the original user=<name> to call the helpers with unchanged
+	 * "user" setting.
+	 */
+	if (cxt->user_mountflags & MNT_MS_USER) {
+		if (!mnt_optstr_get_option(fs->user_optstr,
+					"user", &val, &valsz) && val) {
 			cxt->orig_user = strndup(val, valsz);
 			if (!cxt->orig_user) {
 				rc = -ENOMEM;
@@ -67,15 +74,26 @@ static int fix_optstr(struct libmnt_context *cxt)
 	/*
 	 * Sync mount options with mount flags
 	 */
+	DBG(CXT, mnt_debug_h(cxt, "mount: fixing vfs optstr"));
 	rc = mnt_optstr_apply_flags(&fs->vfs_optstr, cxt->mountflags,
 				mnt_get_builtin_optmap(MNT_LINUX_MAP));
 	if (rc)
 		goto done;
 
+	DBG(CXT, mnt_debug_h(cxt, "mount: fixing user optstr"));
 	rc = mnt_optstr_apply_flags(&fs->user_optstr, cxt->user_mountflags,
 				mnt_get_builtin_optmap(MNT_USERSPACE_MAP));
 	if (rc)
 		goto done;
+
+	if (fs->vfs_optstr && *fs->vfs_optstr == '\0') {
+		free(fs->vfs_optstr);
+		fs->vfs_optstr = NULL;
+	}
+	if (fs->user_optstr && *fs->user_optstr == '\0') {
+		free(fs->user_optstr);
+		fs->user_optstr = NULL;
+	}
 
 	next = fs->fs_optstr;
 
@@ -95,8 +113,17 @@ static int fix_optstr(struct libmnt_context *cxt)
 		 */
 		se_rem = get_linux_version() < KERNEL_VERSION(2, 6, 39);
 	else
-		/* For normal mount we have translate the contexts */
+		/* For normal mount, contexts are translated */
 		se_fix = 1;
+
+	if (!se_rem) {
+		/* de-duplicate SELinux options */
+		mnt_optstr_deduplicate_option(&fs->fs_optstr, "context");
+		mnt_optstr_deduplicate_option(&fs->fs_optstr, "fscontext");
+		mnt_optstr_deduplicate_option(&fs->fs_optstr, "defcontext");
+		mnt_optstr_deduplicate_option(&fs->fs_optstr, "rootcontext");
+		mnt_optstr_deduplicate_option(&fs->fs_optstr, "seclabel");
+	}
 #endif
 	while (!mnt_optstr_next_option(&next, &name, &namesz, &val, &valsz)) {
 
@@ -128,7 +155,7 @@ static int fix_optstr(struct libmnt_context *cxt)
 			goto done;
 	}
 
-	if (!rc && cxt->user_mountflags & MNT_MS_USER)
+	if (!rc && cxt->restricted && (cxt->user_mountflags & MNT_MS_USER))
 		rc = mnt_optstr_fix_user(&fs->user_optstr);
 
 	/* refresh merged optstr */
@@ -141,11 +168,14 @@ done:
 	DBG(CXT, mnt_debug_h(cxt, "fixed options [rc=%d]: "
 		"vfs: '%s' fs: '%s' user: '%s', optstr: '%s'", rc,
 		fs->vfs_optstr, fs->fs_optstr, fs->user_optstr, fs->optstr));
+
+	if (rc)
+		rc = -MNT_ERR_MOUNTOPT;
 	return rc;
 }
 
 /*
- * Converts already evalulated and fixed options to the form that is compatible
+ * Converts already evaluated and fixed options to the form that is compatible
  * with /sbin/mount.type helpers.
  */
 static int generate_helper_optstr(struct libmnt_context *cxt, char **optstr)
@@ -159,7 +189,7 @@ static int generate_helper_optstr(struct libmnt_context *cxt, char **optstr)
 	assert(cxt->fs);
 	assert(optstr);
 
-	DBG(CXT, mnt_debug_h(cxt, "mount: generate heper mount options"));
+	DBG(CXT, mnt_debug_h(cxt, "mount: generate helper mount options"));
 
 	*optstr = mnt_fs_strdup_options(cxt->fs);
 	if (!*optstr)
@@ -196,6 +226,10 @@ err:
 
 /*
  * this has to be called before fix_optstr()
+ *
+ * Note that user=<name> maybe be used by some filesystems as filesystem
+ * specific option (e.g. cifs). Yes, developers of such filesystems have
+ * allocated pretty hot place in hell...
  */
 static int evaluate_permissions(struct libmnt_context *cxt)
 {
@@ -220,8 +254,6 @@ static int evaluate_permissions(struct libmnt_context *cxt)
 		 */
 		cxt->user_mountflags &= ~MNT_MS_OWNER;
 		cxt->user_mountflags &= ~MNT_MS_GROUP;
-		cxt->user_mountflags &= ~MNT_MS_USER;
-		cxt->user_mountflags &= ~MNT_MS_USERS;
 	} else {
 		/*
 		 * user mount
@@ -233,10 +265,22 @@ static int evaluate_permissions(struct libmnt_context *cxt)
 		}
 
 		/*
-		 * Note that MS_OWNERSECURE and MS_SECURE mount options
-		 * are applied by mnt_optstr_get_flags() from mnt_context_merge_mflags()
+		 * MS_OWNERSECURE and MS_SECURE mount options are already
+		 * applied by mnt_optstr_get_flags() in mnt_context_merge_mflags()
+		 * if "user" (but no user=<name> !) options is set.
+		 *
+		 * Let's ignore all user=<name> (if <name> is set) requests.
 		 */
+		if (cxt->user_mountflags & MNT_MS_USER) {
+			size_t valsz = 0;
 
+			if (!mnt_optstr_get_option(cxt->fs->user_optstr,
+					"user", NULL, &valsz) && valsz) {
+
+				DBG(CXT, mnt_debug_h(cxt, "perms: user=<name> detected, ignore"));
+				cxt->user_mountflags &= ~MNT_MS_USER;
+			}
+		}
 
 		/*
 		 * MS_OWNER: Allow owners to mount when fstab contains the
@@ -419,6 +463,7 @@ static int exec_helper(struct libmnt_context *cxt)
 		break;
 	}
 
+	free(o);
 	return rc;
 }
 
@@ -468,11 +513,11 @@ static int do_mount(struct libmnt_context *cxt, const char *try_type)
 	DBG(CXT, mnt_debug_h(cxt, "%smount(2) "
 			"[source=%s, target=%s, type=%s, "
 			" mountflags=0x%08lx, mountdata=%s]",
-			(cxt->flags & MNT_FL_FAKE) ? "(FAKE) " : "",
+			mnt_context_is_fake(cxt) ? "(FAKE) " : "",
 			src, target, type,
 			flags, cxt->mountdata ? "yes" : "<none>"));
 
-	if (cxt->flags & MNT_FL_FAKE)
+	if (mnt_context_is_fake(cxt))
 		cxt->syscall_status = 0;
 	else {
 		if (mount(src, target, type, flags, cxt->mountdata)) {
@@ -537,6 +582,9 @@ static int do_mount_by_pattern(struct libmnt_context *cxt, const char *pattern)
 	rc = mnt_get_filesystems(&filesystems, neg ? pattern : NULL);
 	if (rc)
 		return rc;
+
+	if (filesystems == NULL)
+		return -MNT_ERR_NOFSTYPE;
 
 	for (fp = filesystems; *fp; fp++) {
 		rc = do_mount(cxt, *fp);
@@ -610,12 +658,12 @@ int mnt_context_prepare_mount(struct libmnt_context *cxt)
  * Note that this function could be called only once. If you want to mount
  * another source or target than you have to call mnt_reset_context().
  *
- * If you want to call mount(2) for the same source and target with a diffrent
- * mount flags or fstype then you call mnt_context_reset_status() and then try
+ * If you want to call mount(2) for the same source and target with a different
+ * mount flags or fstype then call mnt_context_reset_status() and then try
  * again mnt_context_do_mount().
  *
  * WARNING: non-zero return code does not mean that mount(2) syscall or
- *          umount.type helper wasn't sucessfully called.
+ *          mount.type helper wasn't successfully called.
  *
  *          Check mnt_context_get_status() after error!
 *
@@ -648,7 +696,7 @@ int mnt_context_do_mount(struct libmnt_context *cxt)
 		res = do_mount_by_pattern(cxt, cxt->fstype_pattern);
 
 	if (mnt_context_get_status(cxt)
-	    && !(cxt->flags & MNT_FL_FAKE)
+	    && !mnt_context_is_fake(cxt)
 	    && !cxt->helper) {
 		/*
 		 * Mounted by mount(2), do some post-mount checks
@@ -723,7 +771,7 @@ int mnt_context_finalize_mount(struct libmnt_context *cxt)
  * once, whole context has to be reseted.
  *
  * WARNING: non-zero return code does not mean that mount(2) syscall or
- *          mount.type helper wasn't sucessfully called.
+ *          mount.type helper wasn't successfully called.
  *
  *          Check mnt_context_get_status() after error!
  *

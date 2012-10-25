@@ -16,9 +16,9 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software Foundation,
- * Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * You should have received a copy of the GNU General Public License along
+ * with this program; if not, write to the Free Software Foundation, Inc.,
+ * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
 #include <stdarg.h>
@@ -27,7 +27,7 @@
 #include <stdio.h>
 #include <errno.h>
 
-#include "writeall.h"
+#include "all-io.h"
 #include "cpuset.h"
 #include "path.h"
 #include "nls.h"
@@ -55,7 +55,7 @@ path_vfopen(const char *mode, int exit_on_error, const char *path, va_list ap)
 
 	f = fopen(p, mode);
 	if (!f && exit_on_error)
-		err(EXIT_FAILURE, _("error: cannot open %s"), p);
+		err(EXIT_FAILURE, _("cannot open %s"), p);
 	return f;
 }
 
@@ -67,7 +67,7 @@ path_vopen(int flags, const char *path, va_list ap)
 
 	fd = open(p, flags);
 	if (fd == -1)
-		err(EXIT_FAILURE, _("error: cannot open %s"), p);
+		err(EXIT_FAILURE, _("cannot open %s"), p);
 	return fd;
 }
 

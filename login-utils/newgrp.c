@@ -6,6 +6,15 @@
  * - added Native Language Support
  */
 
+/*
+ * This command is deprecated.  The utility is in maintenance mode,
+ * meaning we keep them in source tree for backward compatibility
+ * only.  Do not waste time making this command better, unless the
+ * fix is about security or other very critical issue.
+ *
+ * See Documentation/deprecated.txt for more information.
+ */
+
 #include <errno.h>
 #include <getopt.h>
 #include <grp.h>
@@ -20,6 +29,7 @@
 #endif
 
 #include "c.h"
+#include "closestream.h"
 #include "nls.h"
 #include "pathnames.h"
 
@@ -123,6 +133,7 @@ int main(int argc, char *argv[])
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	while ((ch = getopt_long(argc, argv, "Vh", longopts, NULL)) != -1)
 		switch (ch) {

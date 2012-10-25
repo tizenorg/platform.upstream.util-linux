@@ -13,8 +13,11 @@
 #ifndef _BLKID_BLKIDP_H
 #define _BLKID_BLKIDP_H
 
-
+/* support debug output if LIBBLKID_DEBUG env. variable is set */
 #define CONFIG_BLKID_DEBUG 1
+
+/* Always confirm that /dev/disk-by symlinks match with LABEL/UUID on device */
+/* #define CONFIG_BLKID_VERIFY_UDEV 1 */
 
 #include <sys/types.h>
 #include <dirent.h>
@@ -340,7 +343,7 @@ extern void blkid_init_debug(int mask);
 extern void blkid_debug_dump_dev(blkid_dev dev);
 extern void blkid_debug_dump_tag(blkid_tag tag);
 
-#define DBG(m,x)	if ((m) & blkid_debug_mask) x;
+#define DBG(m,x)	do { if ((m) & blkid_debug_mask) x; } while (0)
 
 #else /* !CONFIG_BLKID_DEBUG */
 #define DBG(m,x)
@@ -432,8 +435,10 @@ extern int blkid_probe_set_value(blkid_probe pr, const char *name,
                 unsigned char *data, size_t len);
 extern int blkid_probe_vsprintf_value(blkid_probe pr, const char *name,
                 const char *fmt, va_list ap);
+
 extern int blkid_probe_sprintf_value(blkid_probe pr, const char *name,
-                const char *fmt, ...);
+                const char *fmt, ...) __attribute__ ((__format__ (__printf__, 3, 4)));
+
 extern int blkid_probe_set_magic(blkid_probe pr, blkid_loff_t offset,
 		size_t len, unsigned char *magic);
 

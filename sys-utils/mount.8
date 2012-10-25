@@ -23,10 +23,9 @@
 .\" MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 .\" GNU General Public License for more details.
 .\"
-.\" You should have received a copy of the GNU General Public
-.\" License along with this manual; if not, write to the Free
-.\" Software Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139,
-.\" USA.
+.\" You should have received a copy of the GNU General Public License along
+.\" with this program; if not, write to the Free Software Foundation, Inc.,
+.\" 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 .\"
 .\"
 .TH MOUNT 8 "January 2012" "util-linux" "System Administration"
@@ -100,17 +99,29 @@ If only directory or device is given, for example:
 
 .RE
 then mount looks for a mountpoint and if not found then for a device in the
-/etc/fstab file.
+/etc/fstab file. It's possible to use
+.B --target 
+or
+.B --source
+options to avoid ambivalent interpretation of the given argument. For example
+.RS
+
+.br
+.BI "mount --target /mountpoint"
+.br
+
+.RE
+
 
 .B The listing and help.
 .RS
-Three forms of invocation do not actually mount anything:
-.TP
-.B "mount \-h"
-prints a help message
-.TP
-.B "mount \-V"
-prints a version string
+The listing mode is maintained for backward compatibility only.
+
+For more robust and definable output use
+.BR findmnt (8),
+\fBespecially in your scripts\fP. Note that control characters in the
+mountpoint name are replaced with '?'.
+
 .TP
 .BR "mount " [ -l "] [" "-t \fItype\fP" ]
 lists all mounted filesystems (of type
@@ -128,19 +139,25 @@ but there are other possibilities. For example, in the case of an NFS mount,
 may look like
 .IR knuth.cwi.nl:/dir .
 It is possible to indicate a block special device using its
-volume
+filesystem
 .B LABEL
 or
 .B UUID
-(see the \-L and \-U options below).
+(see the \-L and \-U options below) and
+partition
+.B PARTUUID
+or
+.B PARTLABEL
+(partition identifiers are supported for GUID Partition Table (GPT) and MAC
+partition tables only).
 
-The recommended setup is to use LABEL=<label> or UUID=<uuid> tags rather than
-.B /dev/disk/by-{label,uuid}
+The recommended setup is to use tags (e.g. LABEL=<label>) rather than
+.B /dev/disk/by-{label,uuid,partuuid,partlabel}
 udev symlinks in the /etc/fstab file. The tags are
 more readable, robust and portable. The
 .BR mount (8)
 command internally uses udev
-symlinks, so use the symlinks in /etc/fstab has no advantage over LABEL=/UUID=.
+symlinks, so use the symlinks in /etc/fstab has no advantage over the tags.
 For more details see
 .BR libblkid (3).
 
@@ -173,7 +190,7 @@ The file
 may contain lines describing what devices are usually
 mounted where, using which options. The default location of the
 .BR fstab (5)
-file could be overrided by --fstab <path> command line option (see below for
+file could be overridden by --fstab <path> command line option (see below for
 more details).
 .LP
 The command
@@ -219,7 +236,7 @@ program does not read the
 .I /etc/fstab
 file if
 .I device
-(or LABEL/UUID) and
+(or LABEL, UUID, PARTUUID or PARTLABEL) and
 .I dir
 are specified. For example:
 .RS
@@ -399,6 +416,15 @@ command (then mount(8) does not read /etc/mtab), then you have to use bind flag
 .B mount -o remount,ro,bind
 .I olddir newdir
 .RE
+
+Note that
+.I remount,ro,bind
+will create a read-only mountpoint (VFS entry), but the original filesystem suberblock
+will be still writable, it means that the
+.I olddir
+will be writable, but the
+.I newdir
+will be read-only.
 .RE
 
 .B The move operation.
@@ -434,6 +460,11 @@ any not vice-versa.  A private mount carries no propagation abilities.  A
 unbindable mount is a private mount which cannot be cloned through a bind
 operation. Detailed semantics is documented in Documentation/filesystems/sharedsubtree.txt
 file in the kernel source tree.
+
+Note that Linux kernel does not allow to change more propagation flags by one
+.B mount (2)
+syscall and the flags cannot be mixed with another mount options. It means that
+more --make-* options cannot be used together or with another mount options.
 
 .RS
 .nf
@@ -527,7 +558,7 @@ Don't canonicalize paths. The mount command canonicalizes all paths
 .IR /etc/mtab
 file. This option can be used together with the
 .B \-f
-flag for already canonicalized absolut paths.
+flag for already canonicalized absolute paths.
 .IP "\fB\-p, \-\-pass\-fd \fInum\fP"
 In case of a loop mount with encryption, read the passphrase from
 file descriptor
@@ -538,6 +569,10 @@ Tolerate sloppy mount options rather than failing. This will ignore
 mount options not supported by a filesystem type. Not all filesystems
 support this option. This option exists for support of the Linux
 autofs\-based automounter.
+.IP "\fB\-\-source \fIsrc\fP"
+If only one argument for the mount command is given then the argument might be
+interpreted as target (mountpoint) or source (device). This option allows to
+explicitly define that the argument is mount source.
 .IP "\fB\-r, \-\-read\-only\fP"
 Mount the filesystem read-only. A synonym is
 .BR "\-o ro" .
@@ -714,6 +749,10 @@ mounts all filesystems except those of type
 and
 .IR ext .
 .RE
+.IP "\fB\-\-target \fIdir\fP"
+If only one argument for the mount command is given then the argument might be
+interpreted as target (mountpoint) or source (device). This option allows to
+explicitly define that the argument is mount target.
 .IP "\fB\-O, \-\-test-opts \fIopts\fP"
 Used in conjunction with
 .BR \-a ,
@@ -867,7 +906,7 @@ filesystem that supports xattr labeling.
 The
 .BR rootcontext=
 option allows you to explicitly label the root inode of a FS being mounted
-before that FS or inode because visable to userspace. This was found to be
+before that FS or inode because visible to userspace. This was found to be
 useful for things like stateless linux.
 
 Note that kernel rejects any remount request that includes the context
@@ -1279,7 +1318,7 @@ to the options given in
 No checking is done at mount time. This is the default. This is fast.
 It is wise to invoke
 .BR e2fsck (8)
-every now and then, e.g. at boot time. The non-default behavior is unssuported
+every now and then, e.g. at boot time. The non-default behavior is unsupported
 (check=normal and check=strict options have been removed). Note that these mount options
 don't have to be supported if ext4 kernel driver is used for ext2 and ext3 filesystems.
 .TP
@@ -1305,7 +1344,9 @@ from the parent directory, and also gets the setgid bit set
 if it is a directory itself.
 .TP
 .BR grpquota | noquota | quota | usrquota
-These options are accepted but ignored.
+The usrquota (same as quota) mount option enables user quota support on the
+filesystem. grpquota enables group quotas support. You need the quota utilities
+to actually enable and manage the quota system.
 .TP
 .BR nouid32
 Disables 32-bit UIDs and GIDs.  This is for interoperability with older
@@ -1346,7 +1387,7 @@ Support "user." extended attributes (or not).
 
 .SH "Mount options for ext3"
 The ext3 filesystem is a version of the ext2 filesystem which has been
-enhanced with journalling.  It supports the same options as ext2 as
+enhanced with journaling.  It supports the same options as ext2 as
 well as the following additions:
 .\" .TP
 .\" .BR abort
@@ -1362,7 +1403,7 @@ journal file;  ext3 will create a new journal, overwriting the old contents
 of the file whose inode number is
 .IR inum .
 .TP
-.BR journal_dev=devnum	
+.BR journal_dev=devnum
 When the external journal device's major/minor numbers
 have changed, this option allows the user to specify
 the new journal location.  The journal device is
@@ -1377,7 +1418,7 @@ filesystem containing inconsistencies that can
 lead to any number of problems.
 .TP
 .BR data= { journal | ordered | writeback }
-Specifies the journalling mode for file data.  Metadata is always journaled.
+Specifies the journaling mode for file data.  Metadata is always journaled.
 To use modes other than
 .B ordered
 on the root filesystem, pass the mode to the kernel as boot parameter, e.g.
@@ -1422,6 +1463,14 @@ manual page.
 Enable POSIX Access Control Lists. See the
 .BR acl (5)
 manual page.
+.TP
+.BR usrjquota=aquota.user | grpjquota=aquota.group | jqfmt=vfsv0
+Apart from the old quota system (as in ext2, jqfmt=vfsold aka version 1 quota)
+ext3 also supports journaled quotas (version 2 quota). jqfmt=vfsv0
+enables journaled quotas. For journaled quotas the mount options
+usrjquota=aquota.user and grpjquota=aquota.group are required to tell the
+quota system which quota database files to use. Journaled quotas have the
+advantage that even after a crash no quota check is required.
 
 .SH "Mount options for ext4"
 The ext4 filesystem is an advanced level of the ext3 filesystem which
@@ -1431,7 +1480,8 @@ filesystem.
 The options
 .B journal_dev, noload, data, commit, orlov, oldalloc, [no]user_xattr
 .B [no]acl, bsddf, minixdf, debug, errors, data_err, grpid, bsdgroups, nogrpid
-.B sysvgroups, resgid, resuid, sb, quota, noquota, grpquota and usrquota
+.B sysvgroups, resgid, resuid, sb, quota, noquota, grpquota, usrquota
+.B usrjquota, grpjquota and jqfmt
 are backwardly compatible with ext3 or ext2.
 .TP
 .BR journal_checksum
@@ -1460,10 +1510,10 @@ with other ext4 mount options.
 
 The ext4 filesystem enables write barriers by default.
 .TP
-.BI inode_readahead= n
+.BI inode_readahead_blks= n
 This tuning parameter controls the maximum number of inode table blocks that
 ext4's inode table readahead algorithm will pre-read into the buffer cache.
-The default value is 32 blocks.
+The value must be a power of 2. The default value is 32 blocks.
 .TP
 .BI stripe= n
 Number of filesystem blocks that mballoc will try to use for allocation size
@@ -1499,7 +1549,7 @@ may improve the throughput of multi-threaded, synchronous workloads on very
 fast disks, at the cost of increasing latency.
 .TP
 .BI journal_ioprio= prio
-The I/O priority (from 0 to 7, where 0 is the highest priorty) which should be
+The I/O priority (from 0 to 7, where 0 is the highest priority) which should be
 used for I/O operations submitted by kjournald2 during a commit operation.
 This defaults to 3, which is a slightly higher priority than the default I/O
 priority.
@@ -1618,7 +1668,7 @@ Normally
 .B utime(2)
 checks current process is owner of the file, or it has
 CAP_FOWNER capability.  But FAT filesystem doesn't have uid/gid on disk, so
-normal check is too unflexible. With this option you can relax it.
+normal check is too inflexible. With this option you can relax it.
 .RE
 .TP
 .BI check= value
@@ -1694,6 +1744,11 @@ flag.  A version string and a list of filesystem parameters will be
 printed (these data are also printed if the parameters appear to be
 inconsistent).
 .TP
+.B discard
+If set, causes discard/TRIM commands to be issued to the block device
+when blocks are freed. This is useful for SSD devices and
+sparse/thinly-provisioned LUNs.
+.TP
 .BR fat= {12 | 16 | 32 }
 Specify a 12, 16 or 32 bit fat.  This overrides
 the automatic FAT type detection routine.  Use with caution!
@@ -1702,6 +1757,11 @@ the automatic FAT type detection routine.  Use with caution!
 Character set to use for converting between 8 bit characters
 and 16 bit Unicode characters. The default is iso8859-1.
 Long filenames are stored on disk in Unicode format.
+.TP
+.B nfs
+If set, enables in-memory indexing of directory inodes to reduce the
+frequency of ESTALE errors in NFS client operations. Useful only when
+the filesystem is exported via NFS.
 .TP
 .BI tz=UTC
 This option disables the conversion of timestamps
@@ -1925,7 +1985,7 @@ keyword with no value will grow the volume to the full size of the partition.
 .B nointegrity
 Do not write to the journal.  The primary use of this option is to allow
 for higher performance when restoring a volume from backup media. The
-integrity of the volume is not guaranteed if the system abnormally abends.
+integrity of the volume is not guaranteed if the system abnormally ends.
 .TP
 .B integrity
 Default.  Commit metadata changes to the journal.  Use this option to remount
@@ -2072,10 +2132,10 @@ Disable the border allocator algorithm invented by Yury Yu. Rupasov.
 This may provide performance improvements in some situations.
 .TP
 .BR nolog
-Disable journalling. This will provide slight performance improvements in
+Disable journaling. This will provide slight performance improvements in
 some situations at the cost of losing reiserfs's fast recovery from crashes.
-Even with this option turned on, reiserfs still performs all journalling
-operations, save for actual writes into its journalling area.  Implementation
+Even with this option turned on, reiserfs still performs all journaling
+operations, save for actual writes into its journaling area.  Implementation
 of
 .IR nolog
 is a work in progress.

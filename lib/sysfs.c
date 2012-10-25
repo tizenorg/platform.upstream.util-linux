@@ -2,6 +2,8 @@
  * Copyright (C) 2011 Karel Zak <kzak@redhat.com>
  */
 
+#include <ctype.h>
+
 #include "c.h"
 #include "at.h"
 #include "pathnames.h"
@@ -56,7 +58,7 @@ dev_t sysfs_devname_to_devno(const char *name, const char *parent)
 			name += 5;	/* unaccesible, or not node in /dev */
 	}
 
-	if (!dev && parent) {
+	if (!dev && parent && strncmp("dm-", name, 3)) {
 		/*
 		 * Create path to /sys/block/<parent>/<name>/dev
 		 */
@@ -88,7 +90,7 @@ dev_t sysfs_devname_to_devno(const char *name, const char *parent)
 		if (!f)
 			return 0;
 
-		if (fscanf(f, "%u:%u", &maj, &min) == 2)
+		if (fscanf(f, "%d:%d", &maj, &min) == 2)
 			dev = makedev(maj, min);
 		fclose(f);
 	}
@@ -137,7 +139,7 @@ char *sysfs_devno_to_devpath(dev_t devno, char *buf, size_t bufsiz)
 int sysfs_init(struct sysfs_cxt *cxt, dev_t devno, struct sysfs_cxt *parent)
 {
 	char path[PATH_MAX];
-	int fd, rc = 0;
+	int fd, rc;
 
 	memset(cxt, 0, sizeof(*cxt));
 	cxt->dir_fd = -1;
@@ -157,7 +159,7 @@ int sysfs_init(struct sysfs_cxt *cxt, dev_t devno, struct sysfs_cxt *parent)
 	cxt->parent = parent;
 	return 0;
 err:
-	rc = -errno;
+	rc = errno > 0 ? -errno : -1;
 	sysfs_deinit(cxt);
 	return rc;
 }
@@ -218,6 +220,9 @@ static int sysfs_open(struct sysfs_cxt *cxt, const char *attr)
 ssize_t sysfs_readlink(struct sysfs_cxt *cxt, const char *attr,
 		   char *buf, size_t bufsiz)
 {
+	if (!cxt->dir_path)
+		return -1;
+
 	if (attr)
 		return readlink_at(cxt->dir_fd, cxt->dir_path, attr, buf, bufsiz);
 
@@ -228,11 +233,12 @@ ssize_t sysfs_readlink(struct sysfs_cxt *cxt, const char *attr,
 DIR *sysfs_opendir(struct sysfs_cxt *cxt, const char *attr)
 {
 	DIR *dir;
-	int fd;
+	int fd = -1;
 
 	if (attr)
 		fd = sysfs_open(cxt, attr);
-	else
+
+	else if (cxt->dir_fd >= 0)
 		/* request to open root of device in sysfs (/sys/block/<dev>)
 		 * -- we cannot use cxt->sysfs_fd directly, because closedir()
 		 * will close this our persistent file descriptor.
@@ -281,17 +287,80 @@ int sysfs_is_partition_dirent(DIR *dir, struct dirent *d, const char *parent_nam
 	char path[256];
 
 #ifdef _DIRENT_HAVE_D_TYPE
-	if (d->d_type != DT_DIR)
+	if (d->d_type != DT_DIR &&
+	    d->d_type != DT_LNK)
 		return 0;
 #endif
-	if (strncmp(parent_name, d->d_name, strlen(parent_name)))
-		return 0;
+	if (parent_name) {
+		const char *p = parent_name;
+		size_t len;
+
+		/* /dev/sda --> "sda" */
+		if (*parent_name == '/') {
+			p = strrchr(parent_name, '/');
+			if (!p)
+				return 0;
+			p++;
+		}
+
+		len = strlen(p);
+		if (strlen(d->d_name) <= len)
+			return 0;
+
+		/* partitions subdir name is
+		 *	"<parent>[:digit:]" or "<parent>p[:digit:]"
+		 */
+		return strncmp(p, d->d_name, len) == 0 &&
+		       ((*(d->d_name + len) == 'p' && isdigit(*(d->d_name + len + 1)))
+			|| isdigit(*(d->d_name + len)));
+	}
 
 	/* Cannot use /partition file, not supported on old sysfs */
 	snprintf(path, sizeof(path), "%s/start", d->d_name);
 
 	return faccessat(dirfd(dir), path, R_OK, 0) == 0;
 }
+
+/*
+ * Converts @partno (partition number) to devno of the partition.
+ * The @cxt handles wholedisk device.
+ *
+ * Note that this code does not expect any special format of the
+ * partitions devnames.
+ */
+dev_t sysfs_partno_to_devno(struct sysfs_cxt *cxt, int partno)
+{
+	DIR *dir;
+	struct dirent *d;
+	char path[256];
+	dev_t devno = 0;
+
+	dir = sysfs_opendir(cxt, NULL);
+	if (!dir)
+		return 0;
+
+	while ((d = xreaddir(dir))) {
+		int n, maj, min;
+
+		if (!sysfs_is_partition_dirent(dir, d, NULL))
+			continue;
+
+		snprintf(path, sizeof(path), "%s/partition", d->d_name);
+		if (sysfs_read_int(cxt, path, &n))
+			continue;
+
+		if (n == partno) {
+			snprintf(path, sizeof(path), "%s/dev", d->d_name);
+			if (sysfs_scanf(cxt, path, "%d:%d", &maj, &min) == 2)
+				devno = makedev(maj, min);
+			break;
+		}
+	}
+
+	closedir(dir);
+	return devno;
+}
+
 
 int sysfs_scanf(struct sysfs_cxt *cxt,  const char *attr, const char *fmt, ...)
 {
@@ -349,7 +418,7 @@ int sysfs_read_int(struct sysfs_cxt *cxt, const char *attr, int *res)
 char *sysfs_strdup(struct sysfs_cxt *cxt, const char *attr)
 {
 	char buf[1024];
-	return sysfs_scanf(cxt, attr, "%1024[^\n]", buf) == 1 ?
+	return sysfs_scanf(cxt, attr, "%1023[^\n]", buf) == 1 ?
 						strdup(buf) : NULL;
 }
 
@@ -438,6 +507,135 @@ char *sysfs_get_devname(struct sysfs_cxt *cxt, char *buf, size_t bufsiz)
 	return buf;
 }
 
+/* returns basename and keeps dirname in the @path */
+static char *stripoff_last_component(char *path)
+{
+    char *p = strrchr(path, '/');
+
+    if (!p)
+        return NULL;
+    *p = '\0';
+    return ++p;
+}
+
+static int get_dm_wholedisk(struct sysfs_cxt *cxt, char *diskname,
+                size_t len, dev_t *diskdevno)
+{
+    int rc = 0;
+    char *name;
+
+    /* Note, sysfs_get_slave() returns the first slave only,
+     * if there is more slaves, then return NULL
+     */
+    name = sysfs_get_slave(cxt);
+    if (!name)
+        return -1;
+
+    if (diskname && len) {
+        strncpy(diskname, name, len);
+        diskname[len - 1] = '\0';
+    }
+
+    if (diskdevno) {
+        *diskdevno = sysfs_devname_to_devno(name, NULL);
+        if (!*diskdevno)
+            rc = -1;
+    }
+
+    free(name);
+    return rc;
+}
+
+int sysfs_devno_to_wholedisk(dev_t dev, char *diskname,
+            size_t len, dev_t *diskdevno)
+{
+    struct sysfs_cxt cxt;
+    int is_part = 0;
+
+    if (!dev || sysfs_init(&cxt, dev, NULL) != 0)
+        return -1;
+
+    is_part = sysfs_has_attribute(&cxt, "partition");
+    if (!is_part) {
+        /*
+         * Extra case for partitions mapped by device-mapper.
+         *
+         * All regualar partitions (added by BLKPG ioctl or kernel PT
+         * parser) have the /sys/.../partition file. The partitions
+         * mapped by DM don't have such file, but they have "part"
+         * prefix in DM UUID.
+         */
+        char *uuid = sysfs_strdup(&cxt, "dm/uuid");
+        char *tmp = uuid;
+        char *prefix = uuid ? strsep(&tmp, "-") : NULL;
+
+        if (prefix && strncasecmp(prefix, "part", 4) == 0)
+            is_part = 1;
+        free(uuid);
+
+        if (is_part &&
+            get_dm_wholedisk(&cxt, diskname, len, diskdevno) == 0)
+            /*
+             * partitioned device, mapped by DM
+             */
+            goto done;
+
+        is_part = 0;
+    }
+
+    if (!is_part) {
+        /*
+         * unpartitioned device
+         */
+        if (diskname && len) {
+            if (!sysfs_get_devname(&cxt, diskname, len))
+                goto err;
+        }
+        if (diskdevno)
+            *diskdevno = dev;
+
+    } else {
+        /*
+         * partitioned device
+         *  - readlink /sys/dev/block/8:1   = ../../block/sda/sda1
+         *  - dirname  ../../block/sda/sda1 = ../../block/sda
+         *  - basename ../../block/sda      = sda
+         */
+        char linkpath[PATH_MAX];
+        char *name;
+        int linklen;
+
+        linklen = sysfs_readlink(&cxt, NULL,
+                linkpath, sizeof(linkpath) - 1);
+        if (linklen < 0)
+            goto err;
+        linkpath[linklen] = '\0';
+
+        stripoff_last_component(linkpath);      /* dirname */
+        name = stripoff_last_component(linkpath);   /* basename */
+        if (!name)
+            goto err;
+
+        if (diskname && len) {
+            strncpy(diskname, name, len);
+            diskname[len - 1] = '\0';
+        }
+
+        if (diskdevno) {
+            *diskdevno = sysfs_devname_to_devno(name, NULL);
+            if (!*diskdevno)
+                goto err;
+        }
+    }
+
+done:
+    sysfs_deinit(&cxt);
+    return 0;
+err:
+    sysfs_deinit(&cxt);
+    return -1;
+}
+
 #ifdef TEST_PROGRAM_SYSFS
 #include <errno.h>
 #include <err.h>
@@ -445,11 +643,11 @@ char *sysfs_get_devname(struct sysfs_cxt *cxt, char *buf, size_t bufsiz)
 
 int main(int argc, char *argv[])
 {
-	struct sysfs_cxt cxt;
+	struct sysfs_cxt cxt = UL_SYSFSCXT_EMPTY;
 	char *devname;
 	dev_t devno;
 	char path[PATH_MAX];
-	int i;
+	int i, is_part;
 	uint64_t u64;
 	ssize_t len;
 
@@ -462,19 +660,30 @@ int main(int argc, char *argv[])
 	if (!devno)
 		err(EXIT_FAILURE, "failed to read devno");
 
+	is_part = sysfs_devno_has_attribute(devno, "partition");
+
 	printf("NAME: %s\n", devname);
-	printf("DEVNO: %u\n", (unsigned int) devno);
+	printf("DEVNO: %u (%d:%d)\n", (unsigned int) devno, major(devno), minor(devno));
 	printf("DEVNOPATH: %s\n", sysfs_devno_path(devno, path, sizeof(path)));
 	printf("DEVPATH: %s\n", sysfs_devno_to_devpath(devno, path, sizeof(path)));
-	printf("PARTITION: %s\n",
-		sysfs_devno_has_attribute(devno, "partition") ? "YES" : "NOT");
+	printf("PARTITION: %s\n", is_part ? "YES" : "NOT");
 
-	sysfs_init(&cxt, devno, NULL);
+	if (sysfs_init(&cxt, devno, NULL))
+		return EXIT_FAILURE;
 
 	len = sysfs_readlink(&cxt, NULL, path, sizeof(path) - 1);
 	if (len > 0) {
 		path[len] = '\0';
 		printf("DEVNOLINK: %s\n", path);
+	}
+
+	if (!is_part) {
+		printf("First 5 partitions:\n");
+		for (i = 1; i <= 5; i++) {
+			dev_t dev = sysfs_partno_to_devno(&cxt, i);
+			if (dev)
+				printf("\t#%d %d:%d\n", i, major(dev), minor(dev));
+		}
 	}
 
 	printf("SLAVES: %d\n", sysfs_count_dirents(&cxt, "slaves"));

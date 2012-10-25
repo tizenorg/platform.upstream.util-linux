@@ -48,6 +48,7 @@
  * API.
  */
 
+#ifdef CONFIG_BLKID_VERIFY_UDEV
 /* returns zero when the device has NAME=value (LABEL/UUID) */
 static int verify_tag(const char *devname, const char *name, const char *value)
 {
@@ -64,6 +65,9 @@ static int verify_tag(const char *devname, const char *name, const char *value)
 	blkid_probe_enable_superblocks(pr, TRUE);
 	blkid_probe_set_superblocks_flags(pr,
 			BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID);
+
+	blkid_probe_enable_partitions(pr, TRUE);
+	blkid_probe_set_partitions_flags(pr, BLKID_PARTS_ENTRY_DETAILS);
 
 	fd = open(devname, O_RDONLY);
 	if (fd < 0) {
@@ -88,6 +92,7 @@ done:
 	/* for non-root users we use unverified udev links */
 	return errsv == EACCES ? 0 : rc;
 }
+#endif /* CONFIG_BLKID_VERIFY_UDEV*/
 
 /**
  * blkid_send_uevent:
@@ -139,6 +144,10 @@ static char *evaluate_by_udev(const char *token, const char *value, int uevent)
 		strcpy(dev, _PATH_DEV_BYUUID "/");
 	else if (!strcmp(token, "LABEL"))
 		strcpy(dev, _PATH_DEV_BYLABEL "/");
+	else if (!strcmp(token, "PARTLABEL"))
+		strcpy(dev, _PATH_DEV_BYPARTLABEL "/");
+	else if (!strcmp(token, "PARTUUID"))
+		strcpy(dev, _PATH_DEV_BYPARTUUID "/");
 	else {
 		DBG(DEBUG_EVALUATE,
 		    printf("unsupported token %s\n", token));
@@ -162,8 +171,10 @@ static char *evaluate_by_udev(const char *token, const char *value, int uevent)
 	if (!path)
 		return NULL;
 
+#ifdef CONFIG_BLKID_VERIFY_UDEV
 	if (verify_tag(path, token, value))
 		goto failed;
+#endif
 	return path;
 
 failed:

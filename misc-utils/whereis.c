@@ -53,6 +53,7 @@
 #include "xalloc.h"
 #include "nls.h"
 #include "c.h"
+#include "closestream.h"
 
 static char *bindirs[] = {
 	"/bin",
@@ -130,7 +131,7 @@ static char *srcdirs[] = {
 };
 
 static char sflag = 1, bflag = 1, mflag = 1, uflag;
-static char **Sflag, **Bflag, **Mflag, **dirp, **pathdir;
+static char **Sflag, **Bflag, **Mflag, **pathdir, **pathdir_p;
 static int Scnt, Bcnt, Mcnt, count, print;
 
 static void __attribute__ ((__noreturn__)) usage(FILE * out)
@@ -147,7 +148,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 		" -M <dirs>  define man lookup path\n"
 		" -s         search only sources path\n"
 		" -S <dirs>  define sources lookup path\n"
-		" -u         search from unusual enties\n"
+		" -u         search from unusual entities\n"
 		" -V         output version information and exit\n"
 		" -h         display this help and exit\n\n"), out);
 
@@ -215,7 +216,8 @@ findin(char *dir, char *cp)
 		/* refuse excessively long names */
 		strcpy(dirbuf, dir);
 		d = strchr(dirbuf, '*');
-		*d = 0;
+		if (d)
+			*d = 0;
 		dirp = opendir(dirbuf);
 		if (dirp == NULL)
 			return;
@@ -282,7 +284,7 @@ static void fillpath(void)
 	pathdir = xrealloc(pathdir, (i + 1) * sizeof(char *));
 	pathdir[i] = NULL;
 
-	dirp = pathdir;
+	pathdir_p = pathdir;
 	free(pathcp);
 }
 
@@ -313,8 +315,8 @@ lookbin(char *cp)
 {
 	if (Bflag == 0) {
 		findv(bindirs, ARRAY_SIZE(bindirs)-1, cp);
-		while (*dirp)
-			findin(*dirp++, cp);		/* look $PATH */
+		while (*pathdir_p)
+			findin(*pathdir_p++, cp);		/* look $PATH */
 	 } else
 		findv(Bflag, Bcnt, cp);
 }
@@ -417,6 +419,7 @@ main(int argc, char **argv)
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	argc--, argv++;
 	if (argc == 0)

@@ -13,11 +13,18 @@
  *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software
- *  Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *  This file may be redistributed under the terms of the GNU General
- *  Public License, version 2.
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ */
+
+/*
+ * This command is deprecated.  The utility is in maintenance mode,
+ * meaning we keep them in source tree for backward compatibility
+ * only.  Do not waste time making this command better, unless the
+ * fix is about security or other very critical issue.
+ *
+ * See Documentation/deprecated.txt for more information.
  */
 
 #include <fcntl.h>
@@ -31,6 +38,7 @@
 #include <sys/utsname.h>
 #include "nls.h"
 #include "blkdev.h"
+#include "closestream.h"
 #include "linux_version.h"
 
 /* this has to match with the kernel structure */
@@ -72,6 +80,7 @@ main(int argc, char * argv[]) {
 	setlocale(LC_MESSAGES, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	for (;;) {
 		int opt;

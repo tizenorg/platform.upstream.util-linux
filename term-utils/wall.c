@@ -66,17 +66,11 @@
 #include "pathnames.h"
 #include "carefulputc.h"
 #include "c.h"
+#include "fileutils.h"
+#include "closestream.h"
 
 #define	IGNOREUSER	"sleeper"
 #define WRITE_TIME_OUT	300		/* in seconds */
-
-#ifndef MAXHOSTNAMELEN
-# ifdef HOST_NAME_MAX
-#  define MAXHOSTNAMELEN HOST_NAME_MAX
-# else
-#  define MAXHOSTNAMELEN 64
-# endif
-#endif
 
 /* Function prototypes */
 char *makemsg(char *fname, size_t *mbufsize, int print_banner);
@@ -99,7 +93,6 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 
 int
 main(int argc, char **argv) {
-	extern int optind;
 	int ch;
 	struct iovec iov;
 	struct utmp *utmpptr;
@@ -108,11 +101,12 @@ main(int argc, char **argv) {
 	int print_banner = TRUE;
 	char *mbuf;
 	size_t mbufsize;
-	long timeout = WRITE_TIME_OUT;
+	unsigned timeout = WRITE_TIME_OUT;
 
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
+	atexit(close_stdout);
 
 	static const struct option longopts[] = {
 		{ "nobanner",	no_argument,		0, 'n' },
@@ -131,7 +125,7 @@ main(int argc, char **argv) {
 				warnx(_("--nobanner is available only for root"));
 			break;
 		case 't':
-			timeout = strtoll_or_err(optarg, _("invalid timeout argument"));
+			timeout = strtou32_or_err(optarg, _("invalid timeout argument"));
 			if (timeout < 1)
 				errx(EXIT_FAILURE, _("invalid timeout argument: %s"), optarg);
 			break;
@@ -188,24 +182,15 @@ makemsg(char *fname, size_t *mbufsize, int print_banner)
 	struct stat sbuf;
 	time_t now;
 	FILE *fp;
-	int fd;
-	char *p, *whom, *where, *hostname, *lbuf, *tmpname, *tmpenv, *mbuf;
+	char *p, *whom, *where, *hostname, *lbuf, *tmpname, *mbuf;
 	long line_max;
 
 	hostname = xmalloc(sysconf(_SC_HOST_NAME_MAX) + 1);
 	line_max = sysconf(_SC_LINE_MAX);
 	lbuf = xmalloc(line_max);
 
-	tmpname = xmalloc(PATH_MAX);
-	tmpenv = getenv("TMPDIR");
-	if ((tmpenv))
-		snprintf(tmpname, PATH_MAX, "%s/%s.XXXXXX", tmpenv,
-			program_invocation_short_name);
-	else
-		snprintf(tmpname, PATH_MAX, "%s/%s.XXXXXX", _PATH_TMP,
-			program_invocation_short_name);
-	if (!(fd = mkstemp(tmpname)) || !(fp = fdopen(fd, "r+")))
-		err(EXIT_FAILURE, _("can't open temporary file %s"), tmpname);
+	if ((fp = xfmkstemp(&tmpname, NULL)) == NULL)
+		err(EXIT_FAILURE, _("can't open temporary file"));
 	unlink(tmpname);
 	free(tmpname);
 
@@ -259,7 +244,7 @@ makemsg(char *fname, size_t *mbufsize, int print_banner)
 			     fname);
 
 		if (!freopen(fname, "r", stdin))
-			err(EXIT_FAILURE, _("cannot open file %s"), fname);
+			err(EXIT_FAILURE, _("cannot open %s"), fname);
 	}
 
 	while (fgets(lbuf, line_max, stdin)) {
@@ -280,8 +265,8 @@ makemsg(char *fname, size_t *mbufsize, int print_banner)
 	free(lbuf);
 	rewind(fp);
 
-	if (fstat(fd, &sbuf))
-		err(EXIT_FAILURE, _("fstat failed"));
+	if (fstat(fileno(fp), &sbuf))
+		err(EXIT_FAILURE, _("stat failed"));
 
 	*mbufsize = (size_t) sbuf.st_size;
 	mbuf = xmalloc(*mbufsize);
@@ -289,7 +274,7 @@ makemsg(char *fname, size_t *mbufsize, int print_banner)
 	if (fread(mbuf, 1, *mbufsize, fp) != *mbufsize)
 		err(EXIT_FAILURE, _("fread failed"));
 
-	close(fd);
-	fclose(fp);
+	if (close_stream(fp) != 0)
+		errx(EXIT_FAILURE, _("write error"));
 	return mbuf;
 }
