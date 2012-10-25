@@ -36,6 +36,7 @@ Source6:        etc_filesystems
 Source7:        baselibs.conf
 Source8:        login.pamd
 Source9:        remote.pamd
+Source14:       su.pamd
 # TODO: split to separate package
 Source10:       http://ftp.debian.org/debian/pool/main/a/adjtimex/adjtimex_%{adjtimex_ver}.orig.tar.gz
 Source11:       klogconsole.tar.bz2
@@ -133,6 +134,13 @@ Group:          System/Filesystems
 The uuidd package contains a userspace daemon (uuidd) which guarantees
 uniqueness of time-based UUID generation even at very high rates on
 SMP systems.
+
+%package -n su
+Summary:        Library to generate UUIDs
+Group:          System/Filesystems
+
+%description -n su
+A library to generate universally unique IDs (UUIDs).
 
 %package -n libuuid
 Summary:        Library to generate UUIDs
@@ -233,6 +241,7 @@ export SUID_LDFLAGS="-pie"
 %configure \
   --enable-mesg \
   --enable-partx \
+  --disable-kill \
   --enable-write \
   --enable-line \
   --enable-new-mount \
@@ -258,7 +267,7 @@ install -m 744 %{SOURCE50} %{buildroot}%{_initddir}/uuidd
 install -m 644 %{SOURCE51} %{buildroot}%{_sysconfdir}/blkid.conf
 install -m 644 %{SOURCE8} %{buildroot}/etc/pam.d/login
 install -m 644 %{SOURCE9} %{buildroot}/etc/pam.d/remote
-mkdir -p %{buildroot}%{_localstatedir}/adm/fillup-templates
+install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su
 cp adjtimex-*/adjtimex %{buildroot}/%{_sbindir}
 cp adjtimex-*/adjtimex.8  %{buildroot}%{_mandir}/man8/
 pushd ..
@@ -346,6 +355,10 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 %docs_package
 
+%files -n su
+%{_bindir}/su
+%config(noreplace) /etc/pam.d/su
+
 %files -f %{name}.files 
 # Common files for all archs
 %defattr(-,root,root)
@@ -355,9 +368,8 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %config(noreplace) /etc/pam.d/remote
 %{_bindir}/cal
 %{_bindir}/eject
-%{_bindir}/kill
+#%{_bindir}/kill
 %{_bindir}/lslocks
-%{_bindir}/su
 %{_bindir}/utmpdump
 %{_bindir}/wdctl
 %{_sbindir}/resizepart
