@@ -354,6 +354,14 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %config(noreplace) /etc/pam.d/login
 %config(noreplace) /etc/pam.d/remote
 %{_bindir}/cal
+%{_bindir}/eject
+%{_bindir}/kill
+%{_bindir}/lslocks
+%{_bindir}/su
+%{_bindir}/utmpdump
+%{_bindir}/wdctl
+%{_bindir}/resizepart
+%{_bindir}/sulogin
 %{_bindir}/login
 %{_bindir}/chrt
 %{_bindir}/col
