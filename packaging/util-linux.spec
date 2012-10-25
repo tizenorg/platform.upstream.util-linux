@@ -37,6 +37,7 @@ Source7:        baselibs.conf
 Source8:        login.pamd
 Source9:        remote.pamd
 Source14:       su.pamd
+Source15:       su.default
 # TODO: split to separate package
 Source10:       http://ftp.debian.org/debian/pool/main/a/adjtimex/adjtimex_%{adjtimex_ver}.orig.tar.gz
 Source11:       klogconsole.tar.bz2
@@ -269,6 +270,8 @@ install -m 644 %{SOURCE8} %{buildroot}/etc/pam.d/login
 install -m 644 %{SOURCE9} %{buildroot}/etc/pam.d/remote
 install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su
 install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su-l
+install -d -m 755 %{buildroot}/etc/default
+install -m 644 %{S:15} %{buildroot}/etc/default/su
 cp adjtimex-*/adjtimex %{buildroot}/%{_sbindir}
 cp adjtimex-*/adjtimex.8  %{buildroot}%{_mandir}/man8/
 pushd ..
