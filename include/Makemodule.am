@@ -53,4 +53,12 @@ dist_noinst_HEADERS += \
 	include/timeutils.h \
 	include/ttyutils.h \
 	include/widechar.h \
-	include/xalloc.h
+	include/xalloc.h \
+	include/xgetpass.h \
+	include/pt-sgi.h \
+	include/pt-bsd.h \
+	include/pt-mbr.h \
+	include/xgetpass.h \
+	include/pt-mbr-partnames.h \
+	include/pt-sun.h \
+	include/statfs_magic.h

@@ -28,6 +28,8 @@ if BUILD_AGETTY
 sbin_PROGRAMS += agetty
 dist_man_MANS += term-utils/agetty.8
 agetty_SOURCES = term-utils/agetty.c
+agetty_CFLAGS = $(SUID_CFLAGS) $(AM_CFLAGS)
+agetty_LDFLAGS = $(SUID_LDFLAGS) $(AM_LDFLAGS)
 agetty_LDADD = $(LDADD) libcommon.la
 if BSD
 agetty_LDADD += -lutil
