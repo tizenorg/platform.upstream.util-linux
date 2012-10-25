@@ -1,0 +1,13 @@
+Index: util-linux-2.21.2/libmount/src/context_loopdev.c
+===================================================================
+--- util-linux-2.21.2.orig/libmount/src/context_loopdev.c
++++ util-linux-2.21.2/libmount/src/context_loopdev.c
+@@ -199,6 +199,8 @@ int mnt_context_setup_loopdev(struct lib
+ 	if (rc == 0 && (cxt->user_mountflags & MNT_MS_ENCRYPTION) &&
+ 	    mnt_optstr_get_option(optstr, "encryption", &val, &len) == 0) {
+ 		DBG(CXT, mnt_debug_h(cxt, "encryption no longer supported"));
++		// XXX: nasty for the lib but there's on better way to give a hint atm
++		fprintf(stderr, "mount: encryption no longer supported. Please use /etc/crypttab instead (man 5 crypttab)\n");
+ 		rc = -EINVAL;
+ 	}
+ 

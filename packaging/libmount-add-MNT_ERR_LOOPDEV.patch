@@ -1,0 +1,59 @@
+From 82756a747e4bcfc13a27b7618d889af080649584 Mon Sep 17 00:00:00 2001
+From: Karel Zak <kzak@redhat.com>
+Date: Mon, 28 May 2012 12:26:36 +0200
+Subject: [PATCH] libmount: add MNT_ERR_LOOPDEV
+
+Signed-off-by: Karel Zak <kzak@redhat.com>
+Signed-off-by: Petr Uzel <petr.uzel@suse.cz>
+---
+ lib/loopdev.c                  |    4 ++++
+ libmount/src/context_loopdev.c |    1 +
+ libmount/src/libmount.h.in     |    1 +
+ 3 files changed, 6 insertions(+), 0 deletions(-)
+
+Index: util-linux-2.21.2/lib/loopdev.c
+===================================================================
+--- util-linux-2.21.2.orig/lib/loopdev.c
++++ util-linux-2.21.2/lib/loopdev.c
+@@ -173,6 +173,8 @@ int loopcxt_init(struct loopdev_cxt *lc,
+  */
+ void loopcxt_deinit(struct loopdev_cxt *lc)
+ {
++	int errsv = errno;
++
+ 	if (!lc)
+ 		return;
+ 
+@@ -183,6 +185,8 @@ void loopcxt_deinit(struct loopdev_cxt *
+ 
+ 	loopcxt_set_device(lc, NULL);
+ 	loopcxt_deinit_iterator(lc);
++
++	errno = errsv;
+ }
+ 
+ /*
+Index: util-linux-2.21.2/libmount/src/context_loopdev.c
+===================================================================
+--- util-linux-2.21.2.orig/libmount/src/context_loopdev.c
++++ util-linux-2.21.2/libmount/src/context_loopdev.c
+@@ -261,6 +261,7 @@ int mnt_context_setup_loopdev(struct lib
+ 
+ 		if (loopdev || rc != -EBUSY) {
+ 			DBG(CXT, mnt_debug_h(cxt, "failed to setup device"));
++			rc = -MNT_ERR_LOOPDEV;
+ 			goto done;
+ 		}
+ 		DBG(CXT, mnt_debug_h(cxt, "loopdev stolen...trying again"));
+Index: util-linux-2.21.2/libmount/src/libmount.h.in
+===================================================================
+--- util-linux-2.21.2.orig/libmount/src/libmount.h.in
++++ util-linux-2.21.2/libmount/src/libmount.h.in
+@@ -126,6 +126,7 @@ enum {
+ #define MNT_ERR_NOFSTAB      5000	/* not found required entry in fstab */
+ #define MNT_ERR_NOFSTYPE     5001	/* failed to detect filesystem type */
+ #define MNT_ERR_NOSOURCE     5002	/* required mount source undefined */
++#define MNT_ERR_LOOPDEV	     5003	/* loopdev setup failed, errno set by libc */
+ 
+ /* init.c */
+ extern void mnt_init_debug(int mask);
