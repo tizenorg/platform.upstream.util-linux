@@ -97,6 +97,7 @@ Patch60:        time-1.7.dif
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Requires(pre):         /usr/bin/sed
 #
+Provides:       eject
 Provides:       base = %{version}-%{release}
 Provides:       login = 4.0-33.7
 Provides:       util = %{version}-%{release}
