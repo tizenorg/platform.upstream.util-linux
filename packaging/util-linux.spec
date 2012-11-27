@@ -1,7 +1,3 @@
-%define time_ver 1.7
-%define which_ver 2.20
-%define adjtimex_ver 1.29
-
 Name:           util-linux
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
@@ -21,13 +17,10 @@ Release:        0
 # these tools as well
 #!BuildIgnore:  pwdutils
 Url:            http://kernel.org/~kzak/util-linux/
-Provides:       fsck-with-dev-lock = %{version}
-# bnc#651598:
-Provides:       util-linux(fake+no-canonicalize)
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
 Group:          System/Base
-Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.21/%{name}-%{version}.tar.gz
+Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.gz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
 Source2:        nologin.c
@@ -38,61 +31,7 @@ Source8:        login.pamd
 Source9:        remote.pamd
 Source14:       su.pamd
 Source15:       su.default
-# TODO: split to separate package
-Source10:       http://ftp.debian.org/debian/pool/main/a/adjtimex/adjtimex_%{adjtimex_ver}.orig.tar.gz
-Source11:       klogconsole.tar.bz2
-# TODO: split to separate package
-Source12:       which-%{which_ver}.tar.bz2
-# TODO: split to separate package
-Source13:       time-%{time_ver}.tar.bz2
-# XXX: needed?
-Source22:       setctsid.c
-Source23:       setctsid.8
-# XXX: ppc specific, still needed?
-Source28:       mkzimage_cmdline.8
-Source29:       mkzimage_cmdline.c
-Source31:       addnote.c
-#
-Source30:       README.largedisk
-Source50:       uuidd.rc
 Source51:       blkid.conf
-##
-## util-linux patches
-##
-# 241372 - remove legacy warnings from fdisk
-Patch1:         util-linux-2.12r-fdisk_remove_bogus_warnings.patch
-Patch2:         util-linux-2.20-libmount-deps.patch
-Patch3:         fdisk-tinfo.patch
-Patch4:         mount-new-allow-sloppy-for-non-root.patch
-Patch5:         libmount-don-t-use-nosuid-noexec-nodev-for-cifs-user.patch
-
-# Patches 6-10: bcn#767208 (taken from upstream
-Patch6:         mount-new-improve-error-messages.patch
-Patch7:         libmount-add-special-MNT_ERR-codes.patch
-Patch8:         mount-new-use-MNT_ERR-for-error-messages.patch
-Patch9:         libmount-add-MNT_ERR_LOOPDEV.patch
-Patch10:        mount-new-add-loopdev-specific-error-message.patch
-
-# disable encryption
-Patch11:        util-linux-2.21.2-noenc.diff
-Patch12:        util-linux-2.21.2-noenc-suse.diff
-
-# hack for boot.localfs
-Patch20:        util-linux-HACK-boot.localfs.diff
-#####
-
-##
-## adjtimex
-##
-##
-## klogconsole
-##
-Patch55:        klogconsole-quiet.patch
-Patch56:        klogconsole.diff
-##
-## time
-##
-Patch60:        time-1.7.dif
 
 BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Requires(pre):         /usr/bin/sed
@@ -177,66 +116,12 @@ Requires:       libmount = %{version}
 Files to develop applications using the libmount library.
 
 %prep
-%setup -q -n %{name}-%{version} -a 10 -b 11 -b 12 -b 13
-%patch1 -p1
-%patch2 -p1
-%patch3 -p1
-%patch4 -p1
-%patch5 -p1
-%patch6 -p1
-%patch7 -p1
-%patch8 -p1
-%patch9 -p1
-%patch10 -p1
-%patch11 -p1
-%patch12 -p1
+%setup -q -n %{name}-%{version} 
 #
-%patch20 -p1
-
-#
-cd adjtimex-*
-# adjtimex patches belongs here
-cd -
-# setctsid
-cp %{S:22} %{S:23} .
 # nologin
-cp %{S:2} %{S:3}  %{S:30} .
-cd ../klogconsole
-%patch55 -p1
-%patch56 -p1
-cd ../time-*
-%patch60
+cp %{S:2} %{S:3}   .
 
 %build
-# adjtimex build
-cd adjtimex-%{adjtimex_ver}
-%configure
-make %{?_smp_mflags}
-cd ..
-pushd ../
-# which build
-cd which-%{which_ver}
-%configure
-make %{?_smp_mflags}
-cd ..
-# time build
-cd time-%{time_ver}
-export CFLAGS="%{optflags} -D_GNU_SOURCE "
-export INSTALL_PROGRAM='$(INSTALL)'
-%configure
-make %{?_smp_mflags}
-cd ..
-# klogconsole build
-cd klogconsole
-make %{?_smp_mflags} CFLAGS="%{optflags}" CC="%{__cc}"
-cd ..
-popd
-# setctsid build
-rm -f setctsid
-make %{?_smp_mflags} setctsid CFLAGS="%{optflags}" CC="%{__cc}"
-#
-# util-linux itself
-#
 autoreconf -fi
 export SUID_CFLAGS="-fpie"
 export SUID_LDFLAGS="-pie"
@@ -258,14 +143,11 @@ export SUID_LDFLAGS="-pie"
 make %{?_smp_mflags}
 #
 %{__cc} -fwhole-program %{optflags} -o nologin nologin.c
-%{__cc} -fwhole-program %{optflags} -o mkzimage_cmdline %{S:29}
-%{__cc} -fwhole-program %{optflags} -o chrp-addnote %{SOURCE31}
 
 %install
-mkdir -p %{buildroot}{/etc/init.d,/etc/pam.d,%{_mandir}/man{1,8},/usr/bin,/usr/sbin,%{_infodir}}
+mkdir -p %{buildroot}{/etc/pam.d,%{_mandir}/man{1,8},/usr/bin,/usr/sbin,%{_infodir}}
 mkdir -p %{buildroot}%{_localstatedir}/lib/libuuid/
 mkdir -p %{buildroot}%{_localstatedir}/run/uuidd/
-install -m 744 %{SOURCE50} %{buildroot}%{_initddir}/uuidd
 install -m 644 %{SOURCE51} %{buildroot}%{_sysconfdir}/blkid.conf
 install -m 644 %{SOURCE8} %{buildroot}/etc/pam.d/login
 install -m 644 %{SOURCE9} %{buildroot}/etc/pam.d/remote
@@ -273,41 +155,13 @@ install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su
 install -m 644 %{SOURCE14} %{buildroot}/etc/pam.d/su-l
 install -d -m 755 %{buildroot}/etc/default
 install -m 644 %{S:15} %{buildroot}/etc/default/su
-cp adjtimex-*/adjtimex %{buildroot}/%{_sbindir}
-cp adjtimex-*/adjtimex.8  %{buildroot}%{_mandir}/man8/
-pushd ..
-# which install
-cd which-%{which_ver}
-%make_install
-cd ..
-# time install
-cd time-%{time_ver}
-make install DESTDIR=%{buildroot} \
-        prefix=%{buildroot}/usr \
-        infodir=%{buildroot}%{_infodir} \
-        mandir=%{buildroot}%{_mandir} \
-        bindir=%{buildroot}%{_bindir}
-cd ..
-# klogconsole install
-cd klogconsole
-make install DEST=%{buildroot}
-popd
-#
-# util-linux install
-#
 %make_install
 install -m 644 %{SOURCE6} %{buildroot}%{_sysconfdir}/filesystems
 install -m 755 nologin %{buildroot}/%{_sbindir}
 rm -f %{buildroot}/%{_libdir}/libblkid.la
 rm -f %{buildroot}/%{_libdir}/libuuid.la
 rm -f %{buildroot}/%{_libdir}/libmount.la
-install -m 755 mkzimage_cmdline %{buildroot}/%{_bindir}
-install -m 644 %{S:28} %{buildroot}%{_mandir}/man8
-install -m 755 chrp-addnote %{buildroot}/%{_bindir}
 install -m 644 nologin.8 %{buildroot}%{_mandir}/man8
-# setctsid install
-install -m 755 setctsid   %{buildroot}/%{_sbindir}
-install -m 444 setctsid.8 %{buildroot}%{_mandir}/man8/
 echo -e "#! /bin/bash\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
 chmod 755 %{buildroot}%{_sbindir}/flushb
 # Stupid hack so we don't have a tcsh dependency
@@ -418,16 +272,11 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/setsid
 %{_bindir}/tailf
 %{_bindir}/taskset
-%{_bindir}/time
 %{_bindir}/ul
 %{_bindir}/umount
 %{_bindir}/unshare
 %{_bindir}/uuidgen
-%{_bindir}/which
-%{_bindir}/chrp-addnote
-%{_bindir}/mkzimage_cmdline
 %{_sbindir}/addpart
-%{_sbindir}/adjtimex
 %{_sbindir}/agetty
 %{_sbindir}/blkid
 %{_sbindir}/blockdev
@@ -452,7 +301,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_sbindir}/partx
 %{_sbindir}/pivot_root
 %{_sbindir}/rtcwake
-%{_sbindir}/setctsid
 %{_sbindir}/swaplabel
 %{_sbindir}/swapoff
 %{_sbindir}/swapon
@@ -474,7 +322,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/cytune
 %{_sbindir}/fdformat
 %{_sbindir}/hwclock
-%{_sbindir}/klogconsole
 %{_bindir}/setterm
 %{_sbindir}/tunelp
 
@@ -508,7 +355,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %attr(-,uuidd,uuidd) %dir %{_localstatedir}/lib/libuuid
 %ghost %{_localstatedir}/lib/libuuid/clock.txt
 %attr(-,uuidd,uuidd) %ghost %dir %{_localstatedir}/run/uuidd
-%{_initddir}/uuidd
 
 %files -n libuuid
 %defattr(-, root, root)
