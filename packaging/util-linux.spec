@@ -1,4 +1,5 @@
 Name:           util-linux
+Version:        2.22.2
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
 BuildRequires:  gettext-devel
@@ -8,7 +9,6 @@ BuildRequires:  pam-devel
 BuildRequires:  pkg-config
 BuildRequires:  readline-devel
 BuildRequires:  zlib-devel
-Version:        2.22.1
 Release:        0
 # util-linux is a base package and uuidd pre-requiring pwdutils pulls
 # that into the core build cycle.  pwdutils also pulls in the whole
@@ -33,7 +33,6 @@ Source14:       su.pamd
 Source15:       su.default
 Source51:       blkid.conf
 
-BuildRoot:      %{_tmppath}/%{name}-%{version}-build
 Requires(pre):         /usr/bin/sed
 #
 Provides:       eject
