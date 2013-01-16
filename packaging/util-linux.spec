@@ -20,7 +20,7 @@ Url:            http://kernel.org/~kzak/util-linux/
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
 Group:          System/Base
-Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.gz
+Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.bz2
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
 Source2:        nologin.c
