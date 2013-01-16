@@ -75,13 +75,6 @@ The uuidd package contains a userspace daemon (uuidd) which guarantees
 uniqueness of time-based UUID generation even at very high rates on
 SMP systems.
 
-%package -n su
-Summary:        Library to generate UUIDs
-Group:          System/Filesystems
-
-%description -n su
-A library to generate universally unique IDs (UUIDs).
-
 %package -n libuuid
 Summary:        Library to generate UUIDs
 Group:          System/Filesystems
