@@ -590,7 +590,8 @@ static int do_mount_by_pattern(struct libmnt_context *cxt, const char *pattern)
 		rc = do_mount(cxt, *fp);
 		if (mnt_context_get_status(cxt))
 			break;
-		if (mnt_context_get_syscall_errno(cxt) != EINVAL)
+		if (mnt_context_get_syscall_errno(cxt) != EINVAL &&
+		    mnt_context_get_syscall_errno(cxt) != ENODEV)
 			break;
 	}
 	mnt_free_filesystems(filesystems);
@@ -690,9 +691,13 @@ int mnt_context_do_mount(struct libmnt_context *cxt)
 		cxt->mountdata = (char *) mnt_fs_get_fs_options(cxt->fs);
 
 	type = mnt_fs_get_fstype(cxt->fs);
-	if (type)
-		res = do_mount(cxt, NULL);
-	else
+	if (type) {
+		if (strchr(type, ','))
+			/* this only happen if fstab countains list of filesystems */
+			res = do_mount_by_pattern(cxt, type);
+		else
+			res = do_mount(cxt, NULL);
+	} else
 		res = do_mount_by_pattern(cxt, cxt->fstype_pattern);
 
 	if (mnt_context_get_status(cxt)

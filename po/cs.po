@@ -36,9 +36,9 @@ msgid ""
 msgstr ""
 "Project-Id-Version: util-linux 2.22-rc2\n"
 "Report-Msgid-Bugs-To: util-linux@vger.kernel.org\n"
-"POT-Creation-Date: 2012-10-10 14:41+0200\n"
-"PO-Revision-Date: 2012-08-27 20:16+0200\n"
-"Last-Translator: Petr Písař <petr.pisar@atlas.cz>\n"
+"POT-Creation-Date: 2012-12-12 22:02+0100\n"
+"PO-Revision-Date: 2012-11-05 10:58+0100\n"
+"Last-Translator: Petr Pisar <petr.pisar@atlas.cz>\n"
 "Language-Team: Czech <translation-team-cs@lists.sourceforge.net>\n"
 "Language: cs\n"
 "MIME-Version: 1.0\n"
@@ -77,7 +77,7 @@ msgstr " %s <zařízení disku> <číslo oddílu> <začátek> <délka>\n"
 #: sys-utils/rtcwake.c:277 sys-utils/rtcwake.c:515 sys-utils/swapon.c:310
 #: sys-utils/swapon.c:477 sys-utils/switch_root.c:158 sys-utils/wdctl.c:309
 #: sys-utils/wdctl.c:363 term-utils/script.c:208 term-utils/script.c:233
-#: term-utils/script.c:560 term-utils/scriptreplay.c:197
+#: term-utils/script.c:562 term-utils/scriptreplay.c:197
 #: term-utils/scriptreplay.c:200 term-utils/wall.c:247 text-utils/rev.c:131
 #: text-utils/tailf.c:62 text-utils/tailf.c:99 text-utils/ul.c:231
 #, c-format
@@ -340,9 +340,9 @@ msgstr ""
 #: misc-utils/logger.c:264 misc-utils/look.c:126 misc-utils/lsblk.c:1376
 #: misc-utils/mcookie.c:119 misc-utils/namei.c:466 misc-utils/rename.c:101
 #: misc-utils/uuidd.c:580 misc-utils/uuidgen.c:77 misc-utils/whereis.c:467
-#: misc-utils/wipefs.c:438 schedutils/ionice.c:171 sys-utils/chcpu.c:307
+#: misc-utils/wipefs.c:448 schedutils/ionice.c:171 sys-utils/chcpu.c:307
 #: sys-utils/cytune.c:378 sys-utils/dmesg.c:1162 sys-utils/hwclock.c:1355
-#: sys-utils/lscpu.c:1315 term-utils/agetty.c:672 term-utils/mesg.c:108
+#: sys-utils/lscpu.c:1348 term-utils/agetty.c:671 term-utils/mesg.c:108
 #: term-utils/script.c:212 term-utils/scriptreplay.c:172
 #: term-utils/setterm.c:812 term-utils/wall.c:133 term-utils/write.c:112
 #: text-utils/col.c:208 text-utils/colcrt.c:118 text-utils/colrm.c:174
@@ -445,12 +445,12 @@ msgstr "%s: chyba rozboru na řádku %d – ignoruje se"
 msgid "%s: failed to parse fstab"
 msgstr "%s: fstab se nepodařilo rozebrat"
 
-#: disk-utils/fsck.c:584 sys-utils/umount.c:236
+#: disk-utils/fsck.c:584 sys-utils/umount.c:237
 #, c-format
 msgid "%s: not found"
 msgstr "%s: nenalezeno"
 
-#: disk-utils/fsck.c:610 login-utils/login.c:1093 login-utils/vipw.c:212
+#: disk-utils/fsck.c:610 login-utils/login.c:1098 login-utils/vipw.c:212
 #: sys-utils/flock.c:314 sys-utils/swapon.c:267 term-utils/script.c:264
 #: term-utils/script.c:274
 msgid "fork failed"
@@ -858,7 +858,7 @@ msgid "%s: OK\n"
 msgstr "%s: OK\n"
 
 #: disk-utils/fsck.minix.c:194 disk-utils/swaplabel.c:159
-#: misc-utils/wipefs.c:361 sys-utils/tunelp.c:80
+#: misc-utils/wipefs.c:366 sys-utils/tunelp.c:80
 #, c-format
 msgid " %s [options] <device>\n"
 msgstr " %s [přepínače] <zařízení>\n"
@@ -2174,13 +2174,13 @@ msgstr "Pro zařízení loop se zkusí použít „%s“\n"
 msgid "%s: failed to set backing file"
 msgstr "%s: nastavení podkladového souboru selhalo"
 
-#: disk-utils/partx.c:123 sys-utils/losetup.c:411 sys-utils/mount.c:435
+#: disk-utils/partx.c:123 sys-utils/losetup.c:409 sys-utils/mount.c:436
 #, c-format
 msgid "%s: failed to setup loop device"
 msgstr "%s: zařízení loop se nepodařilo nastavit"
 
 #: disk-utils/partx.c:153 misc-utils/findmnt.c:341 misc-utils/lsblk.c:258
-#: misc-utils/lslocks.c:342 sys-utils/lscpu.c:260 sys-utils/prlimit.c:271
+#: misc-utils/lslocks.c:342 sys-utils/lscpu.c:265 sys-utils/prlimit.c:271
 #: sys-utils/swapon.c:110 sys-utils/wdctl.c:144
 #, c-format
 msgid "unknown column: %s"
@@ -2254,7 +2254,7 @@ msgid "failed to add line to output"
 msgstr "přidání řádku na výstup selhalo"
 
 #: disk-utils/partx.c:531 misc-utils/findmnt.c:1318 misc-utils/lsblk.c:1409
-#: misc-utils/lslocks.c:444 sys-utils/lscpu.c:1022 sys-utils/prlimit.c:283
+#: misc-utils/lslocks.c:444 sys-utils/lscpu.c:1053 sys-utils/prlimit.c:283
 #: sys-utils/swapon.c:230 sys-utils/wdctl.c:249
 msgid "failed to initialize output table"
 msgstr "výstupní tabulku se nepodařilo inicializovat"
@@ -2740,7 +2740,7 @@ msgid ""
 msgstr ""
 "Jste si jist, že chcete uložit tabulku rozdělení disku na disk? (ano či ne): "
 
-#: fdisks/cfdisk.c:1705 sys-utils/lscpu.c:866 sys-utils/lscpu.c:876
+#: fdisks/cfdisk.c:1705 sys-utils/lscpu.c:895 sys-utils/lscpu.c:905
 #, c-format
 msgid "no"
 msgstr "ne"
@@ -2749,7 +2749,7 @@ msgstr "ne"
 msgid "Did not write partition table to disk"
 msgstr "Tabulka rozdělení disku nebyla uložena"
 
-#: fdisks/cfdisk.c:1709 sys-utils/lscpu.c:866 sys-utils/lscpu.c:876
+#: fdisks/cfdisk.c:1709 sys-utils/lscpu.c:895 sys-utils/lscpu.c:905
 #, c-format
 msgid "yes"
 msgstr "ano"
@@ -3157,7 +3157,7 @@ msgstr "Velikost %'lld bajtů, %'lld,%lld GB"
 msgid "Heads: %d   Sectors per Track: %d   Cylinders: %lld"
 msgstr "Hlav: %d   Sektorů na stopu: %d    Cylindrů: %'lld"
 
-#: fdisks/cfdisk.c:2499 login-utils/chfn.c:248 login-utils/chfn.c:328
+#: fdisks/cfdisk.c:2499 login-utils/chfn.c:247 login-utils/chfn.c:327
 msgid "Name"
 msgstr "Název"
 
@@ -6250,7 +6250,7 @@ msgstr ""
 #: misc-utils/getopt.c:314 misc-utils/logger.c:172 misc-utils/look.c:368
 #: misc-utils/mcookie.c:68 misc-utils/namei.c:418 misc-utils/rename.c:65
 #: misc-utils/uuidd.c:69 misc-utils/uuidgen.c:34 misc-utils/whereis.c:139
-#: misc-utils/wipefs.c:359 sys-utils/dmesg.c:181 sys-utils/fsfreeze.c:41
+#: misc-utils/wipefs.c:364 sys-utils/dmesg.c:181 sys-utils/fsfreeze.c:41
 #: sys-utils/hwclock.c:1375 sys-utils/renice.c:55 term-utils/mesg.c:70
 #: term-utils/script.c:130 term-utils/scriptreplay.c:40
 #: term-utils/setterm.c:676 term-utils/wall.c:81 term-utils/write.c:79
@@ -6270,7 +6270,7 @@ msgstr " %s [PŘEPÍNAČE] ZAŘÍZENÍ […]\n"
 #: misc-utils/getopt.c:322 misc-utils/logger.c:176 misc-utils/look.c:372
 #: misc-utils/mcookie.c:72 misc-utils/namei.c:422 misc-utils/rename.c:70
 #: misc-utils/uuidd.c:73 misc-utils/uuidgen.c:38 misc-utils/whereis.c:143
-#: misc-utils/wipefs.c:363 sys-utils/dmesg.c:185 sys-utils/fsfreeze.c:45
+#: misc-utils/wipefs.c:368 sys-utils/dmesg.c:185 sys-utils/fsfreeze.c:45
 #: sys-utils/hwclock.c:1395 sys-utils/renice.c:62 term-utils/mesg.c:76
 #: term-utils/script.c:134 term-utils/scriptreplay.c:45
 #: term-utils/setterm.c:680 term-utils/wall.c:85 term-utils/write.c:84
@@ -6693,8 +6693,8 @@ msgstr ""
 
 #: include/closestream.h:41 include/closestream.h:43 login-utils/vipw.c:283
 #: login-utils/vipw.c:302 mount-deprecated/mount_mntent.c:58
-#: sys-utils/rtcwake.c:288 term-utils/script.c:288 term-utils/script.c:298
-#: term-utils/script.c:411 term-utils/script.c:422 term-utils/script.c:484
+#: sys-utils/rtcwake.c:288 term-utils/script.c:290 term-utils/script.c:300
+#: term-utils/script.c:413 term-utils/script.c:424 term-utils/script.c:486
 #: term-utils/setterm.c:1118 term-utils/wall.c:278
 #, c-format
 msgid "write error"
@@ -6715,7 +6715,7 @@ msgstr "se vzájemně vylučují."
 msgid "waitpid failed (%s)"
 msgstr "volání waitpid selhalo (%s)"
 
-#: lib/path.c:174 sys-utils/lscpu.c:1118
+#: lib/path.c:174 sys-utils/lscpu.c:1151
 msgid "failed to callocate cpu set"
 msgstr "množinu CPU nelze alokovat"
 
@@ -6758,94 +6758,94 @@ msgstr " -u, --help     zobrazí tuto nápovědu a skončí\n"
 msgid " -v, --version  output version information and exit\n"
 msgstr " -v, --version  vypíše údaje o verzi a skončí\n"
 
-#: login-utils/chfn.c:121 login-utils/chsh.c:96
+#: login-utils/chfn.c:120 login-utils/chsh.c:96
 #, c-format
 msgid "you (user %d) don't exist."
 msgstr "vy (uživatel %d) neexistujete."
 
-#: login-utils/chfn.c:126 login-utils/chsh.c:101
+#: login-utils/chfn.c:125 login-utils/chsh.c:101
 #, c-format
 msgid "user \"%s\" does not exist."
 msgstr "uživatel „%s“ neexistuje."
 
-#: login-utils/chfn.c:131
+#: login-utils/chfn.c:130
 msgid "can only change local entries"
 msgstr "měnit lze pouze místní záznamy"
 
-#: login-utils/chfn.c:141
+#: login-utils/chfn.c:140
 #, c-format
 msgid "%s is not authorized to change the finger info of %s"
 msgstr "%s nemá dovoleno měnit finger informace o uživateli %s"
 
-#: login-utils/chfn.c:143 login-utils/chsh.c:119
+#: login-utils/chfn.c:142 login-utils/chsh.c:119
 msgid "Unknown user context"
 msgstr "Neznámý kontext uživatele"
 
-#: login-utils/chfn.c:149 login-utils/chsh.c:125
+#: login-utils/chfn.c:148 login-utils/chsh.c:125
 #, c-format
 msgid "can't set default context for %s"
 msgstr "výchozí kontext pro %s nelze nastavit"
 
-#: login-utils/chfn.c:159
+#: login-utils/chfn.c:158
 #, c-format
 msgid "Changing finger information for %s.\n"
 msgstr "Měním finger informace o uživateli %s.\n"
 
-#: login-utils/chfn.c:196
+#: login-utils/chfn.c:195
 #, c-format
 msgid "Finger information not changed.\n"
 msgstr "Finger informace nebyly změněny.\n"
 
-#: login-utils/chfn.c:252 login-utils/chfn.c:329
+#: login-utils/chfn.c:251 login-utils/chfn.c:328
 msgid "Office"
 msgstr "Kancelář"
 
-#: login-utils/chfn.c:256 login-utils/chfn.c:330
+#: login-utils/chfn.c:255 login-utils/chfn.c:329
 msgid "Office Phone"
 msgstr "Telefon do práce"
 
-#: login-utils/chfn.c:260 login-utils/chfn.c:331
+#: login-utils/chfn.c:259 login-utils/chfn.c:330
 msgid "Home Phone"
 msgstr "Telefon domů"
 
-#: login-utils/chfn.c:351 login-utils/chsh.c:265
+#: login-utils/chfn.c:350 login-utils/chsh.c:264
 msgid "Aborted."
 msgstr "Ukončen."
 
-#: login-utils/chfn.c:383
+#: login-utils/chfn.c:382
 #, c-format
 msgid "field %s is too long"
 msgstr "položka %s je příliš dlouhá"
 
-#: login-utils/chfn.c:385
+#: login-utils/chfn.c:384
 msgid "field is too long"
 msgstr "položka je příliš dlouhá"
 
-#: login-utils/chfn.c:393
+#: login-utils/chfn.c:392
 #, c-format
 msgid "%s: '%c' is not allowed"
 msgstr "%s: „%c“ není povoleno"
 
-#: login-utils/chfn.c:395 login-utils/chsh.c:309
+#: login-utils/chfn.c:394 login-utils/chsh.c:308
 #, c-format
 msgid "'%c' is not allowed"
 msgstr "„%c“ není povoleno"
 
-#: login-utils/chfn.c:401
+#: login-utils/chfn.c:400
 #, c-format
 msgid "%s: control characters are not allowed"
 msgstr "%s: řídicí znaky nejsou povoleny"
 
-#: login-utils/chfn.c:404 login-utils/chsh.c:313
+#: login-utils/chfn.c:403 login-utils/chsh.c:312
 msgid "control characters are not allowed"
 msgstr "kontrolní znaky nejsou povoleny"
 
-#: login-utils/chfn.c:481
+#: login-utils/chfn.c:480
 #, c-format
 msgid "Finger information *NOT* changed.  Try again later.\n"
 msgstr "Finger informace *NEBYLY* změněny. Zkuste to opět později.\n"
 
-#: login-utils/chfn.c:484
+#: login-utils/chfn.c:483
 #, c-format
 msgid "Finger information changed.\n"
 msgstr "Finger informace byly změněny.\n"
@@ -6900,31 +6900,31 @@ msgstr ""
 "setpwnam selhal\n"
 "Shell *NEBYL* změněn. Zkuste to později znovu."
 
-#: login-utils/chsh.c:198
+#: login-utils/chsh.c:197
 #, c-format
 msgid "Shell changed.\n"
 msgstr "Shell byl změněn.\n"
 
-#: login-utils/chsh.c:294
+#: login-utils/chsh.c:293
 msgid "shell must be a full path name"
 msgstr "shell musí být zadán úplným jménem cesty"
 
-#: login-utils/chsh.c:298
+#: login-utils/chsh.c:297
 #, c-format
 msgid "\"%s\" does not exist"
 msgstr "„%s“ neexistuje"
 
-#: login-utils/chsh.c:302
+#: login-utils/chsh.c:301
 #, c-format
 msgid "\"%s\" is not executable"
 msgstr "„%s“ není spustitelným souborem"
 
-#: login-utils/chsh.c:321
+#: login-utils/chsh.c:320
 #, c-format
 msgid "Warning: \"%s\" is not listed in %s."
 msgstr "Pozor: „%s“ není uveden v %s."
 
-#: login-utils/chsh.c:325 login-utils/chsh.c:331
+#: login-utils/chsh.c:324 login-utils/chsh.c:330
 #, c-format
 msgid ""
 "\"%s\" is not listed in %s.\n"
@@ -6933,7 +6933,7 @@ msgstr ""
 "„%s“ není uveden v %s.\n"
 "Seznam lze zobrazit pomocí „%s -l“."
 
-#: login-utils/chsh.c:355
+#: login-utils/chsh.c:354
 msgid "No known shells."
 msgstr "Není znám žádný shell."
 
@@ -7008,70 +7008,70 @@ msgstr "FATÁLNÍ: špatné TTY"
 msgid "FATAL: %s: change permissions failed: %m"
 msgstr "FATÁLNÍ: %s: změna přístupových práv selhala: %m"
 
-#: login-utils/login.c:531
+#: login-utils/login.c:532
 #, c-format
 msgid "Last login: %.*s "
 msgstr "Poslední přihlášení: %.*s "
 
-#: login-utils/login.c:533
+#: login-utils/login.c:534
 #, c-format
 msgid "from %.*s\n"
 msgstr "z %.*s\n"
 
-#: login-utils/login.c:536
+#: login-utils/login.c:537
 #, c-format
 msgid "on %.*s\n"
 msgstr "%.*s\n"
 
-#: login-utils/login.c:553
+#: login-utils/login.c:554
 msgid "write lastlog failed"
 msgstr "zápis do protokolu přihlášení (lastlog) se nezdařil"
 
-#: login-utils/login.c:651
+#: login-utils/login.c:652
 #, c-format
 msgid "DIALUP AT %s BY %s"
 msgstr "PŘÍSTUP UŽIVATELE %2$s VYTÁČENOU LINKOU NA TTY %1$s"
 
-#: login-utils/login.c:656
+#: login-utils/login.c:657
 #, c-format
 msgid "ROOT LOGIN ON %s FROM %s"
 msgstr "PŘIHLÁŠENÍ UŽIVATELE ROOT Z %2$s NA TTY %1$s"
 
-#: login-utils/login.c:659
+#: login-utils/login.c:660
 #, c-format
 msgid "ROOT LOGIN ON %s"
 msgstr "PŘIHLÁŠENÍ UŽIVATELE ROOT NA TTY %s"
 
-#: login-utils/login.c:662
+#: login-utils/login.c:663
 #, c-format
 msgid "LOGIN ON %s BY %s FROM %s"
 msgstr "PŘIHLÁŠENÍ UŽIVATELE %2$s Z %3$s NA TTY %1$s"
 
-#: login-utils/login.c:665
+#: login-utils/login.c:666
 #, c-format
 msgid "LOGIN ON %s BY %s"
 msgstr "PŘIHLÁŠENÍ UŽIVATELE %2$s NA TTY %1$s"
 
-#: login-utils/login.c:726
+#: login-utils/login.c:727
 msgid "login: "
 msgstr "Přihlašovací jméno:"
 
-#: login-utils/login.c:752
+#: login-utils/login.c:753
 #, c-format
 msgid "PAM failure, aborting: %s"
 msgstr "chyba PAM, končí se: %s"
 
-#: login-utils/login.c:753
+#: login-utils/login.c:754
 #, c-format
 msgid "Couldn't initialize PAM: %s"
 msgstr "PAM nelze inicializovat: %s"
 
-#: login-utils/login.c:825
+#: login-utils/login.c:826
 #, c-format
 msgid "FAILED LOGIN %u FROM %s FOR %s, %s"
 msgstr "%1$u. CHYBNÉ PŘIHLÁŠENÍ UŽIVATELE %3$s Z %2$s, %4$s"
 
-#: login-utils/login.c:833 login-utils/sulogin.c:602
+#: login-utils/login.c:834 login-utils/sulogin.c:602
 #, c-format
 msgid ""
 "Login incorrect\n"
@@ -7080,17 +7080,17 @@ msgstr ""
 "Chybné přihlášení\n"
 "\n"
 
-#: login-utils/login.c:848
+#: login-utils/login.c:849
 #, c-format
 msgid "TOO MANY LOGIN TRIES (%u) FROM %s FOR %s, %s"
 msgstr "PŘÍLIŠ MNOHO (%1$u) POKUSŮ UŽIVATELE %3$s O PŘIHLÁŠENÍ Z %2$s, %4$s"
 
-#: login-utils/login.c:854
+#: login-utils/login.c:855
 #, c-format
 msgid "FAILED LOGIN SESSION FROM %s FOR %s, %s"
 msgstr "NEÚSPĚŠNÉ PŘIHLÁŠENÍ UŽIVATELE %2$s Z %1$s, %3$s"
 
-#: login-utils/login.c:862
+#: login-utils/login.c:863
 #, c-format
 msgid ""
 "\n"
@@ -7099,7 +7099,7 @@ msgstr ""
 "\n"
 "Chybné přihlášení\n"
 
-#: login-utils/login.c:890 login-utils/login.c:1342 login-utils/login.c:1366
+#: login-utils/login.c:891 login-utils/login.c:1347 login-utils/login.c:1371
 msgid ""
 "\n"
 "Session setup problem, abort."
@@ -7107,70 +7107,74 @@ msgstr ""
 "\n"
 "Problém s nastavováním relace. Činnost bude ukončena."
 
-#: login-utils/login.c:891
+#: login-utils/login.c:892
 #, c-format
 msgid "NULL user name in %s:%d. Abort."
 msgstr "NULLOVÉ jméno uživatele v %s:%d. Přerušuji činnost."
 
-#: login-utils/login.c:1145
+#: login-utils/login.c:1043
+msgid "hush login status: restore original IDs failed"
+msgstr ""
+
+#: login-utils/login.c:1150
 #, c-format
 msgid "TIOCSCTTY failed: %m"
 msgstr "Selhalo TIOCSCTTY: %m"
 
-#: login-utils/login.c:1286
+#: login-utils/login.c:1291
 #, c-format
 msgid "login: -h for super-user only.\n"
 msgstr "login: přepínač -h může použít pouze superuživatel\n"
 
-#: login-utils/login.c:1301
+#: login-utils/login.c:1306
 #, c-format
 msgid "usage: login [ -p ] [ -h host ] [ -H ] [ -f username | username ]\n"
 msgstr ""
 "Použití: login [ -p ] [ -h počítač ] [ -H ] [ -f uživatel | uživatel ]\n"
 
-#: login-utils/login.c:1343
+#: login-utils/login.c:1348
 #, c-format
 msgid "Invalid user name \"%s\" in %s:%d. Abort."
 msgstr "Neplatné jméno uživatele „%s“ v %s:%d. Přerušuji činnost."
 
-#: login-utils/login.c:1365
+#: login-utils/login.c:1370
 #, c-format
 msgid "groups initialization failed: %m"
 msgstr "inicializace skupin se nezdařila: %m"
 
-#: login-utils/login.c:1390
+#: login-utils/login.c:1395
 msgid "setgid() failed"
 msgstr "volání setgid() selhalo"
 
-#: login-utils/login.c:1420
+#: login-utils/login.c:1425
 #, c-format
 msgid "You have new mail.\n"
 msgstr "Máte novou poštu.\n"
 
-#: login-utils/login.c:1422
+#: login-utils/login.c:1427
 #, c-format
 msgid "You have mail.\n"
 msgstr "Máte starou poštu.\n"
 
-#: login-utils/login.c:1436
+#: login-utils/login.c:1441
 msgid "setuid() failed"
 msgstr "volání setuid() selhalo"
 
-#: login-utils/login.c:1442 login-utils/sulogin.c:343
+#: login-utils/login.c:1447 login-utils/sulogin.c:343
 #, c-format
 msgid "%s: change directory failed"
 msgstr "%s: nepodařilo se změnit adresář"
 
-#: login-utils/login.c:1449 login-utils/sulogin.c:344
+#: login-utils/login.c:1454 login-utils/sulogin.c:344
 #, c-format
 msgid "Logging in with home = \"/\".\n"
 msgstr "Přihlašuji s domácím adresářem nastaveným na „/“.\n"
 
-#: login-utils/login.c:1478
+#: login-utils/login.c:1483
 msgid "couldn't exec shell script"
 msgstr "shellový skript nelze spustit"
 
-#: login-utils/login.c:1480
+#: login-utils/login.c:1485
 msgid "no shell"
 msgstr "Žádný shell"
 
@@ -7180,7 +7184,7 @@ msgid "%s: %s contains invalid numerical value: %s"
 msgstr "%s: %s obsahuje neplatnou číselnou hodnotu: %s"
 
 #: login-utils/newgrp.c:101 mount-deprecated/mount.c:1318
-#: sys-utils/losetup.c:384 sys-utils/mount.c:119
+#: sys-utils/losetup.c:382 sys-utils/mount.c:120
 msgid "Password: "
 msgstr "Heslo: "
 
@@ -7201,7 +7205,7 @@ msgstr "volání setgid selhalo"
 msgid "no such group"
 msgstr "žádná taková skupina neexistuje"
 
-#: login-utils/newgrp.c:171 sys-utils/mount.c:467
+#: login-utils/newgrp.c:171 sys-utils/mount.c:468
 msgid "permission denied"
 msgstr "povolení zamítnuto"
 
@@ -7703,7 +7707,7 @@ msgid "%s: parse error at line %d"
 msgstr "%s: chyba rozboru na řádku %d"
 
 #: misc-utils/findmnt.c:659 misc-utils/findmnt.c:874 sys-utils/eject.c:709
-#: sys-utils/mount.c:628
+#: sys-utils/mount.c:629
 msgid "failed to initialize libmount table"
 msgstr "tabulku libmountu se nepodařilo inicializovat"
 
@@ -7712,9 +7716,9 @@ msgstr "tabulku libmountu se nepodařilo inicializovat"
 msgid "can't read %s"
 msgstr "z %s nelze číst"
 
-#: misc-utils/findmnt.c:814 misc-utils/findmnt.c:880 sys-utils/mount.c:162
-#: sys-utils/mount.c:210 sys-utils/swapoff.c:98 sys-utils/swapon.c:194
-#: sys-utils/swapon.c:226 sys-utils/swapon.c:611 sys-utils/umount.c:260
+#: misc-utils/findmnt.c:814 misc-utils/findmnt.c:880 sys-utils/mount.c:163
+#: sys-utils/mount.c:211 sys-utils/swapoff.c:98 sys-utils/swapon.c:194
+#: sys-utils/swapon.c:226 sys-utils/swapon.c:611 sys-utils/umount.c:261
 msgid "failed to initialize libmount iterator"
 msgstr "iterátor libmountu se nepodařilo inicializovat"
 
@@ -7850,7 +7854,7 @@ msgstr ""
 "                        PARTLABEL= (jmenovka oddílu))\n"
 " -T, --target <řetězec> bod připojení\n"
 
-#: misc-utils/findmnt.c:1027 sys-utils/lscpu.c:1230
+#: misc-utils/findmnt.c:1027 sys-utils/lscpu.c:1263
 #, c-format
 msgid ""
 "\n"
@@ -8413,7 +8417,7 @@ msgstr "konec se nepodařilo rozebrat"
 
 #: misc-utils/lslocks.c:478 misc-utils/mcookie.c:70 misc-utils/uuidd.c:71
 #: misc-utils/uuidgen.c:36 sys-utils/arch.c:44 sys-utils/dmesg.c:183
-#: sys-utils/ipcmk.c:67 sys-utils/lscpu.c:1217 sys-utils/readprofile.c:104
+#: sys-utils/ipcmk.c:67 sys-utils/lscpu.c:1250 sys-utils/readprofile.c:104
 #: sys-utils/rtcwake.c:88 term-utils/setterm.c:678
 #, c-format
 msgid " %s [options]\n"
@@ -8791,14 +8795,16 @@ msgstr "%s: výmaz magického řetězce %s na pozici 0x%08jx selhal"
 msgid "%s: %zd bytes were erased at offset 0x%08jx (%s): "
 msgstr "%s: vymazáno %zd B na pozici 0x%08jx (%s): "
 
-#: misc-utils/wipefs.c:344
+#: misc-utils/wipefs.c:349
 #, c-format
 msgid "%s: offset 0x%jx not found"
 msgstr "%s: pozice 0x%jx nenalezena"
 
-#: misc-utils/wipefs.c:364
+#: misc-utils/wipefs.c:369
+#, fuzzy
 msgid ""
 " -a, --all           wipe all magic strings (BE CAREFUL!)\n"
+" -f, --force         force erasure\n"
 " -h, --help          show this help text\n"
 " -n, --no-act        do everything except the actual write() call\n"
 " -o, --offset <num>  offset to erase, in bytes\n"
@@ -8818,7 +8824,7 @@ msgstr ""
 "                       nebo tabulek rozdělení disku\n"
 " -V, --version         zobrazí údaje o verzi a skončí\n"
 
-#: misc-utils/wipefs.c:373
+#: misc-utils/wipefs.c:379
 #, c-format
 msgid ""
 "\n"
@@ -8827,7 +8833,7 @@ msgstr ""
 "\n"
 "Více informací naleznete ve wipefs(8).\n"
 
-#: misc-utils/wipefs.c:425
+#: misc-utils/wipefs.c:435
 msgid "invalid offset argument"
 msgstr "neplatný argument přepínače --offset"
 
@@ -9254,7 +9260,7 @@ msgstr ""
 "       V jistých případech lze najít potřebné informace v systémovém\n"
 "       protokolu – zkuste například „dmesg | tail“ \n"
 
-#: mount-deprecated/mount.c:1792 sys-utils/mount.c:551
+#: mount-deprecated/mount.c:1792 sys-utils/mount.c:552
 msgid "mount table full"
 msgstr "tabulka připojení je plná"
 
@@ -9351,7 +9357,7 @@ msgstr "mount: %s%s je chráněno proti zápisu, připojuji pouze pro čtení"
 msgid "mount: no medium found on %s"
 msgstr "mount: v %s nenalezeno žádné médium"
 
-#: mount-deprecated/mount.c:1901 sys-utils/mount.c:333
+#: mount-deprecated/mount.c:1901 sys-utils/mount.c:334
 #, c-format
 msgid ""
 "mount: %s does not contain SELinux labels.\n"
@@ -9854,7 +9860,7 @@ msgstr "politiku vlákna s TID %d se nepodařilo nastavit"
 msgid "failed to set pid %d's policy"
 msgstr "politiku procesu %d se nepodařilo nastavit"
 
-#: schedutils/chrt.c:335 sys-utils/switch_root.c:227 term-utils/script.c:451
+#: schedutils/chrt.c:335 sys-utils/switch_root.c:227 term-utils/script.c:453
 #, c-format
 msgid "failed to execute %s"
 msgstr "spuštění %s selhalo"
@@ -10605,7 +10611,7 @@ msgstr "volání sysinfo selhalo"
 msgid "cannot mmap: %s"
 msgstr "nelze namapovat do paměti: %s"
 
-#: sys-utils/dmesg.c:576 term-utils/script.c:304 term-utils/script.c:396
+#: sys-utils/dmesg.c:576 term-utils/script.c:306 term-utils/script.c:398
 msgid "write failed"
 msgstr "zápis selhal"
 
@@ -10866,7 +10872,7 @@ msgstr "%s: zařízení nelze nalézt"
 msgid "device name is `%s'"
 msgstr "název zařízení je „%s“"
 
-#: sys-utils/eject.c:979 sys-utils/umount.c:224
+#: sys-utils/eject.c:979 sys-utils/umount.c:225
 #, c-format
 msgid "%s: not mounted"
 msgstr "%s: nepřipojeno"
@@ -11172,7 +11178,7 @@ msgstr ""
 msgid "failed to parse length"
 msgstr "nezdařilo se rozebrat délku"
 
-#: sys-utils/fstrim.c:110 sys-utils/losetup.c:297 text-utils/hexsyntax.c:93
+#: sys-utils/fstrim.c:110 sys-utils/losetup.c:295 text-utils/hexsyntax.c:93
 msgid "failed to parse offset"
 msgstr "nezdařilo se rozebrat začátek oblasti"
 
@@ -11944,7 +11950,7 @@ msgid ""
 " -p, --mode <mode>        permission for the resource (default is 0644)\n"
 msgstr " -p, --mode <mód>         práva pro zdroj (výchozí jsou 0644)\n"
 
-#: sys-utils/ipcmk.c:107 sys-utils/losetup.c:317
+#: sys-utils/ipcmk.c:107 sys-utils/losetup.c:315
 msgid "failed to parse size"
 msgstr "velikost se nezdařilo rozebrat"
 
@@ -12066,7 +12072,7 @@ msgstr "ID selhalo"
 msgid "invalid id: %s"
 msgstr "neplatné ID: %s"
 
-#: sys-utils/ipcrm.c:154 term-utils/agetty.c:685 term-utils/agetty.c:694
+#: sys-utils/ipcrm.c:154 term-utils/agetty.c:684 term-utils/agetty.c:693
 msgid "not enough arguments"
 msgstr "málo argumentů"
 
@@ -12812,56 +12818,56 @@ msgstr ""
 "%s: pozor: soubor není zarovnán na 512bajtové sektory, konec souboru bude "
 "ignorován."
 
-#: sys-utils/losetup.c:267 sys-utils/losetup.c:276 sys-utils/losetup.c:341
-#: sys-utils/losetup.c:431
+#: sys-utils/losetup.c:265 sys-utils/losetup.c:274 sys-utils/losetup.c:339
+#: sys-utils/losetup.c:429
 #, c-format
 msgid "%s: failed to use device"
 msgstr "%s: zařízení nebylo možné použít"
 
-#: sys-utils/losetup.c:302 sys-utils/mount.c:861
+#: sys-utils/losetup.c:300 sys-utils/mount.c:893
 msgid "invalid passphrase file descriptor"
 msgstr "neplatný deskriptor souboru s heslem"
 
-#: sys-utils/losetup.c:352
+#: sys-utils/losetup.c:350
 msgid "no loop device specified"
 msgstr "žádné loop zařízení nebylo zadáno"
 
-#: sys-utils/losetup.c:354
+#: sys-utils/losetup.c:352
 #, c-format
 msgid "%s failed to use device"
 msgstr "%s nemohlo použít zařízení"
 
-#: sys-utils/losetup.c:359
+#: sys-utils/losetup.c:357
 msgid "no file specified"
 msgstr "nezadán žádný soubor"
 
-#: sys-utils/losetup.c:366
+#: sys-utils/losetup.c:364
 #, c-format
 msgid "the options %s are allowed to loop device setup only"
 msgstr "přepínače %s jsou dovoleny jen při nastavování loop zařízení"
 
-#: sys-utils/losetup.c:371
+#: sys-utils/losetup.c:369
 msgid "the option --offset is not allowed in this context."
 msgstr "v tomto kontextu není přepínač --offset dovolen."
 
-#: sys-utils/losetup.c:382 sys-utils/mount.c:115
+#: sys-utils/losetup.c:380 sys-utils/mount.c:116
 msgid "couldn't lock into memory"
 msgstr "nebylo možné zamknout v paměti"
 
-#: sys-utils/losetup.c:391
+#: sys-utils/losetup.c:389
 msgid "not found unused device"
 msgstr "nelze nalézt nepoužité zařízení"
 
-#: sys-utils/losetup.c:403
+#: sys-utils/losetup.c:401
 #, c-format
 msgid "%s: failed to use backing file"
 msgstr "%s: podkladový soubor se nepodařilo použít"
 
-#: sys-utils/losetup.c:442
+#: sys-utils/losetup.c:440
 msgid "find unused loop device failed"
 msgstr "hledání nepoužitého loop zařízení selhalo"
 
-#: sys-utils/losetup.c:452 sys-utils/umount.c:246
+#: sys-utils/losetup.c:450 sys-utils/umount.c:247
 #, c-format
 msgid "%s"
 msgstr "%s"
@@ -12881,73 +12887,80 @@ msgstr "paravirtualizace"
 msgid "full"
 msgstr "plná"
 
+# dispatching mode
 #: sys-utils/lscpu.c:110
 msgid "horizontal"
-msgstr "vodorovná"
+msgstr "vodorovný"
 
+# dispatching mode
 #: sys-utils/lscpu.c:111
 msgid "vertical"
-msgstr "svislá"
+msgstr "svislý"
 
-#: sys-utils/lscpu.c:237
+#: sys-utils/lscpu.c:242
 msgid "logical CPU number"
 msgstr "číslo logického CPU"
 
-#: sys-utils/lscpu.c:238
+#: sys-utils/lscpu.c:243
 msgid "logical core number"
 msgstr "číslo logického jádra"
 
-#: sys-utils/lscpu.c:239
+#: sys-utils/lscpu.c:244
 msgid "logical socket number"
 msgstr "číslo logické zásuvky"
 
-#: sys-utils/lscpu.c:240
+#: sys-utils/lscpu.c:245
 msgid "logical NUMA node number"
 msgstr "číslo logické uzlu NUMA"
 
-#: sys-utils/lscpu.c:241
+#: sys-utils/lscpu.c:246
 msgid "logical book number"
 msgstr "číslo logické knihy"
 
-#: sys-utils/lscpu.c:242
+#: sys-utils/lscpu.c:247
 msgid "shows how caches are shared between CPUs"
 msgstr "ukáže sdílení keše mezi CPU"
 
-#: sys-utils/lscpu.c:243
+#: sys-utils/lscpu.c:248
 msgid "CPU dispatching mode on virtual hardware"
 msgstr "režim rozhodování CPU na virtuálním hardwaru"
 
-#: sys-utils/lscpu.c:244
+#: sys-utils/lscpu.c:249
 msgid "physical address of a CPU"
 msgstr "fyzická adresa CPU"
 
-#: sys-utils/lscpu.c:245
+#: sys-utils/lscpu.c:250
 msgid "shows if the hypervisor has allocated the CPU"
 msgstr "ukáže, zda-li hypervizor alokoval CPU"
 
-#: sys-utils/lscpu.c:246
+#: sys-utils/lscpu.c:251
 msgid "shows if Linux currently makes use of the CPU"
 msgstr "ukáže, zda-li nyní Linux nutí používat toto CPU"
 
-#: sys-utils/lscpu.c:340
+#: sys-utils/lscpu.c:346
 msgid "error: uname failed"
 msgstr "chyba: volání uname selhalo"
 
-#: sys-utils/lscpu.c:551
+#: sys-utils/lscpu.c:405
+#, fuzzy, c-format
+msgid "failed to determine number of CPUs: %s"
+msgstr "nezdařilo se rozebrat počet řádků"
+
+#: sys-utils/lscpu.c:569
 msgid "failed to allocate memory"
 msgstr "alokace paměti selhala"
 
-#: sys-utils/lscpu.c:863 sys-utils/lscpu.c:873
+#: sys-utils/lscpu.c:892 sys-utils/lscpu.c:902
 #, c-format
 msgid "Y"
 msgstr "A"
 
-#: sys-utils/lscpu.c:863 sys-utils/lscpu.c:873
+#: sys-utils/lscpu.c:892 sys-utils/lscpu.c:902
 #, c-format
 msgid "N"
 msgstr "N"
 
-#: sys-utils/lscpu.c:947
+#: sys-utils/lscpu.c:976
 #, c-format
 msgid ""
 "# The following is the parsable format, which can be fed to other\n"
@@ -12958,119 +12971,119 @@ msgstr ""
 "# programů. Každá různá položka v každém sloupci má jedinečné ID,\n"
 "# které se počítá od nuly.\n"
 
-#: sys-utils/lscpu.c:1081
+#: sys-utils/lscpu.c:1114
 msgid "Architecture:"
 msgstr "Architektura:"
 
 # FIXME: value alignment counts bytes instead of columns
-#: sys-utils/lscpu.c:1095
+#: sys-utils/lscpu.c:1128
 msgid "CPU op-mode(s):"
 msgstr "Operační režim(y) CPU:"
 
-#: sys-utils/lscpu.c:1098 sys-utils/lscpu.c:1100
+#: sys-utils/lscpu.c:1131 sys-utils/lscpu.c:1133
 msgid "Byte Order:"
 msgstr "Pořadí bajtů:"
 
-#: sys-utils/lscpu.c:1102
+#: sys-utils/lscpu.c:1135
 msgid "CPU(s):"
 msgstr "Počet CPU:"
 
-#: sys-utils/lscpu.c:1105
+#: sys-utils/lscpu.c:1138
 msgid "On-line CPU(s) mask:"
 msgstr "Maska zapnutých CPU:"
 
-#: sys-utils/lscpu.c:1106
+#: sys-utils/lscpu.c:1139
 msgid "On-line CPU(s) list:"
 msgstr "Seznam zapnutých CPU:"
 
-#: sys-utils/lscpu.c:1124
+#: sys-utils/lscpu.c:1157
 msgid "Off-line CPU(s) mask:"
 msgstr "Maska vypnutých CPU:"
 
-#: sys-utils/lscpu.c:1125
+#: sys-utils/lscpu.c:1158
 msgid "Off-line CPU(s) list:"
 msgstr "Seznam vypnutých CPU:"
 
-#: sys-utils/lscpu.c:1156
+#: sys-utils/lscpu.c:1189
 msgid "Thread(s) per core:"
 msgstr "Vláken na jádro:"
 
-#: sys-utils/lscpu.c:1157
+#: sys-utils/lscpu.c:1190
 msgid "Core(s) per socket:"
 msgstr "Jader na patici:"
 
-#: sys-utils/lscpu.c:1160
+#: sys-utils/lscpu.c:1193
 msgid "Socket(s) per book:"
 msgstr "Patic na knihu:"
 
-#: sys-utils/lscpu.c:1162
+#: sys-utils/lscpu.c:1195
 msgid "Book(s):"
 msgstr "Knihy:"
 
-#: sys-utils/lscpu.c:1164
+#: sys-utils/lscpu.c:1197
 msgid "Socket(s):"
 msgstr "Patic:"
 
-#: sys-utils/lscpu.c:1168
+#: sys-utils/lscpu.c:1201
 msgid "NUMA node(s):"
 msgstr "Uzly NUMA:"
 
-#: sys-utils/lscpu.c:1170
+#: sys-utils/lscpu.c:1203
 msgid "Vendor ID:"
 msgstr "ID výrobce:"
 
-#: sys-utils/lscpu.c:1172
+#: sys-utils/lscpu.c:1205
 msgid "CPU family:"
 msgstr "Rodina CPU:"
 
-#: sys-utils/lscpu.c:1174
+#: sys-utils/lscpu.c:1207
 msgid "Model:"
 msgstr "Model:"
 
 # ???: Existuje český překlad?
-#: sys-utils/lscpu.c:1176
+#: sys-utils/lscpu.c:1209
 msgid "Stepping:"
 msgstr "Stepping:"
 
-#: sys-utils/lscpu.c:1178
+#: sys-utils/lscpu.c:1211
 msgid "CPU MHz:"
 msgstr "CPU MHz:"
 
-#: sys-utils/lscpu.c:1180
+#: sys-utils/lscpu.c:1213
 msgid "BogoMIPS:"
 msgstr "BogoMIPS:"
 
-#: sys-utils/lscpu.c:1183 sys-utils/lscpu.c:1185
+#: sys-utils/lscpu.c:1216 sys-utils/lscpu.c:1218
 msgid "Virtualization:"
 msgstr "Virtualizace:"
 
-#: sys-utils/lscpu.c:1188
+#: sys-utils/lscpu.c:1221
 msgid "Hypervisor:"
 msgstr "Hypervizor:"
 
-#: sys-utils/lscpu.c:1190
+#: sys-utils/lscpu.c:1223
 msgid "Hypervisor vendor:"
 msgstr "Výrobce hypervizoru:"
 
-#: sys-utils/lscpu.c:1191
+#: sys-utils/lscpu.c:1224
 msgid "Virtualization type:"
 msgstr "Druh virtualizace:"
 
-#: sys-utils/lscpu.c:1194
+#: sys-utils/lscpu.c:1227
 msgid "Dispatching mode:"
 msgstr "Režim rozhodování:"
 
-#: sys-utils/lscpu.c:1200
+#: sys-utils/lscpu.c:1233
 #, c-format
 msgid "%s cache:"
 msgstr "%s keš:"
 
-#: sys-utils/lscpu.c:1206
+#: sys-utils/lscpu.c:1239
 #, c-format
 msgid "NUMA node%d CPU(s):"
 msgstr "CPU NUMA uzlu %d:"
 
-#: sys-utils/lscpu.c:1220
+#: sys-utils/lscpu.c:1253
 msgid ""
 " -a, --all               print online and offline CPUs (default for -e)\n"
 " -b, --online            print online CPUs only (default for -p)\n"
@@ -13092,7 +13105,7 @@ msgstr ""
 " -V, --version              vypíše údaje o verzi a skončí\n"
 " -x, --hex                  vypíše šestnáctkové masky namísto seznamů CPU\n"
 
-#: sys-utils/lscpu.c:1235
+#: sys-utils/lscpu.c:1268
 #, c-format
 msgid ""
 "\n"
@@ -13101,7 +13114,7 @@ msgstr ""
 "\n"
 "Podrobnosti naleznete v lscpu(1).\n"
 
-#: sys-utils/lscpu.c:1325
+#: sys-utils/lscpu.c:1358
 #, c-format
 msgid ""
 "%s: options --all, --online and --offline may only be used with options --"
@@ -13110,190 +13123,190 @@ msgstr ""
 "%s: přepínače --all, --online a --offline lze použít jen\n"
 "s přepínači --extended nebo --parsable.\n"
 
-#: sys-utils/mount.c:67 sys-utils/umount.c:112
+#: sys-utils/mount.c:68 sys-utils/umount.c:113
 #, c-format
 msgid "only root can use \"--%s\" option (effective UID is %u)"
 msgstr "přepínač „--%s“ může použít pouze superuživatel (efektivní UID je %u)"
 
-#: sys-utils/mount.c:70 sys-utils/umount.c:115
+#: sys-utils/mount.c:71 sys-utils/umount.c:116
 #, c-format
 msgid "only root can do that (effective UID is %u)"
 msgstr "toto může provést pouze superuživatel (efektivní UID je %u)"
 
-#: sys-utils/mount.c:74 sys-utils/umount.c:119
+#: sys-utils/mount.c:75 sys-utils/umount.c:120
 #, c-format
 msgid "only root can use \"--%s\" option"
 msgstr "pouze superuživatel může použít přepínač „--%s“"
 
-#: sys-utils/mount.c:75 sys-utils/umount.c:120
+#: sys-utils/mount.c:76 sys-utils/umount.c:121
 msgid "only root can do that"
 msgstr "toto může provést pouze superuživatel"
 
-#: sys-utils/mount.c:86 sys-utils/umount.c:57
+#: sys-utils/mount.c:87 sys-utils/umount.c:58
 #, c-format
 msgid "%s from %s (libmount %s"
 msgstr "%s z %s (libmount %s"
 
-#: sys-utils/mount.c:103 sys-utils/umount.c:43
+#: sys-utils/mount.c:104 sys-utils/umount.c:44
 #, c-format
 msgid "%s: parse error: ignore entry at line %d."
 msgstr "%s: chyba rozboru: záznam na řádku %d bude ignorován."
 
-#: sys-utils/mount.c:158
+#: sys-utils/mount.c:159
 msgid "failed to read mtab"
 msgstr "čtení mtab selhalo"
 
-#: sys-utils/mount.c:220 sys-utils/umount.c:270
+#: sys-utils/mount.c:221 sys-utils/umount.c:271
 #, c-format
 msgid "%-25s: ignored\n"
 msgstr "%-25s: ignoruje se\n"
 
-#: sys-utils/mount.c:221
+#: sys-utils/mount.c:222
 #, c-format
 msgid "%-25s: already mounted\n"
 msgstr "%-25s: již připojeno\n"
 
-#: sys-utils/mount.c:275
+#: sys-utils/mount.c:276
 #, fuzzy, c-format
 msgid "%s moved to %s"
 msgstr "%s: rozbor se nezdařil"
 
-#: sys-utils/mount.c:277
+#: sys-utils/mount.c:278
 #, fuzzy, c-format
 msgid "%s binded on %s"
 msgstr "%s: připojeno do %s"
 
-#: sys-utils/mount.c:279
+#: sys-utils/mount.c:280
 #, c-format
 msgid "%s propagation flags changed"
 msgstr ""
 
-#: sys-utils/mount.c:281
+#: sys-utils/mount.c:282
 #, fuzzy, c-format
 msgid "%s mounted on %s"
 msgstr "%s: připojeno do %s"
 
-#: sys-utils/mount.c:389
+#: sys-utils/mount.c:390
 #, c-format
 msgid "only root can mount %s on %s"
 msgstr "pouze superuživatel může připojit %s do %s"
 
-#: sys-utils/mount.c:392
+#: sys-utils/mount.c:393
 #, c-format
 msgid "%s is already mounted"
 msgstr "%s je již připojeno"
 
-#: sys-utils/mount.c:396
+#: sys-utils/mount.c:397
 #, c-format
 msgid "can't find %s in %s"
 msgstr "%s nelze v %s nalézt"
 
-#: sys-utils/mount.c:403
+#: sys-utils/mount.c:404
 #, c-format
 msgid "can't find mountpoint %s in %s"
 msgstr "bod připojení %s nelze v %s nalézt"
 
-#: sys-utils/mount.c:406
+#: sys-utils/mount.c:407
 #, c-format
 msgid "can't find mount source %s in %s"
 msgstr "zdroj připojení %s nelze v %s nalézt"
 
-#: sys-utils/mount.c:411
+#: sys-utils/mount.c:412
 msgid "I could not determine the filesystem type, and none was specified"
 msgstr "typ systému souborů nebyl zadán a ani jej nelze zjistit"
 
-#: sys-utils/mount.c:414
+#: sys-utils/mount.c:415
 msgid "you must specify the filesystem type"
 msgstr "musíte zadat typ systému souborů"
 
-#: sys-utils/mount.c:418
+#: sys-utils/mount.c:419
 #, c-format
 msgid "can't find %s"
 msgstr "%s nelze nalézt"
 
-#: sys-utils/mount.c:420
+#: sys-utils/mount.c:421
 msgid "mount source not defined"
 msgstr "zdroj připojení není definován"
 
-#: sys-utils/mount.c:424 sys-utils/mount.c:426
+#: sys-utils/mount.c:425 sys-utils/mount.c:427
 msgid "failed to parse mount options"
 msgstr "nezdařilo se rozebrat volby připojení"
 
-#: sys-utils/mount.c:432
+#: sys-utils/mount.c:433
 #, c-format
 msgid "%s: failed to setup loop device (probably unknown encryption type)"
 msgstr ""
 "%s: zařízení loop se nepodařilo nastavit (zřejmě neznámý druh šifrování)"
 
-#: sys-utils/mount.c:438
+#: sys-utils/mount.c:439
 #, c-format
 msgid "%s: mount failed"
 msgstr "%s: připojení se nezdařilo"
 
-#: sys-utils/mount.c:448
+#: sys-utils/mount.c:449
 #, c-format
 msgid "%s: filesystem mounted, but mount(8) failed"
 msgstr "%s: souborový systém byl připojen, ale příkaz mount(8) selhal"
 
-#: sys-utils/mount.c:465 sys-utils/mount.c:517
+#: sys-utils/mount.c:466 sys-utils/mount.c:518
 #, c-format
 msgid "mount point %s is not a directory"
 msgstr "přípojný bod %s není adresářem"
 
-#: sys-utils/mount.c:469
+#: sys-utils/mount.c:470
 msgid "must be superuser to use mount"
 msgstr "mount může používat pouze superuživatel"
 
-#: sys-utils/mount.c:477
+#: sys-utils/mount.c:478
 #, c-format
 msgid "%s is busy"
 msgstr "%s se používá"
 
-#: sys-utils/mount.c:481
+#: sys-utils/mount.c:482
 #, c-format
 msgid "%s is already mounted or %s busy"
 msgstr "%s je již připojeno, či je %s již používáno"
 
-#: sys-utils/mount.c:493
+#: sys-utils/mount.c:494
 #, c-format
 msgid "       %s is already mounted on %s\n"
 msgstr "       %s je již připojeno do %s\n"
 
-#: sys-utils/mount.c:501
+#: sys-utils/mount.c:502
 #, c-format
 msgid "mount point %s does not exist"
 msgstr "přípojný bod %s neexistuje"
 
-#: sys-utils/mount.c:503
+#: sys-utils/mount.c:504
 #, c-format
 msgid "mount point %s is a symbolic link to nowhere"
 msgstr "přípojný bod %s je symbolickým odkazem, jenž nikam neukazuje"
 
-#: sys-utils/mount.c:508
+#: sys-utils/mount.c:509
 #, c-format
 msgid "special device %s does not exist"
 msgstr "zvláštní zařízení %s neexistuje"
 
-#: sys-utils/mount.c:511 sys-utils/mount.c:526
+#: sys-utils/mount.c:512 sys-utils/mount.c:527
 msgid "mount(2) failed"
 msgstr "volání mount(2) neuspělo"
 
-#: sys-utils/mount.c:522
+#: sys-utils/mount.c:523
 #, c-format
 msgid "special device %s does not exist (a path prefix is not a directory)"
 msgstr "zvláštní zařízení %s neexistuje (název cesty nezačíná adresářem)"
 
-#: sys-utils/mount.c:532
+#: sys-utils/mount.c:533
 #, c-format
 msgid "%s not mounted or bad option"
 msgstr "%s není připojeno či chybný přepínač"
 
-#: sys-utils/mount.c:534
+#: sys-utils/mount.c:535
 #, c-format
 msgid "%s is not mountpoint or bad option"
 msgstr "%s není bod připojení či chybný přepínač"
 
-#: sys-utils/mount.c:536
+#: sys-utils/mount.c:537
 #, c-format
 msgid ""
 "wrong fs type, bad option, bad superblock on %s,\n"
@@ -13302,7 +13315,7 @@ msgstr ""
 "chybný typ souborového systému, chybný přepínač, chybný superblok na\n"
 "       %s, chybí kódová stránka nebo pomocný program nebo jiná chyba"
 
-#: sys-utils/mount.c:542
+#: sys-utils/mount.c:543
 #, c-format
 msgid ""
 "       (for several filesystems (e.g. nfs, cifs) you might\n"
@@ -13311,7 +13324,7 @@ msgstr ""
 "       (pro řadu souborových systémů (např. nfs, cifs) je\n"
 "       třeba pomocný program /sbin/mount.<typ>)\n"
 
-#: sys-utils/mount.c:546
+#: sys-utils/mount.c:547
 #, c-format
 msgid ""
 "       In some cases useful info is found in syslog - try\n"
@@ -13320,22 +13333,22 @@ msgstr ""
 "       V jistých případech lze najít potřebné informace v systémovém\n"
 "       protokolu – zkuste například „dmesg | tail“\n"
 
-#: sys-utils/mount.c:555
+#: sys-utils/mount.c:556
 #, c-format
 msgid "%s: can't read superblock"
 msgstr "%s: superblok nelze přečíst"
 
-#: sys-utils/mount.c:559
+#: sys-utils/mount.c:560
 #, c-format
 msgid "unknown filesystem type '%s'"
 msgstr "neznámý typ systému souborů „%s“"
 
-#: sys-utils/mount.c:567
+#: sys-utils/mount.c:568
 #, c-format
 msgid "%s is not a block device, and stat(2) fails?"
 msgstr "%s není blokovým zařízením a volání stat(2-) selhalo?"
 
-#: sys-utils/mount.c:569
+#: sys-utils/mount.c:570
 #, c-format
 msgid ""
 "the kernel does not recognize %s as a block device\n"
@@ -13344,58 +13357,58 @@ msgstr ""
 "jádro nerozpoznalo %s jako blokové zařízení\n"
 "       (možná „modprobe ovladač“?)"
 
-#: sys-utils/mount.c:572
+#: sys-utils/mount.c:573
 #, c-format
 msgid "%s is not a block device (maybe try `-o loop'?)"
 msgstr "%s není blokovým zařízením (možná pomůže „-o loop“?)"
 
-#: sys-utils/mount.c:574
+#: sys-utils/mount.c:575
 #, c-format
 msgid " %s is not a block device"
 msgstr " %s není blokovým zařízením"
 
-#: sys-utils/mount.c:581
+#: sys-utils/mount.c:582
 #, c-format
 msgid "%s is not a valid block device"
 msgstr "%s není platným blokovým zařízením"
 
-#: sys-utils/mount.c:587
+#: sys-utils/mount.c:588
 #, c-format
 msgid "cannot mount %s read-only"
 msgstr "%s nelze připojit v režimu pouze pro čtení"
 
-#: sys-utils/mount.c:590
+#: sys-utils/mount.c:591
 #, c-format
 msgid "%s is write-protected but explicit `-w' flag given"
 msgstr "%s je chráněno proti zápisu, třebaže byl zadán příznak „-w“"
 
-#: sys-utils/mount.c:593
+#: sys-utils/mount.c:594
 #, c-format
 msgid "cannot remount %s read-write, is write-protected"
 msgstr ""
 "%s nelze znovu připojit pro čtení i zápis, protože je chráněno proti zápisu"
 
-#: sys-utils/mount.c:596
+#: sys-utils/mount.c:597
 #, c-format
 msgid "%s is write-protected, mounting read-only"
 msgstr "%s je chráněno proti zápisu, připojuji pouze pro čtení"
 
-#: sys-utils/mount.c:609
+#: sys-utils/mount.c:610
 #, c-format
 msgid "no medium found on %s"
 msgstr "v %s nenalezeno žádné médium"
 
-#: sys-utils/mount.c:613
+#: sys-utils/mount.c:614
 #, c-format
 msgid "mount %s on %s failed"
 msgstr "připojení %s do %s selhalo"
 
-#: sys-utils/mount.c:635
+#: sys-utils/mount.c:636
 #, c-format
 msgid "%s: failed to parse"
 msgstr "%s: rozbor se nezdařil"
 
-#: sys-utils/mount.c:644
+#: sys-utils/mount.c:676
 #, c-format
 msgid ""
 " %1$s [-lhV]\n"
@@ -13410,7 +13423,7 @@ msgstr ""
 " %1$s [přepínače] <zdroj> <adresář>\n"
 " %1$s <operace> <bod_připojení> [<cíl>]\n"
 
-#: sys-utils/mount.c:653
+#: sys-utils/mount.c:685
 #, c-format
 msgid ""
 " -a, --all               mount all filesystems mentioned in fstab\n"
@@ -13425,7 +13438,7 @@ msgstr ""
 " -F, --fork              pro každé zařízení vytvoří potomka (použijte s -a)\n"
 " -T, --fstab <cesta>     náhrada za /etc/fstab\n"
 
-#: sys-utils/mount.c:659
+#: sys-utils/mount.c:691
 #, c-format
 msgid ""
 " -h, --help              display this help text and exit\n"
@@ -13438,7 +13451,7 @@ msgstr ""
 " -l, --show-labels       zobrazí všechna připojení s JMENOVKAMI\n"
 " -n, --no-mtab           nezapíše do /etc/mtab\n"
 
-#: sys-utils/mount.c:664
+#: sys-utils/mount.c:696
 #, c-format
 msgid ""
 " -o, --options <list>    comma-separated list of mount options\n"
@@ -13455,7 +13468,7 @@ msgstr ""
 "                         (stejné jako -o ro)\n"
 " -t, --types <seznam>    omezí množinu typů souborových systémů\n"
 
-#: sys-utils/mount.c:670
+#: sys-utils/mount.c:702
 #, c-format
 msgid ""
 "     --source <src>      explicitly specifies source (path, label, uuid)\n"
@@ -13464,7 +13477,7 @@ msgstr ""
 "     --source <zdroj>    výslovně určí zdroj (cesta, jmenovka, UUID)\n"
 "     --target <cíl>      výslovně určí bod připojení\n"
 
-#: sys-utils/mount.c:673
+#: sys-utils/mount.c:705
 #, c-format
 msgid ""
 " -v, --verbose           say what is being done\n"
@@ -13475,7 +13488,7 @@ msgstr ""
 " -V, --version           zobrazí údaje o verzi a skončí\n"
 " -w, --read-write        souborové systémy připojí i pro zápis (výchozí)\n"
 
-#: sys-utils/mount.c:682
+#: sys-utils/mount.c:714
 #, c-format
 msgid ""
 "\n"
@@ -13496,7 +13509,7 @@ msgstr ""
 " PARTLABEL=<jmenovka>    určí zařízení podle jmenovky oddílu\n"
 " PARTUUID=<uuid>         určí zařízení podle UUID oddílu\n"
 
-#: sys-utils/mount.c:691
+#: sys-utils/mount.c:723
 #, c-format
 msgid ""
 " <device>                specifies device by path\n"
@@ -13508,7 +13521,7 @@ msgstr ""
 "                         (vizte --bind/rbind)\n"
 " <soubor>                běžný soubor pro sestavení loop zařízení\n"
 
-#: sys-utils/mount.c:696
+#: sys-utils/mount.c:728
 #, c-format
 msgid ""
 "\n"
@@ -13524,7 +13537,7 @@ msgstr ""
 " -R, --rbind             připojí podstrom a všechna podřízená připojení "
 "jinam\n"
 
-#: sys-utils/mount.c:701
+#: sys-utils/mount.c:733
 #, c-format
 msgid ""
 " --make-shared           mark a subtree as shared\n"
@@ -13537,7 +13550,7 @@ msgstr ""
 " --make-private          označí podstrom za soukromý\n"
 " --make-unbindable       označí podstrom za nevázatelný\n"
 
-#: sys-utils/mount.c:706
+#: sys-utils/mount.c:738
 #, c-format
 msgid ""
 " --make-rshared          recursively mark a whole subtree as shared\n"
@@ -13550,16 +13563,16 @@ msgstr ""
 " --make-rprivate         rekurzivně označí celý podstrom za soukromý\n"
 " --make-runbindable      rekurzivně označí celý podstrom za nevázatelný\n"
 
-#: sys-utils/mount.c:797 sys-utils/umount.c:340
+#: sys-utils/mount.c:829 sys-utils/umount.c:359
 msgid "libmount context allocation failed"
 msgstr "alokace kontextu libmount se nezdařila"
 
 # XXX: Nepřekládat „append“ jako „připojit“, hrozí záměna s „mount“
-#: sys-utils/mount.c:837 sys-utils/mount.c:848 sys-utils/mount.c:853
+#: sys-utils/mount.c:869 sys-utils/mount.c:880 sys-utils/mount.c:885
 msgid "failed to append options"
 msgstr "nepodařilo se přiřetězit volby"
 
-#: sys-utils/mount.c:857 sys-utils/umount.c:385
+#: sys-utils/mount.c:889 sys-utils/umount.c:404
 msgid "failed to set options pattern"
 msgstr "nepodařilo se nastavit vzorek voleb"
 
@@ -14272,7 +14285,7 @@ msgstr "Nejste superuživatel."
 msgid "%s: swapoff failed"
 msgstr "%s: swapoff selhal"
 
-#: sys-utils/swapoff.c:68 sys-utils/swapon.c:647
+#: sys-utils/swapoff.c:68 sys-utils/swapon.c:648
 #, c-format
 msgid " %s [options] [<spec>]\n"
 msgstr " %s [přepínače] [<specifikace>]\n"
@@ -14443,7 +14456,7 @@ msgstr "%s: swapon selhal"
 msgid "failed to parse %s"
 msgstr "%s se nezdařilo rozebrat"
 
-#: sys-utils/swapon.c:650
+#: sys-utils/swapon.c:651
 msgid ""
 " -a, --all              enable all swaps from /etc/fstab\n"
 " -d, --discard          discard freed pages before they are reused\n"
@@ -14473,7 +14486,7 @@ msgstr ""
 "     --bytes             zobrazí velikosti v bajtech ve výstupu --show\n"
 " -v, --verbose           upovídaný režim\n"
 
-#: sys-utils/swapon.c:666
+#: sys-utils/swapon.c:667
 msgid ""
 "\n"
 "The <spec> parameter:\n"
@@ -14497,7 +14510,7 @@ msgstr ""
 " <zařízení>             vybere zařízení\n"
 " <soubor>               vybere soubor\n"
 
-#: sys-utils/swapon.c:676
+#: sys-utils/swapon.c:677
 msgid ""
 "\n"
 "Available columns (for --show):\n"
@@ -14677,7 +14690,7 @@ msgstr "%s používá IRQ %d\n"
 msgid "%s using polling\n"
 msgstr "%s používá poll\n"
 
-#: sys-utils/umount.c:73
+#: sys-utils/umount.c:74
 #, c-format
 msgid ""
 " %1$s [-hV]\n"
@@ -14688,7 +14701,7 @@ msgstr ""
 " %1$s -a [přepínače]\n"
 " %1$s [přepínače] <zdroj> | <adresář>\n"
 
-#: sys-utils/umount.c:80
+#: sys-utils/umount.c:81
 #, c-format
 msgid ""
 " -a, --all               umount all filesystems\n"
@@ -14705,7 +14718,7 @@ msgstr ""
 "(2)\n"
 " -f, --force             vynutí odpojení (pro případ nedostupného NFS)\n"
 
-#: sys-utils/umount.c:86
+#: sys-utils/umount.c:87
 #, c-format
 msgid ""
 " -i, --internal-only     don't call the umount.<type> helpers\n"
@@ -14716,7 +14729,7 @@ msgstr ""
 " -n, --no-mtab           nezapíše do /etc/mtab\n"
 " -l, --lazy              souborový systém odpojí teď, zbytek uklidí později\n"
 
-#: sys-utils/umount.c:90
+#: sys-utils/umount.c:91
 #, c-format
 msgid ""
 " -O, --test-opts <list>  limit the set of filesystems (use with -a)\n"
@@ -14731,37 +14744,37 @@ msgstr ""
 " -t, --types <seznam>    omezí množinu typů souborových systémů\n"
 " -v, --verbose           popisuje, co se děje\n"
 
-#: sys-utils/umount.c:137
+#: sys-utils/umount.c:138
 #, fuzzy, c-format
 msgid "%s (%s) unmounted"
 msgstr "%s je připojeno\n"
 
-#: sys-utils/umount.c:139
+#: sys-utils/umount.c:140
 #, fuzzy, c-format
 msgid "%s unmounted"
 msgstr "%s: nepřipojeno"
 
-#: sys-utils/umount.c:198
+#: sys-utils/umount.c:199
 #, c-format
 msgid "%s: umount failed"
 msgstr "%s: odpojení se nezdařilo"
 
-#: sys-utils/umount.c:207
+#: sys-utils/umount.c:208
 #, c-format
 msgid "%s: filesystem umounted, but mount(8) failed"
 msgstr "%s: souborový systém byl odpojen, ale příkaz mount(8) selhal"
 
-#: sys-utils/umount.c:221
+#: sys-utils/umount.c:222
 #, c-format
 msgid "%s: invalid block device"
 msgstr "%s: neplatné blokové zařízení"
 
-#: sys-utils/umount.c:227
+#: sys-utils/umount.c:228
 #, c-format
 msgid "%s: can't write superblock"
 msgstr "%s: superblok nelze zapsat"
 
-#: sys-utils/umount.c:230
+#: sys-utils/umount.c:231
 #, c-format
 msgid ""
 "%s: target is busy.\n"
@@ -14772,17 +14785,17 @@ msgstr ""
 "        (V některých případech lze získat užitečné informace o procesech,\n"
 "        které se zařízením pracují, pomocí nástrojů lsof(8) a fuser(1).)"
 
-#: sys-utils/umount.c:239
+#: sys-utils/umount.c:240
 #, c-format
 msgid "%s: must be superuser to umount"
 msgstr "%s: musíte být superuživatelem, abyste mohl odpojovat"
 
-#: sys-utils/umount.c:242
+#: sys-utils/umount.c:243
 #, c-format
 msgid "%s: block devices not permitted on fs"
 msgstr "%s: bloková zařízení nejsou na systému souborů povolena"
 
-#: sys-utils/umount.c:291
+#: sys-utils/umount.c:292
 msgid "failed to set umount target"
 msgstr "nezdařilo se nastavit cíl odpojení"
 
@@ -14972,83 +14985,83 @@ msgstr "Zařízení:"
 msgid "%-15s%s [version %x]\n"
 msgstr "%-15s%s [verze %x]\n"
 
-#: term-utils/agetty.c:435
+#: term-utils/agetty.c:434
 #, c-format
 msgid "%s: can't change root directory %s: %m"
 msgstr "%s: nelze změnit kořenový adresář %s: %m"
 
-#: term-utils/agetty.c:440
+#: term-utils/agetty.c:439
 #, c-format
 msgid "%s: can't change working directory %s: %m"
 msgstr "%s: nelze změnit pracovního adresáře %s: %m"
 
-#: term-utils/agetty.c:445
+#: term-utils/agetty.c:444
 #, c-format
 msgid "%s: can't change process priority: %m"
 msgstr "%s: nelze změnit prioritu procesu: %m"
 
-#: term-utils/agetty.c:451
+#: term-utils/agetty.c:450
 #, c-format
 msgid "%s: can't exec %s: %m"
 msgstr "%s: %s nelze spustit: %m"
 
-#: term-utils/agetty.c:480 term-utils/agetty.c:737 term-utils/agetty.c:749
-#: term-utils/agetty.c:1464 term-utils/agetty.c:1824
+#: term-utils/agetty.c:479 term-utils/agetty.c:736 term-utils/agetty.c:748
+#: term-utils/agetty.c:1463 term-utils/agetty.c:1823
 #, c-format
 msgid "failed to allocate memory: %m"
 msgstr "paměť nelze alokovat: %m"
 
-#: term-utils/agetty.c:654
+#: term-utils/agetty.c:653
 #, c-format
 msgid "bad timeout value: %s"
 msgstr "chybný časový limit: %s"
 
-#: term-utils/agetty.c:767
+#: term-utils/agetty.c:766
 #, c-format
 msgid "bad speed: %s"
 msgstr "chybná rychlost %s"
 
-#: term-utils/agetty.c:769
+#: term-utils/agetty.c:768
 msgid "too many alternate speeds"
 msgstr "příliš mnoho alternativních rychlostí"
 
-#: term-utils/agetty.c:890 term-utils/agetty.c:907 term-utils/agetty.c:947
+#: term-utils/agetty.c:889 term-utils/agetty.c:906 term-utils/agetty.c:946
 #, c-format
 msgid "/dev/%s: cannot open as standard input: %m"
 msgstr "/dev/%s nelze otevřít jako standardní vstup: %m"
 
-#: term-utils/agetty.c:911 term-utils/agetty.c:915
+#: term-utils/agetty.c:910 term-utils/agetty.c:914
 #, c-format
 msgid "/dev/%s: not a character device"
 msgstr "/dev/%s není znakovým zařízením"
 
-#: term-utils/agetty.c:962
+#: term-utils/agetty.c:961
 #, c-format
 msgid "%s: not open for read/write"
 msgstr "%s: není otevřeno pro čtení/zápis"
 
-#: term-utils/agetty.c:981
+#: term-utils/agetty.c:980
 #, c-format
 msgid "%s: dup problem: %m"
 msgstr "%s: volání dup selhalo: %m"
 
-#: term-utils/agetty.c:1275
+#: term-utils/agetty.c:1274
 msgid "Num Lock off"
 msgstr "Num Lock vypnut"
 
-#: term-utils/agetty.c:1278
+#: term-utils/agetty.c:1277
 msgid "Num Lock on"
 msgstr "Num Lock zapnut"
 
-#: term-utils/agetty.c:1281
+#: term-utils/agetty.c:1280
 msgid "Caps Lock on"
 msgstr "Caps Lock zapnut"
 
-#: term-utils/agetty.c:1284
+#: term-utils/agetty.c:1283
 msgid "Scroll Lock on"
 msgstr "Scroll Lock zapnut"
 
-#: term-utils/agetty.c:1287
+#: term-utils/agetty.c:1286
 #, c-format
 msgid ""
 "Hint: %s\n"
@@ -15057,17 +15070,17 @@ msgstr ""
 "Nápověda: %s\n"
 "\n"
 
-#: term-utils/agetty.c:1390
+#: term-utils/agetty.c:1389
 #, c-format
 msgid "%s: read: %m"
 msgstr "%s: přečteno: %m"
 
-#: term-utils/agetty.c:1444
+#: term-utils/agetty.c:1443
 #, c-format
 msgid "%s: input overrun"
 msgstr "%s: přetečení vstupu"
 
-#: term-utils/agetty.c:1594
+#: term-utils/agetty.c:1593
 #, c-format
 msgid ""
 "\n"
@@ -15080,7 +15093,7 @@ msgstr ""
 " %1$s [přepínače] linka baud_rate,… [druh_terminálu]\n"
 " %1$s [přepínače] baud_rate,… linka [druh_terminálu]\n"
 
-#: term-utils/agetty.c:1599
+#: term-utils/agetty.c:1598
 #, c-format
 msgid ""
 "\n"
@@ -15146,12 +15159,12 @@ msgstr ""
 "     --help                 zobrazí tuto nápovědu a skončí\n"
 "\n"
 
-#: term-utils/agetty.c:1808
+#: term-utils/agetty.c:1807
 #, c-format
 msgid "user"
 msgstr "uživatel"
 
-#: term-utils/agetty.c:1808
+#: term-utils/agetty.c:1807
 #, c-format
 msgid "users"
 msgstr "uživatelé"
@@ -15249,16 +15262,16 @@ msgstr ""
 msgid "Script started, file is %s\n"
 msgstr "Script spuštěn. Soubor je %s.\n"
 
-#: term-utils/script.c:365
+#: term-utils/script.c:367
 #, c-format
 msgid "Script started on %s"
 msgstr "Script spuštěn %s"
 
-#: term-utils/script.c:401
+#: term-utils/script.c:403
 msgid "cannot write script file"
 msgstr "skript soubor nelze zapsat"
 
-#: term-utils/script.c:481
+#: term-utils/script.c:483
 #, c-format
 msgid ""
 "\n"
@@ -15267,16 +15280,16 @@ msgstr ""
 "\n"
 "Script ukončen %s"
 
-#: term-utils/script.c:491
+#: term-utils/script.c:493
 #, c-format
 msgid "Script done, file is %s\n"
 msgstr "Script utils. Soubor je %s\n"
 
-#: term-utils/script.c:513
+#: term-utils/script.c:515
 msgid "openpty failed"
 msgstr "volání openpty selhalo"
 
-#: term-utils/script.c:549
+#: term-utils/script.c:551
 msgid "out of pty's"
 msgstr "nedostatek PTY"
 

@@ -43,6 +43,26 @@ static void blkid_probe_to_tags(blkid_probe pr, blkid_dev dev)
 			blkid_set_tag(dev, name, data, len);
 		}
 	}
+
+	/*
+	 * remove obsolete tags
+	 */
+	if (!nvals || !blkid_probe_has_value(pr, "LABEL"))
+		blkid_set_tag(dev, "LABEL", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "UUID"))
+		blkid_set_tag(dev, "UUID", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "PART_ENTRY_UUID"))
+		blkid_set_tag(dev, "PARTUUID", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "PART_ENTRY_NAME"))
+		blkid_set_tag(dev, "PARTLABEL", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "TYPE"))
+		blkid_set_tag(dev, "TYPE", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "SEC_TYPE"))
+		blkid_set_tag(dev, "SEC_TYPE", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "EXT_JOURNAL"))	/* extN */
+		blkid_set_tag(dev, "EXT_JOURNAL", NULL, 0);
+	if (!nvals || !blkid_probe_has_value(pr, "MOUNT"))		/* ocfs */
+		blkid_set_tag(dev, "MOUNT", NULL, 0);
 }
 
 /*
@@ -141,9 +161,6 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 		BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
 		BLKID_SUBLKS_TYPE | BLKID_SUBLKS_SECTYPE);
 
-	blkid_probe_enable_partitions(cache->probe, TRUE);
-	blkid_probe_set_partitions_flags(cache->probe, BLKID_PARTS_ENTRY_DETAILS);
-
 	/*
 	 * If we already know the type, then try that first.
 	 */
@@ -157,8 +174,18 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 		blkid_probe_filter_superblocks_type(cache->probe,
 				BLKID_FLTR_ONLYIN, fltr);
 
-		if (!blkid_do_probe(cache->probe))
-			goto found_type;
+		if (blkid_do_probe(cache->probe) == 0) {
+			/*
+			 * Cool, we found FS type, let's also read PART{UUID,LABEL}
+			 */
+			blkid_probe_enable_superblocks(cache->probe, FALSE);
+			blkid_probe_enable_partitions(cache->probe, TRUE);
+			blkid_probe_set_partitions_flags(cache->probe, BLKID_PARTS_ENTRY_DETAILS);
+			if (blkid_do_probe(cache->probe) == 0)
+				goto found_type;
+		}
+
+		blkid_probe_enable_superblocks(cache->probe, TRUE);
 		blkid_probe_invert_superblocks_filter(cache->probe);
 
 		/*
@@ -172,6 +199,9 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 			blkid_set_tag(dev, type, 0, 0);
 		blkid_tag_iterate_end(iter);
 	}
+
+	blkid_probe_enable_partitions(cache->probe, TRUE);
+	blkid_probe_set_partitions_flags(cache->probe, BLKID_PARTS_ENTRY_DETAILS);
 
 	/*
 	 * Probe for all types.

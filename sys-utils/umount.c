@@ -35,6 +35,7 @@
 #include "optutils.h"
 #include "exitcodes.h"
 #include "closestream.h"
+#include "canonicalize.h"
 
 static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)),
 			const char *filename, int line)
@@ -258,7 +259,7 @@ static int umount_all(struct libmnt_context *cxt)
 	itr = mnt_new_iter(MNT_ITER_BACKWARD);
 	if (!itr) {
 		warn(_("failed to initialize libmount iterator"));
-		return -ENOMEM;
+		return MOUNT_EX_SYSERR;
 	}
 
 	while (mnt_context_next_umount(cxt, itr, &fs, &mntrc, &ignored) == 0) {
@@ -285,7 +286,7 @@ static int umount_one(struct libmnt_context *cxt, const char *spec)
 	int rc;
 
 	if (!spec)
-		return -EINVAL;
+		return MOUNT_EX_SOFTWARE;
 
 	if (mnt_context_set_target(cxt, spec))
 		err(MOUNT_EX_SYSERR, _("failed to set umount target"));
@@ -298,6 +299,24 @@ static int umount_one(struct libmnt_context *cxt, const char *spec)
 
 	mnt_reset_context(cxt);
 	return rc;
+}
+
+/*
+ * Check path -- non-root user should not be able to resolve path which is
+ * unreadable for him.
+ */
+static char *sanitize_path(const char *path)
+{
+	char *p;
+
+	if (!path)
+		return NULL;
+
+	p = canonicalize_path_restricted(path);
+	if (!p)
+		err(MOUNT_EX_USAGE, "%s", path);
+
+	return p;
 }
 
 int main(int argc, char **argv)
@@ -412,8 +431,19 @@ int main(int argc, char **argv)
 	} else if (argc < 1) {
 		usage(stderr);
 
-	} else while (argc--)
-		rc += umount_one(cxt, *argv++);
+	} else {
+		while (argc--) {
+			char *path = *argv++;
+
+			if (mnt_context_is_restricted(cxt))
+				path = sanitize_path(path);
+
+			rc += umount_one(cxt, path);
+
+			if (mnt_context_is_restricted(cxt))
+				free(path);
+		}
+	}
 
 	mnt_free_context(cxt);
 	return rc;

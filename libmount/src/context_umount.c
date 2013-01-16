@@ -83,7 +83,9 @@ static int lookup_umount_fs(struct libmnt_context *cxt)
 	 * where LABEL, UUID or symlinks are to canonicalized. It means that
 	 * it's usable only for canonicalized stuff (e.g. kernel mountinfo).
 	 */
-	if (!cxt->mtab_writable	&& *tgt == '/') {
+	if (!cxt->mtab_writable	&& *tgt == '/' &&
+	    !mnt_context_is_force(cxt) && !mnt_context_is_lazy(cxt)) {
+
 		struct stat st;
 
 		if (stat(tgt, &st) == 0 && S_ISDIR(st.st_mode)) {
@@ -110,7 +112,10 @@ static int lookup_umount_fs(struct libmnt_context *cxt)
 try_loopdev:
 	fs = mnt_table_find_target(mtab, tgt, MNT_ITER_BACKWARD);
 	if (!fs && mnt_context_is_swapmatch(cxt)) {
-		/* maybe the option is source rather than target (mountpoint) */
+		/*
+		 * Maybe the option is source rather than target (sometimes
+		 * people use e.g. "umount /dev/sda1")
+		 */
 		fs = mnt_table_find_source(mtab, tgt, MNT_ITER_BACKWARD);
 
 		if (fs) {
@@ -133,9 +138,9 @@ try_loopdev:
 		}
 	}
 
-	if (!fs && !loopdev) {
+	if (!fs && !loopdev && mnt_context_is_swapmatch(cxt)) {
 		/*
-		 * Maybe target is /path/file.img, try to convert to /dev/loopN
+		 * Maybe the option is /path/file.img, try to convert to /dev/loopN
 		 */
 		struct stat st;
 

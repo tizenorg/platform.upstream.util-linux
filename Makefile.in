@@ -56,23 +56,23 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 noinst_PROGRAMS =
-usrbin_exec_PROGRAMS = $(am__EXEEXT_48) $(am__EXEEXT_49) \
-	$(am__EXEEXT_50) col$(EXEEXT) colcrt$(EXEEXT) colrm$(EXEEXT) \
+usrbin_exec_PROGRAMS = $(am__EXEEXT_49) $(am__EXEEXT_50) \
+	$(am__EXEEXT_51) col$(EXEEXT) colcrt$(EXEEXT) colrm$(EXEEXT) \
 	column$(EXEEXT) hexdump$(EXEEXT) rev$(EXEEXT) tailf$(EXEEXT) \
-	$(am__EXEEXT_51) $(am__EXEEXT_52) script$(EXEEXT) \
-	scriptreplay$(EXEEXT) $(am__EXEEXT_53) $(am__EXEEXT_54) \
-	$(am__EXEEXT_55) $(am__EXEEXT_56) $(am__EXEEXT_57) \
-	$(am__EXEEXT_58) $(am__EXEEXT_59) $(am__EXEEXT_60) \
+	$(am__EXEEXT_52) $(am__EXEEXT_53) script$(EXEEXT) \
+	scriptreplay$(EXEEXT) $(am__EXEEXT_54) $(am__EXEEXT_55) \
+	$(am__EXEEXT_56) $(am__EXEEXT_57) $(am__EXEEXT_58) \
+	$(am__EXEEXT_59) $(am__EXEEXT_60) $(am__EXEEXT_61) \
 	flock$(EXEEXT) ipcmk$(EXEEXT) ipcrm$(EXEEXT) ipcs$(EXEEXT) \
-	renice$(EXEEXT) setsid$(EXEEXT) $(am__EXEEXT_61) \
-	$(am__EXEEXT_62) $(am__EXEEXT_63) $(am__EXEEXT_64) \
-	$(am__EXEEXT_65) $(am__EXEEXT_66) cal$(EXEEXT) logger$(EXEEXT) \
+	renice$(EXEEXT) setsid$(EXEEXT) $(am__EXEEXT_62) \
+	$(am__EXEEXT_63) $(am__EXEEXT_64) $(am__EXEEXT_65) \
+	$(am__EXEEXT_66) $(am__EXEEXT_67) cal$(EXEEXT) logger$(EXEEXT) \
 	look$(EXEEXT) mcookie$(EXEEXT) namei$(EXEEXT) whereis$(EXEEXT) \
-	$(am__EXEEXT_67) $(am__EXEEXT_68) $(am__EXEEXT_69) \
-	$(am__EXEEXT_70) getopt$(EXEEXT) isosize$(EXEEXT)
-usrsbin_exec_PROGRAMS = $(am__EXEEXT_71) readprofile$(EXEEXT) \
-	$(am__EXEEXT_72) $(am__EXEEXT_73) $(am__EXEEXT_74) \
-	$(am__EXEEXT_75)
+	$(am__EXEEXT_68) $(am__EXEEXT_69) $(am__EXEEXT_70) \
+	$(am__EXEEXT_71) getopt$(EXEEXT) isosize$(EXEEXT)
+usrsbin_exec_PROGRAMS = $(am__EXEEXT_72) readprofile$(EXEEXT) \
+	$(am__EXEEXT_73) $(am__EXEEXT_74) $(am__EXEEXT_75) \
+	$(am__EXEEXT_76)
 bin_PROGRAMS = $(am__EXEEXT_1) $(am__EXEEXT_2) $(am__EXEEXT_3) \
 	$(am__EXEEXT_4) $(am__EXEEXT_5) $(am__EXEEXT_6) \
 	$(am__EXEEXT_7) $(am__EXEEXT_8) $(am__EXEEXT_9) \
@@ -80,15 +80,15 @@ bin_PROGRAMS = $(am__EXEEXT_1) $(am__EXEEXT_2) $(am__EXEEXT_3) \
 	$(am__EXEEXT_13) $(am__EXEEXT_14) $(am__EXEEXT_15) \
 	$(am__EXEEXT_16) $(am__EXEEXT_17) $(am__EXEEXT_18) \
 	$(am__EXEEXT_19)
-sbin_PROGRAMS = $(am__EXEEXT_26) $(am__EXEEXT_27) $(am__EXEEXT_28) \
-	$(am__EXEEXT_29) $(am__EXEEXT_30) $(am__EXEEXT_31) \
-	$(am__EXEEXT_32) $(am__EXEEXT_33) $(am__EXEEXT_34) \
-	$(am__EXEEXT_35) $(am__EXEEXT_36) fsck.minix$(EXEEXT) \
+sbin_PROGRAMS = $(am__EXEEXT_27) $(am__EXEEXT_28) $(am__EXEEXT_29) \
+	$(am__EXEEXT_30) $(am__EXEEXT_31) $(am__EXEEXT_32) \
+	$(am__EXEEXT_33) $(am__EXEEXT_34) $(am__EXEEXT_35) \
+	$(am__EXEEXT_36) $(am__EXEEXT_37) fsck.minix$(EXEEXT) \
 	mkfs.minix$(EXEEXT) mkfs$(EXEEXT) mkfs.bfs$(EXEEXT) \
-	mkswap$(EXEEXT) $(am__EXEEXT_37) $(am__EXEEXT_38) \
-	$(am__EXEEXT_39) $(am__EXEEXT_40) $(am__EXEEXT_41) \
-	$(am__EXEEXT_42) $(am__EXEEXT_43) $(am__EXEEXT_44) \
-	$(am__EXEEXT_45) $(am__EXEEXT_46) $(am__EXEEXT_47)
+	mkswap$(EXEEXT) $(am__EXEEXT_38) $(am__EXEEXT_39) \
+	$(am__EXEEXT_40) $(am__EXEEXT_41) $(am__EXEEXT_42) \
+	$(am__EXEEXT_43) $(am__EXEEXT_44) $(am__EXEEXT_45) \
+	$(am__EXEEXT_46) $(am__EXEEXT_47) $(am__EXEEXT_48)
 check_PROGRAMS = test_at$(EXEEXT) test_blkdev$(EXEEXT) \
 	test_canonicalize$(EXEEXT) test_fileutils$(EXEEXT) \
 	test_ismounted$(EXEEXT) test_mangle$(EXEEXT) \
@@ -97,7 +97,7 @@ check_PROGRAMS = test_at$(EXEEXT) test_blkdev$(EXEEXT) \
 	test_wholedisk$(EXEEXT) $(am__EXEEXT_20) $(am__EXEEXT_21) \
 	$(am__EXEEXT_22) $(am__EXEEXT_23) $(am__EXEEXT_24) \
 	$(am__EXEEXT_25) test_islocal$(EXEEXT) test_logindefs$(EXEEXT) \
-	test_byteswap$(EXEEXT) test_md5$(EXEEXT) \
+	$(am__EXEEXT_26) test_byteswap$(EXEEXT) test_md5$(EXEEXT) \
 	test_pathnames$(EXEEXT) test_sysinfo$(EXEEXT)
 TESTS =
 DIST_COMMON = README $(am__configure_deps) \
@@ -444,30 +444,31 @@ DIST_COMMON = README $(am__configure_deps) \
 @BUILD_RAW_TRUE@am__append_196 = raw
 @BUILD_RAW_TRUE@am__append_197 = disk-utils/raw.8
 @BUILD_CRAMFS_TRUE@am__append_198 = fsck.cramfs mkfs.cramfs
-@LINUX_TRUE@am__append_199 = blockdev
-@LINUX_TRUE@am__append_200 = disk-utils/blockdev.8 \
+@BUILD_CRAMFS_TRUE@am__append_199 = test_fsck.cramfs
+@LINUX_TRUE@am__append_200 = blockdev
+@LINUX_TRUE@am__append_201 = disk-utils/blockdev.8 \
 @LINUX_TRUE@	disk-utils/fdformat.8
-@LINUX_TRUE@am__append_201 = fdformat
-@BUILD_PARTX_TRUE@am__append_202 = partx addpart delpart resizepart
-@BUILD_PARTX_TRUE@am__append_203 = \
+@LINUX_TRUE@am__append_202 = fdformat
+@BUILD_PARTX_TRUE@am__append_203 = partx addpart delpart resizepart
+@BUILD_PARTX_TRUE@am__append_204 = \
 @BUILD_PARTX_TRUE@	disk-utils/addpart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/delpart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/resizepart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/partx.8
 
-@ARCH_M68K_FALSE@am__append_204 = fdisk
-@ARCH_M68K_FALSE@am__append_205 = fdisks/fdisk.8
-@ARCH_M68K_FALSE@@BUILD_LIBBLKID_TRUE@am__append_206 = libblkid.la
-@ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@am__append_207 = fdisk.static
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_208 = sfdisk
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_209 = fdisks/sfdisk.8
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__append_210 = sfdisk.static
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_211 = cfdisk
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_212 = fdisks/cfdisk.8
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_213 = -I$(ul_libblkid_incdir)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_214 = libblkid.la
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_TRUE@am__append_215 = -lslang
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_NCURSES_TRUE@@HAVE_SLANG_FALSE@am__append_216 = @NCURSES_LIBS@
+@ARCH_M68K_FALSE@am__append_205 = fdisk
+@ARCH_M68K_FALSE@am__append_206 = fdisks/fdisk.8
+@ARCH_M68K_FALSE@@BUILD_LIBBLKID_TRUE@am__append_207 = libblkid.la
+@ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@am__append_208 = fdisk.static
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_209 = sfdisk
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_210 = fdisks/sfdisk.8
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__append_211 = sfdisk.static
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_212 = cfdisk
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_213 = fdisks/cfdisk.8
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_214 = -I$(ul_libblkid_incdir)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_215 = libblkid.la
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_TRUE@am__append_216 = -lslang
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_NCURSES_TRUE@@HAVE_SLANG_FALSE@am__append_217 = @NCURSES_LIBS@
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/compiler.m4 \
@@ -820,62 +821,63 @@ libuuid_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_tab_update$(EXEEXT) \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_utils$(EXEEXT) \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_version$(EXEEXT)
-@BUILD_AGETTY_TRUE@am__EXEEXT_26 = agetty$(EXEEXT)
-@BUILD_SULOGIN_TRUE@am__EXEEXT_27 = sulogin$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_28 = ctrlaltdel$(EXEEXT) fsfreeze$(EXEEXT) \
+@BUILD_CRAMFS_TRUE@am__EXEEXT_26 = test_fsck.cramfs$(EXEEXT)
+@BUILD_AGETTY_TRUE@am__EXEEXT_27 = agetty$(EXEEXT)
+@BUILD_SULOGIN_TRUE@am__EXEEXT_28 = sulogin$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_29 = ctrlaltdel$(EXEEXT) fsfreeze$(EXEEXT) \
 @LINUX_TRUE@	fstrim$(EXEEXT)
-@BUILD_LOSETUP_TRUE@am__EXEEXT_29 = losetup$(EXEEXT)
-@BUILD_SWAPON_TRUE@am__EXEEXT_30 = swapon$(EXEEXT) swapoff$(EXEEXT)
-@BUILD_CHCPU_TRUE@am__EXEEXT_31 = chcpu$(EXEEXT)
-@BUILD_PIVOT_ROOT_TRUE@am__EXEEXT_32 = pivot_root$(EXEEXT)
-@BUILD_SWITCH_ROOT_TRUE@am__EXEEXT_33 = switch_root$(EXEEXT)
-@BUILD_HWCLOCK_TRUE@am__EXEEXT_34 = hwclock$(EXEEXT)
-@BUILD_LIBBLKID_TRUE@am__EXEEXT_35 = blkid$(EXEEXT) findfs$(EXEEXT) \
+@BUILD_LOSETUP_TRUE@am__EXEEXT_30 = losetup$(EXEEXT)
+@BUILD_SWAPON_TRUE@am__EXEEXT_31 = swapon$(EXEEXT) swapoff$(EXEEXT)
+@BUILD_CHCPU_TRUE@am__EXEEXT_32 = chcpu$(EXEEXT)
+@BUILD_PIVOT_ROOT_TRUE@am__EXEEXT_33 = pivot_root$(EXEEXT)
+@BUILD_SWITCH_ROOT_TRUE@am__EXEEXT_34 = switch_root$(EXEEXT)
+@BUILD_HWCLOCK_TRUE@am__EXEEXT_35 = hwclock$(EXEEXT)
+@BUILD_LIBBLKID_TRUE@am__EXEEXT_36 = blkid$(EXEEXT) findfs$(EXEEXT) \
 @BUILD_LIBBLKID_TRUE@	wipefs$(EXEEXT)
-@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__EXEEXT_36 = blkid.static$(EXEEXT)
-@BUILD_SWAPLABEL_TRUE@am__EXEEXT_37 = swaplabel$(EXEEXT)
-@BUILD_FSCK_TRUE@am__EXEEXT_38 = fsck$(EXEEXT)
-@BUILD_ELVTUNE_TRUE@am__EXEEXT_39 = elvtune$(EXEEXT)
-@BUILD_RAW_TRUE@am__EXEEXT_40 = raw$(EXEEXT)
-@BUILD_CRAMFS_TRUE@am__EXEEXT_41 = fsck.cramfs$(EXEEXT) \
+@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__EXEEXT_37 = blkid.static$(EXEEXT)
+@BUILD_SWAPLABEL_TRUE@am__EXEEXT_38 = swaplabel$(EXEEXT)
+@BUILD_FSCK_TRUE@am__EXEEXT_39 = fsck$(EXEEXT)
+@BUILD_ELVTUNE_TRUE@am__EXEEXT_40 = elvtune$(EXEEXT)
+@BUILD_RAW_TRUE@am__EXEEXT_41 = raw$(EXEEXT)
+@BUILD_CRAMFS_TRUE@am__EXEEXT_42 = fsck.cramfs$(EXEEXT) \
 @BUILD_CRAMFS_TRUE@	mkfs.cramfs$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_42 = blockdev$(EXEEXT)
-@ARCH_M68K_FALSE@am__EXEEXT_43 = fdisk$(EXEEXT)
-@ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@am__EXEEXT_44 = fdisk.static$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__EXEEXT_45 = sfdisk$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__EXEEXT_46 = sfdisk.static$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__EXEEXT_47 = cfdisk$(EXEEXT)
-@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_48 = chrt$(EXEEXT)
-@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_49 =  \
+@LINUX_TRUE@am__EXEEXT_43 = blockdev$(EXEEXT)
+@ARCH_M68K_FALSE@am__EXEEXT_44 = fdisk$(EXEEXT)
+@ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@am__EXEEXT_45 = fdisk.static$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__EXEEXT_46 = sfdisk$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__EXEEXT_47 = sfdisk.static$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__EXEEXT_48 = cfdisk$(EXEEXT)
+@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_49 = chrt$(EXEEXT)
+@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_50 =  \
 @BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@	ionice$(EXEEXT)
-@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__EXEEXT_50 =  \
+@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__EXEEXT_51 =  \
 @BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@	taskset$(EXEEXT)
-@BUILD_LINE_TRUE@am__EXEEXT_51 = line$(EXEEXT)
-@HAVE_NCURSES_TRUE@am__EXEEXT_52 = ul$(EXEEXT) pg$(EXEEXT)
-@HAVE_NCURSES_TRUE@@LINUX_TRUE@am__EXEEXT_53 = setterm$(EXEEXT)
-@BUILD_MESG_TRUE@am__EXEEXT_54 = mesg$(EXEEXT)
-@BUILD_WALL_TRUE@am__EXEEXT_55 = wall$(EXEEXT)
-@BUILD_WRITE_TRUE@am__EXEEXT_56 = write$(EXEEXT)
-@BUILD_LAST_TRUE@am__EXEEXT_57 = last$(EXEEXT)
-@BUILD_UTMPDUMP_TRUE@am__EXEEXT_58 = utmpdump$(EXEEXT)
-@BUILD_CHFN_CHSH_TRUE@am__EXEEXT_59 = chfn$(EXEEXT) chsh$(EXEEXT)
-@BUILD_NEWGRP_TRUE@am__EXEEXT_60 = newgrp$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_61 = cytune$(EXEEXT) setarch$(EXEEXT)
-@BUILD_EJECT_TRUE@am__EXEEXT_62 = eject$(EXEEXT)
-@BUILD_PRLIMIT_TRUE@am__EXEEXT_63 = prlimit$(EXEEXT)
-@BUILD_LSCPU_TRUE@am__EXEEXT_64 = lscpu$(EXEEXT)
-@BUILD_FALLOCATE_TRUE@am__EXEEXT_65 = fallocate$(EXEEXT)
-@BUILD_UNSHARE_TRUE@am__EXEEXT_66 = unshare$(EXEEXT)
-@BUILD_DDATE_TRUE@am__EXEEXT_67 = ddate$(EXEEXT)
-@BUILD_LSLOCKS_TRUE@am__EXEEXT_68 = lslocks$(EXEEXT)
-@BUILD_LIBUUID_TRUE@am__EXEEXT_69 = uuidgen$(EXEEXT)
-@BUILD_RENAME_TRUE@am__EXEEXT_70 = rename$(EXEEXT)
-@BUILD_VIPW_TRUE@am__EXEEXT_71 = vipw$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_72 = ldattach$(EXEEXT) tunelp$(EXEEXT) \
+@BUILD_LINE_TRUE@am__EXEEXT_52 = line$(EXEEXT)
+@HAVE_NCURSES_TRUE@am__EXEEXT_53 = ul$(EXEEXT) pg$(EXEEXT)
+@HAVE_NCURSES_TRUE@@LINUX_TRUE@am__EXEEXT_54 = setterm$(EXEEXT)
+@BUILD_MESG_TRUE@am__EXEEXT_55 = mesg$(EXEEXT)
+@BUILD_WALL_TRUE@am__EXEEXT_56 = wall$(EXEEXT)
+@BUILD_WRITE_TRUE@am__EXEEXT_57 = write$(EXEEXT)
+@BUILD_LAST_TRUE@am__EXEEXT_58 = last$(EXEEXT)
+@BUILD_UTMPDUMP_TRUE@am__EXEEXT_59 = utmpdump$(EXEEXT)
+@BUILD_CHFN_CHSH_TRUE@am__EXEEXT_60 = chfn$(EXEEXT) chsh$(EXEEXT)
+@BUILD_NEWGRP_TRUE@am__EXEEXT_61 = newgrp$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_62 = cytune$(EXEEXT) setarch$(EXEEXT)
+@BUILD_EJECT_TRUE@am__EXEEXT_63 = eject$(EXEEXT)
+@BUILD_PRLIMIT_TRUE@am__EXEEXT_64 = prlimit$(EXEEXT)
+@BUILD_LSCPU_TRUE@am__EXEEXT_65 = lscpu$(EXEEXT)
+@BUILD_FALLOCATE_TRUE@am__EXEEXT_66 = fallocate$(EXEEXT)
+@BUILD_UNSHARE_TRUE@am__EXEEXT_67 = unshare$(EXEEXT)
+@BUILD_DDATE_TRUE@am__EXEEXT_68 = ddate$(EXEEXT)
+@BUILD_LSLOCKS_TRUE@am__EXEEXT_69 = lslocks$(EXEEXT)
+@BUILD_LIBUUID_TRUE@am__EXEEXT_70 = uuidgen$(EXEEXT)
+@BUILD_RENAME_TRUE@am__EXEEXT_71 = rename$(EXEEXT)
+@BUILD_VIPW_TRUE@am__EXEEXT_72 = vipw$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_73 = ldattach$(EXEEXT) tunelp$(EXEEXT) \
 @LINUX_TRUE@	rtcwake$(EXEEXT)
-@BUILD_UUIDD_TRUE@am__EXEEXT_73 = uuidd$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_74 = fdformat$(EXEEXT)
-@BUILD_PARTX_TRUE@am__EXEEXT_75 = partx$(EXEEXT) addpart$(EXEEXT) \
+@BUILD_UUIDD_TRUE@am__EXEEXT_74 = uuidd$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_75 = fdformat$(EXEEXT)
+@BUILD_PARTX_TRUE@am__EXEEXT_76 = partx$(EXEEXT) addpart$(EXEEXT) \
 @BUILD_PARTX_TRUE@	delpart$(EXEEXT) resizepart$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS) $(noinst_PROGRAMS) $(sbin_PROGRAMS) \
 	$(usrbin_exec_PROGRAMS) $(usrsbin_exec_PROGRAMS)
@@ -936,7 +938,7 @@ am__objects_7 = fdisks/cfdisk-gpt.$(OBJEXT) \
 cfdisk_OBJECTS = $(am_cfdisk_OBJECTS)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	libcommon.la \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_214) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_215) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__DEPENDENCIES_1) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__DEPENDENCIES_1)
 cfdisk_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -1073,7 +1075,7 @@ am__objects_12 = fdisks/fdisk-gpt.$(OBJEXT) \
 @ARCH_M68K_FALSE@	$(am__objects_12)
 fdisk_OBJECTS = $(am_fdisk_OBJECTS)
 @ARCH_M68K_FALSE@fdisk_DEPENDENCIES = $(am__DEPENDENCIES_2) \
-@ARCH_M68K_FALSE@	libcommon.la $(am__append_206)
+@ARCH_M68K_FALSE@	libcommon.la $(am__append_207)
 fdisk_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(fdisk_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
@@ -1102,7 +1104,7 @@ am__objects_13 = fdisks/fdisk_static-gpt.$(OBJEXT) \
 @ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@	$(am__objects_14)
 fdisk_static_OBJECTS = $(am_fdisk_static_OBJECTS)
 @ARCH_M68K_FALSE@am__DEPENDENCIES_4 = $(am__DEPENDENCIES_2) \
-@ARCH_M68K_FALSE@	libcommon.la $(am__append_206)
+@ARCH_M68K_FALSE@	libcommon.la $(am__append_207)
 @ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_DEPENDENCIES = $(am__DEPENDENCIES_4)
 fdisk_static_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(fdisk_static_CFLAGS) \
@@ -1744,6 +1746,21 @@ test_fileutils_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_fileutils_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o \
 	$@
+am__test_fsck_cramfs_SOURCES_DIST = disk-utils/fsck.cramfs.c \
+	disk-utils/cramfs.h disk-utils/cramfs_common.c
+@BUILD_CRAMFS_TRUE@am__objects_23 = disk-utils/test_fsck_cramfs-cramfs_common.$(OBJEXT)
+@BUILD_CRAMFS_TRUE@am__objects_24 = disk-utils/test_fsck_cramfs-fsck.cramfs.$(OBJEXT) \
+@BUILD_CRAMFS_TRUE@	$(am__objects_23)
+@BUILD_CRAMFS_TRUE@am_test_fsck_cramfs_OBJECTS = $(am__objects_24)
+test_fsck_cramfs_OBJECTS = $(am_test_fsck_cramfs_OBJECTS)
+@BUILD_CRAMFS_TRUE@am__DEPENDENCIES_11 = $(am__DEPENDENCIES_2) \
+@BUILD_CRAMFS_TRUE@	libcommon.la
+@BUILD_CRAMFS_TRUE@test_fsck_cramfs_DEPENDENCIES =  \
+@BUILD_CRAMFS_TRUE@	$(am__DEPENDENCIES_11)
+test_fsck_cramfs_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
+	$(test_fsck_cramfs_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) \
+	-o $@
 am_test_islocal_OBJECTS = login-utils/test_islocal-islocal.$(OBJEXT)
 test_islocal_OBJECTS = $(am_test_islocal_OBJECTS)
 test_islocal_LDADD = $(LDADD)
@@ -1784,11 +1801,11 @@ test_md5_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__test_mount_cache_SOURCES_DIST = libmount/src/cache.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_cache_OBJECTS = libmount/src/test_mount_cache-cache.$(OBJEXT)
 test_mount_cache_OBJECTS = $(am_test_mount_cache_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@@HAVE_SELINUX_TRUE@am__DEPENDENCIES_11 = $(am__DEPENDENCIES_1)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am__DEPENDENCIES_12 =  \
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@@HAVE_SELINUX_TRUE@am__DEPENDENCIES_12 = $(am__DEPENDENCIES_1)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am__DEPENDENCIES_13 =  \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	libmount.la \
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	$(am__DEPENDENCIES_11)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_cache_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	$(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_cache_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_cache_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_cache_CFLAGS) $(CFLAGS) \
@@ -1796,7 +1813,7 @@ test_mount_cache_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_context_SOURCES_DIST = libmount/src/context.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_context_OBJECTS = libmount/src/test_mount_context-context.$(OBJEXT)
 test_mount_context_OBJECTS = $(am_test_mount_context_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_context_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_context_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_context_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_context_CFLAGS) $(CFLAGS) \
@@ -1804,7 +1821,7 @@ test_mount_context_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_lock_SOURCES_DIST = libmount/src/lock.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_lock_OBJECTS = libmount/src/test_mount_lock-lock.$(OBJEXT)
 test_mount_lock_OBJECTS = $(am_test_mount_lock_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_lock_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_lock_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_lock_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_lock_CFLAGS) $(CFLAGS) $(test_mount_lock_LDFLAGS) \
@@ -1812,7 +1829,7 @@ test_mount_lock_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_optstr_SOURCES_DIST = libmount/src/optstr.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_optstr_OBJECTS = libmount/src/test_mount_optstr-optstr.$(OBJEXT)
 test_mount_optstr_OBJECTS = $(am_test_mount_optstr_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_optstr_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_optstr_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_optstr_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_optstr_CFLAGS) $(CFLAGS) \
@@ -1820,7 +1837,7 @@ test_mount_optstr_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_tab_SOURCES_DIST = libmount/src/tab.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_tab_OBJECTS = libmount/src/test_mount_tab-tab.$(OBJEXT)
 test_mount_tab_OBJECTS = $(am_test_mount_tab_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_tab_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_tab_CFLAGS) $(CFLAGS) $(test_mount_tab_LDFLAGS) \
@@ -1828,7 +1845,7 @@ test_mount_tab_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_tab_diff_SOURCES_DIST = libmount/src/tab_diff.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_tab_diff_OBJECTS = libmount/src/test_mount_tab_diff-tab_diff.$(OBJEXT)
 test_mount_tab_diff_OBJECTS = $(am_test_mount_tab_diff_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_diff_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_diff_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_tab_diff_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_tab_diff_CFLAGS) $(CFLAGS) \
@@ -1836,7 +1853,7 @@ test_mount_tab_diff_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_tab_update_SOURCES_DIST = libmount/src/tab_update.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_tab_update_OBJECTS = libmount/src/test_mount_tab_update-tab_update.$(OBJEXT)
 test_mount_tab_update_OBJECTS = $(am_test_mount_tab_update_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_update_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_tab_update_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_tab_update_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_tab_update_CFLAGS) $(CFLAGS) \
@@ -1844,7 +1861,7 @@ test_mount_tab_update_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_utils_SOURCES_DIST = libmount/src/utils.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_utils_OBJECTS = libmount/src/test_mount_utils-utils.$(OBJEXT)
 test_mount_utils_OBJECTS = $(am_test_mount_utils_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_utils_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_utils_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_utils_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_utils_CFLAGS) $(CFLAGS) \
@@ -1852,7 +1869,7 @@ test_mount_utils_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 am__test_mount_version_SOURCES_DIST = libmount/src/version.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am_test_mount_version_OBJECTS = libmount/src/test_mount_version-version.$(OBJEXT)
 test_mount_version_OBJECTS = $(am_test_mount_version_OBJECTS)
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_version_DEPENDENCIES = $(am__DEPENDENCIES_12)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_version_DEPENDENCIES = $(am__DEPENDENCIES_13)
 test_mount_version_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(test_mount_version_CFLAGS) $(CFLAGS) \
@@ -1947,7 +1964,7 @@ am__umount_SOURCES_DIST = mount-deprecated/umount.c \
 	mount-deprecated/fstab.c mount-deprecated/getusername.c \
 	mount-deprecated/mount_mntent.c mount-deprecated/fsprobe.c \
 	sys-utils/umount.c
-@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_23 = mount-deprecated/umount-sundries.$(OBJEXT) \
+@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_25 = mount-deprecated/umount-sundries.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount-devname.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount-fstab.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount-getusername.$(OBJEXT) \
@@ -1955,7 +1972,7 @@ am__umount_SOURCES_DIST = mount-deprecated/umount.c \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount-fsprobe.$(OBJEXT)
 @BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@am_umount_OBJECTS = sys-utils/umount-umount.$(OBJEXT)
 @BUILD_DEPRECATED_MOUNT_TRUE@am_umount_OBJECTS = mount-deprecated/umount-umount.$(OBJEXT) \
-@BUILD_DEPRECATED_MOUNT_TRUE@	$(am__objects_23)
+@BUILD_DEPRECATED_MOUNT_TRUE@	$(am__objects_25)
 umount_OBJECTS = $(am_umount_OBJECTS)
 @BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@umount_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@	libcommon.la \
@@ -1975,25 +1992,25 @@ am__umount_static_SOURCES_DIST = mount-deprecated/umount.c \
 	mount-deprecated/fstab.c mount-deprecated/getusername.c \
 	mount-deprecated/mount_mntent.c mount-deprecated/fsprobe.c \
 	sys-utils/umount.c
-@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_24 = mount-deprecated/umount_static-sundries.$(OBJEXT) \
+@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_26 = mount-deprecated/umount_static-sundries.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount_static-devname.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount_static-fstab.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount_static-getusername.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount_static-mount_mntent.$(OBJEXT) \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount_static-fsprobe.$(OBJEXT)
-@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@am__objects_25 = sys-utils/umount_static-umount.$(OBJEXT)
-@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_25 = mount-deprecated/umount_static-umount.$(OBJEXT) \
-@BUILD_DEPRECATED_MOUNT_TRUE@	$(am__objects_24)
-@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am_umount_static_OBJECTS = $(am__objects_25)
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am_umount_static_OBJECTS = $(am__objects_25)
+@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@am__objects_27 = sys-utils/umount_static-umount.$(OBJEXT)
+@BUILD_DEPRECATED_MOUNT_TRUE@am__objects_27 = mount-deprecated/umount_static-umount.$(OBJEXT) \
+@BUILD_DEPRECATED_MOUNT_TRUE@	$(am__objects_26)
+@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am_umount_static_OBJECTS = $(am__objects_27)
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am_umount_static_OBJECTS = $(am__objects_27)
 umount_static_OBJECTS = $(am_umount_static_OBJECTS)
-@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@am__DEPENDENCIES_13 = $(am__DEPENDENCIES_2) \
+@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@am__DEPENDENCIES_14 = $(am__DEPENDENCIES_2) \
 @BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@	libcommon.la \
 @BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@	libmount.la
-@BUILD_DEPRECATED_MOUNT_TRUE@am__DEPENDENCIES_13 =  \
+@BUILD_DEPRECATED_MOUNT_TRUE@am__DEPENDENCIES_14 =  \
 @BUILD_DEPRECATED_MOUNT_TRUE@	$(am__DEPENDENCIES_2) libblkid.la \
 @BUILD_DEPRECATED_MOUNT_TRUE@	libcommon.la
-@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@umount_static_DEPENDENCIES = $(am__DEPENDENCIES_13)
+@BUILD_DEPRECATED_MOUNT_FALSE@@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@umount_static_DEPENDENCIES = $(am__DEPENDENCIES_14)
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@umount_static_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@	libblkid.la \
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@	libcommon.la
@@ -2013,9 +2030,9 @@ utmpdump_LDADD = $(LDADD)
 utmpdump_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__uuidd_SOURCES_DIST = misc-utils/uuidd.c misc-utils/sd-daemon.c \
 	misc-utils/sd-daemon.h
-@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__objects_26 = misc-utils/uuidd-sd-daemon.$(OBJEXT)
+@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__objects_28 = misc-utils/uuidd-sd-daemon.$(OBJEXT)
 @BUILD_UUIDD_TRUE@am_uuidd_OBJECTS = misc-utils/uuidd-uuidd.$(OBJEXT) \
-@BUILD_UUIDD_TRUE@	$(am__objects_26)
+@BUILD_UUIDD_TRUE@	$(am__objects_28)
 uuidd_OBJECTS = $(am_uuidd_OBJECTS)
 @BUILD_UUIDD_TRUE@uuidd_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @BUILD_UUIDD_TRUE@	libuuid.la $(am__DEPENDENCIES_1)
@@ -2146,12 +2163,13 @@ SOURCES = $(libblkid_la_SOURCES) $(nodist_libblkid_la_SOURCES) \
 	$(test_blkid_tag_SOURCES) $(test_blkid_verify_SOURCES) \
 	$(test_byteswap_SOURCES) $(test_canonicalize_SOURCES) \
 	$(test_cpuset_SOURCES) $(test_fileutils_SOURCES) \
-	$(test_islocal_SOURCES) $(test_ismounted_SOURCES) \
-	$(test_logindefs_SOURCES) $(test_loopdev_SOURCES) \
-	$(test_mangle_SOURCES) $(test_md5_SOURCES) \
-	$(test_mount_cache_SOURCES) $(test_mount_context_SOURCES) \
-	$(test_mount_lock_SOURCES) $(test_mount_optstr_SOURCES) \
-	$(test_mount_tab_SOURCES) $(test_mount_tab_diff_SOURCES) \
+	$(test_fsck_cramfs_SOURCES) $(test_islocal_SOURCES) \
+	$(test_ismounted_SOURCES) $(test_logindefs_SOURCES) \
+	$(test_loopdev_SOURCES) $(test_mangle_SOURCES) \
+	$(test_md5_SOURCES) $(test_mount_cache_SOURCES) \
+	$(test_mount_context_SOURCES) $(test_mount_lock_SOURCES) \
+	$(test_mount_optstr_SOURCES) $(test_mount_tab_SOURCES) \
+	$(test_mount_tab_diff_SOURCES) \
 	$(test_mount_tab_update_SOURCES) $(test_mount_utils_SOURCES) \
 	$(test_mount_version_SOURCES) $(test_pager_SOURCES) \
 	$(test_pathnames_SOURCES) $(test_procutils_SOURCES) \
@@ -2228,10 +2246,11 @@ DIST_SOURCES = $(am__libblkid_la_SOURCES_DIST) \
 	$(am__test_blkid_tag_SOURCES_DIST) \
 	$(am__test_blkid_verify_SOURCES_DIST) $(test_byteswap_SOURCES) \
 	$(test_canonicalize_SOURCES) $(am__test_cpuset_SOURCES_DIST) \
-	$(test_fileutils_SOURCES) $(test_islocal_SOURCES) \
-	$(test_ismounted_SOURCES) $(test_logindefs_SOURCES) \
-	$(am__test_loopdev_SOURCES_DIST) $(test_mangle_SOURCES) \
-	$(test_md5_SOURCES) $(am__test_mount_cache_SOURCES_DIST) \
+	$(test_fileutils_SOURCES) $(am__test_fsck_cramfs_SOURCES_DIST) \
+	$(test_islocal_SOURCES) $(test_ismounted_SOURCES) \
+	$(test_logindefs_SOURCES) $(am__test_loopdev_SOURCES_DIST) \
+	$(test_mangle_SOURCES) $(test_md5_SOURCES) \
+	$(am__test_mount_cache_SOURCES_DIST) \
 	$(am__test_mount_context_SOURCES_DIST) \
 	$(am__test_mount_lock_SOURCES_DIST) \
 	$(am__test_mount_optstr_SOURCES_DIST) \
@@ -2592,9 +2611,9 @@ dist_man_MANS = $(am__append_5) $(am__append_27) $(am__append_38) \
 	disk-utils/fsck.minix.8 disk-utils/mkfs.minix.8 \
 	disk-utils/mkfs.8 disk-utils/isosize.8 disk-utils/mkfs.bfs.8 \
 	disk-utils/mkswap.8 $(am__append_189) $(am__append_193) \
-	$(am__append_195) $(am__append_197) $(am__append_200) \
-	$(am__append_203) $(am__append_205) $(am__append_209) \
-	$(am__append_212)
+	$(am__append_195) $(am__append_197) $(am__append_201) \
+	$(am__append_204) $(am__append_206) $(am__append_210) \
+	$(am__append_213)
 man_MANS = $(am__append_112)
 pkgconfig_DATA = $(am__append_11) $(am__append_25) $(am__append_35)
 usrlib_exec_LTLIBRARIES = $(am__append_7) $(am__append_13) \
@@ -3277,6 +3296,9 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_183) $(am__append_185)
 @BUILD_CRAMFS_TRUE@fsck_cramfs_LDADD = $(LDADD) -lz libcommon.la
 @BUILD_CRAMFS_TRUE@mkfs_cramfs_SOURCES = disk-utils/mkfs.cramfs.c $(cramfs_common_sources)
 @BUILD_CRAMFS_TRUE@mkfs_cramfs_LDADD = $(LDADD) -lz libcommon.la
+@BUILD_CRAMFS_TRUE@test_fsck_cramfs_SOURCES = $(fsck_cramfs_SOURCES)
+@BUILD_CRAMFS_TRUE@test_fsck_cramfs_LDADD = $(fsck_cramfs_LDADD)
+@BUILD_CRAMFS_TRUE@test_fsck_cramfs_CFLAGS = $(AM_CFLAGS) -DINCLUDE_FS_TESTS
 @LINUX_TRUE@blockdev_SOURCES = disk-utils/blockdev.c
 @LINUX_TRUE@blockdev_LDADD = $(LDADD) libcommon.la
 @LINUX_TRUE@fdformat_SOURCES = disk-utils/fdformat.c
@@ -3326,7 +3348,7 @@ fdisk_common_sources = \
 @ARCH_M68K_FALSE@	fdisks/partname.c \
 @ARCH_M68K_FALSE@	$(fdisk_common_sources)
 
-@ARCH_M68K_FALSE@fdisk_LDADD = $(LDADD) libcommon.la $(am__append_206)
+@ARCH_M68K_FALSE@fdisk_LDADD = $(LDADD) libcommon.la $(am__append_207)
 @ARCH_M68K_FALSE@@BUILD_LIBBLKID_TRUE@fdisk_CFLAGS = -I$(ul_libblkid_incdir)
 @ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_SOURCES = $(fdisk_SOURCES)
 @ARCH_M68K_FALSE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_LDFLAGS = -all-static
@@ -3342,12 +3364,12 @@ fdisk_common_sources = \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@sfdisk_static_LDFLAGS = -all-static
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@sfdisk_static_LDADD = $(sfdisk_LDADD)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_SOURCES = fdisks/cfdisk.c $(fdisk_common_sources)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_CFLAGS = $(am__append_213)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_CFLAGS = $(am__append_214)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_LDADD = $(LDADD) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	libcommon.la \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_214) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_215) \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_216)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_216) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_217)
 test_byteswap_SOURCES = tests/helpers/test_byteswap.c
 test_md5_SOURCES = tests/helpers/test_md5.c lib/md5.c
 test_pathnames_SOURCES = tests/helpers/test_pathnames.c
@@ -4867,6 +4889,15 @@ lib/test_fileutils-fileutils.$(OBJEXT): lib/$(am__dirstamp) \
 test_fileutils$(EXEEXT): $(test_fileutils_OBJECTS) $(test_fileutils_DEPENDENCIES) $(EXTRA_test_fileutils_DEPENDENCIES) 
 	@rm -f test_fileutils$(EXEEXT)
 	$(AM_V_CCLD)$(test_fileutils_LINK) $(test_fileutils_OBJECTS) $(test_fileutils_LDADD) $(LIBS)
+disk-utils/test_fsck_cramfs-fsck.cramfs.$(OBJEXT):  \
+	disk-utils/$(am__dirstamp) \
+	disk-utils/$(DEPDIR)/$(am__dirstamp)
+disk-utils/test_fsck_cramfs-cramfs_common.$(OBJEXT):  \
+	disk-utils/$(am__dirstamp) \
+	disk-utils/$(DEPDIR)/$(am__dirstamp)
+test_fsck.cramfs$(EXEEXT): $(test_fsck_cramfs_OBJECTS) $(test_fsck_cramfs_DEPENDENCIES) $(EXTRA_test_fsck_cramfs_DEPENDENCIES) 
+	@rm -f test_fsck.cramfs$(EXEEXT)
+	$(AM_V_CCLD)$(test_fsck_cramfs_LINK) $(test_fsck_cramfs_OBJECTS) $(test_fsck_cramfs_LDADD) $(LIBS)
 login-utils/test_islocal-islocal.$(OBJEXT):  \
 	login-utils/$(am__dirstamp) \
 	login-utils/$(DEPDIR)/$(am__dirstamp)
@@ -5212,6 +5243,8 @@ mostlyclean-compile:
 	-rm -f disk-utils/raw.$(OBJEXT)
 	-rm -f disk-utils/resizepart.$(OBJEXT)
 	-rm -f disk-utils/swaplabel-swaplabel.$(OBJEXT)
+	-rm -f disk-utils/test_fsck_cramfs-cramfs_common.$(OBJEXT)
+	-rm -f disk-utils/test_fsck_cramfs-fsck.cramfs.$(OBJEXT)
 	-rm -f fdisks/cfdisk-cfdisk.$(OBJEXT)
 	-rm -f fdisks/cfdisk-gpt.$(OBJEXT)
 	-rm -f fdisks/cfdisk-i386_sys_types.$(OBJEXT)
@@ -5717,6 +5750,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@disk-utils/$(DEPDIR)/raw.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@disk-utils/$(DEPDIR)/resizepart.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@disk-utils/$(DEPDIR)/swaplabel-swaplabel.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@fdisks/$(DEPDIR)/cfdisk-cfdisk.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@fdisks/$(DEPDIR)/cfdisk-gpt.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@fdisks/$(DEPDIR)/cfdisk-i386_sys_types.Po@am__quote@
@@ -8245,6 +8280,34 @@ lib/test_fileutils-fileutils.obj: lib/fileutils.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='lib/fileutils.c' object='lib/test_fileutils-fileutils.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fileutils_CFLAGS) $(CFLAGS) -c -o lib/test_fileutils-fileutils.obj `if test -f 'lib/fileutils.c'; then $(CYGPATH_W) 'lib/fileutils.c'; else $(CYGPATH_W) '$(srcdir)/lib/fileutils.c'; fi`
+
+disk-utils/test_fsck_cramfs-fsck.cramfs.o: disk-utils/fsck.cramfs.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -MT disk-utils/test_fsck_cramfs-fsck.cramfs.o -MD -MP -MF disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Tpo -c -o disk-utils/test_fsck_cramfs-fsck.cramfs.o `test -f 'disk-utils/fsck.cramfs.c' || echo '$(srcdir)/'`disk-utils/fsck.cramfs.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Tpo disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='disk-utils/fsck.cramfs.c' object='disk-utils/test_fsck_cramfs-fsck.cramfs.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -c -o disk-utils/test_fsck_cramfs-fsck.cramfs.o `test -f 'disk-utils/fsck.cramfs.c' || echo '$(srcdir)/'`disk-utils/fsck.cramfs.c
+
+disk-utils/test_fsck_cramfs-fsck.cramfs.obj: disk-utils/fsck.cramfs.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -MT disk-utils/test_fsck_cramfs-fsck.cramfs.obj -MD -MP -MF disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Tpo -c -o disk-utils/test_fsck_cramfs-fsck.cramfs.obj `if test -f 'disk-utils/fsck.cramfs.c'; then $(CYGPATH_W) 'disk-utils/fsck.cramfs.c'; else $(CYGPATH_W) '$(srcdir)/disk-utils/fsck.cramfs.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Tpo disk-utils/$(DEPDIR)/test_fsck_cramfs-fsck.cramfs.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='disk-utils/fsck.cramfs.c' object='disk-utils/test_fsck_cramfs-fsck.cramfs.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -c -o disk-utils/test_fsck_cramfs-fsck.cramfs.obj `if test -f 'disk-utils/fsck.cramfs.c'; then $(CYGPATH_W) 'disk-utils/fsck.cramfs.c'; else $(CYGPATH_W) '$(srcdir)/disk-utils/fsck.cramfs.c'; fi`
+
+disk-utils/test_fsck_cramfs-cramfs_common.o: disk-utils/cramfs_common.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -MT disk-utils/test_fsck_cramfs-cramfs_common.o -MD -MP -MF disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Tpo -c -o disk-utils/test_fsck_cramfs-cramfs_common.o `test -f 'disk-utils/cramfs_common.c' || echo '$(srcdir)/'`disk-utils/cramfs_common.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Tpo disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='disk-utils/cramfs_common.c' object='disk-utils/test_fsck_cramfs-cramfs_common.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -c -o disk-utils/test_fsck_cramfs-cramfs_common.o `test -f 'disk-utils/cramfs_common.c' || echo '$(srcdir)/'`disk-utils/cramfs_common.c
+
+disk-utils/test_fsck_cramfs-cramfs_common.obj: disk-utils/cramfs_common.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -MT disk-utils/test_fsck_cramfs-cramfs_common.obj -MD -MP -MF disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Tpo -c -o disk-utils/test_fsck_cramfs-cramfs_common.obj `if test -f 'disk-utils/cramfs_common.c'; then $(CYGPATH_W) 'disk-utils/cramfs_common.c'; else $(CYGPATH_W) '$(srcdir)/disk-utils/cramfs_common.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Tpo disk-utils/$(DEPDIR)/test_fsck_cramfs-cramfs_common.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='disk-utils/cramfs_common.c' object='disk-utils/test_fsck_cramfs-cramfs_common.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(test_fsck_cramfs_CFLAGS) $(CFLAGS) -c -o disk-utils/test_fsck_cramfs-cramfs_common.obj `if test -f 'disk-utils/cramfs_common.c'; then $(CYGPATH_W) 'disk-utils/cramfs_common.c'; else $(CYGPATH_W) '$(srcdir)/disk-utils/cramfs_common.c'; fi`
 
 login-utils/test_islocal-islocal.o: login-utils/islocal.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(test_islocal_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT login-utils/test_islocal-islocal.o -MD -MP -MF login-utils/$(DEPDIR)/test_islocal-islocal.Tpo -c -o login-utils/test_islocal-islocal.o `test -f 'login-utils/islocal.c' || echo '$(srcdir)/'`login-utils/islocal.c
