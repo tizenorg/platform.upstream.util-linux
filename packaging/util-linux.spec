@@ -19,7 +19,7 @@ Release:        0
 Url:            http://kernel.org/~kzak/util-linux/
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
-Group:          System/Base
+Group:          Base/Tools
 Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.xz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
@@ -52,14 +52,14 @@ mount program, the fdisk configuration tool, and more.
 
 %package -n libblkid
 Summary:        Filesystem detection library
-Group:          System/Filesystems
+Group:          Base/File Systems
 
 %description -n libblkid
 Library for filesystem detection.
 
 %package -n libblkid-devel
 Summary:        Development files for the filesystem detection library
-Group:          Development/Libraries/C and C++
+Group:          Development/Libraries
 Requires:       libblkid = %{version}
 
 %description -n libblkid-devel
@@ -68,7 +68,7 @@ detection.
 
 %package -n uuidd
 Summary:        Helper daemon to guarantee uniqueness of time-based UUIDs
-Group:          System/Filesystems
+Group:          Base/File Systems
 
 %description -n uuidd
 The uuidd package contains a userspace daemon (uuidd) which guarantees
@@ -77,14 +77,14 @@ SMP systems.
 
 %package -n libuuid
 Summary:        Library to generate UUIDs
-Group:          System/Filesystems
+Group:          Base/File Systems
 
 %description -n libuuid
 A library to generate universally unique IDs (UUIDs).
 
 %package -n libuuid-devel
 Summary:        Development files for libuuid1
-Group:          Development/Libraries/C and C++
+Group:          Development/Libraries
 Requires:       libuuid = %{version}
 
 %description -n libuuid-devel
@@ -93,7 +93,7 @@ unique IDs (UUIDs).
 
 %package -n libmount
 Summary:        Device mount library
-Group:          System/Filesystems
+Group:          Base/File Systems
 
 %description -n libmount
 Library designed to be used in low-level utils like
@@ -101,7 +101,7 @@ mount(8) and /usr/sbin/mount.<type> helpers.
 
 %package -n libmount-devel
 Summary:        Development files for libmount
-Group:          Development/Libraries/C and C++
+Group:          Development/Libraries
 Requires:       libmount = %{version}
 
 %description -n libmount-devel
