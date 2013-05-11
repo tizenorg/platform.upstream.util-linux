@@ -208,6 +208,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 
 %files -f %{name}.files 
+%license COPYING
 # Common files for all archs
 %defattr(-,root,root)
 %config(noreplace) %{_sysconfdir}/filesystems
