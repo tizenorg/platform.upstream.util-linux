@@ -32,6 +32,7 @@ Source9:        remote.pamd
 Source14:       su.pamd
 Source15:       su.default
 Source51:       blkid.conf
+Source1001: 	util-linux.manifest
 
 Requires(pre):         /usr/bin/sed
 #
@@ -109,6 +110,7 @@ Files to develop applications using the libmount library.
 
 %prep
 %setup -q -n %{name}-%{version} 
+cp %{SOURCE1001} .
 #
 # nologin
 cp %{S:2} %{S:3}   .
@@ -208,6 +210,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 
 %files -f %{name}.files 
+%manifest %{name}.manifest
 %license COPYING
 # Common files for all archs
 %defattr(-,root,root)
@@ -319,11 +322,13 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_sbindir}/tunelp
 
 %files -n libblkid
+%manifest %{name}.manifest
 %defattr(-, root, root)
 /%{_libdir}/libblkid.so.1
 /%{_libdir}/libblkid.so.1.*
 
 %files -n libblkid-devel
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libblkid.so
 %dir %{_includedir}/blkid
@@ -331,11 +336,13 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_libdir}/pkgconfig/blkid.pc
 
 %files -n libmount
+%manifest %{name}.manifest
 %defattr(-, root, root)
 /%{_libdir}/libmount.so.1
 /%{_libdir}/libmount.so.1.*
 
 %files -n libmount-devel
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libmount.so
 %dir %{_includedir}/libmount
@@ -343,6 +350,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_libdir}/pkgconfig/mount.pc
 
 %files -n uuidd
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %verify(not mode) %attr(0755,root,root) %{_sbindir}/uuidd
 %attr(-,uuidd,uuidd) %dir %{_localstatedir}/lib/libuuid
@@ -350,11 +358,13 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %attr(-,uuidd,uuidd) %ghost %dir %{_localstatedir}/run/uuidd
 
 %files -n libuuid
+%manifest %{name}.manifest
 %defattr(-, root, root)
 /%{_libdir}/libuuid.so.1
 /%{_libdir}/libuuid.so.1.*
 
 %files -n libuuid-devel
+%manifest %{name}.manifest
 %defattr(-, root, root)
 %{_libdir}/libuuid.so
 %dir %{_includedir}/uuid
