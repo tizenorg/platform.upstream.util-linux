@@ -179,9 +179,6 @@ rm -f %{buildroot}/%{_mandir}/man8/{vigr.8*,vipw.8*}
 find  %{buildroot}%{_bindir}/ -regextype posix-egrep -type l \
   -regex ".*(linux32|linux64|s390|s390x|i386|ppc|ppc64|ppc32|sparc|sparc64|sparc32|sparc32bash|mips|mips64|mips32|ia64|x86_64|parisc|parisc32|parisc64)$" \
   -printf "%{_bindir}/%f\n" >> %{name}.files
-find  %{buildroot}%{_mandir}/man8 -regextype posix-egrep  \
-  -regex ".*(linux32|linux64|s390|s390x|i386|ppc|ppc64|ppc32|sparc|sparc64|sparc32|sparc32bash|mips|mips64|mips32|ia64|x86_64|parisc|parisc32|parisc64)\.8.*" \
-  -printf "%{_mandir}/man8/%f*\n" >> %{name}.files
 # clock.txt from uuidd is a ghost file
 touch %{buildroot}%{_localstatedir}/lib/libuuid/clock.txt
 # rcuuidd helper
