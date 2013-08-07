@@ -128,7 +128,7 @@ export SUID_LDFLAGS="-pie"
   --enable-new-mount \
   --enable-ddate \
   --enable-login-utils \
-  --disable-mountpoint \
+  --enable-mountpoint \
   --disable-use-tty-group \
   --disable-static \
   --disable-silent-rules \
@@ -254,6 +254,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/mesg
 %{_bindir}/more
 %{_bindir}/mount
+%{_bindir}/mountpoint
 %{_bindir}/namei
 %{_bindir}/prlimit
 %{_bindir}/rename
