@@ -1,0 +1,11 @@
+Code-Review+2: Patrick McCarty <patrick.mccarty@linux.intel.com>
+Code-Review+1: Artem Bityutskiy <artem.bityutskiy@linux.intel.com>
+Code-Review+2: Anas Nashif <anas.nashif@intel.com>
+Code-Review+1: Mikko Ylinen <mikko.ylinen@intel.com>
+Verified+1: Mikko Ylinen <mikko.ylinen@intel.com>
+Code-Review+1: william douglas <william.douglas@intel.com>
+Submitted-by: Anas Nashif <anas.nashif@intel.com>
+Submitted-at: Fri, 16 Aug 2013 10:08:42 -0700
+Reviewed-on: https://review.tizen.org/gerrit/8339
+Project: platform/upstream/util-linux
+Branch: refs/heads/tizen
