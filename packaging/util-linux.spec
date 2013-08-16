@@ -36,7 +36,6 @@ Source1001: 	util-linux.manifest
 
 Requires(pre):         /usr/bin/sed
 #
-Provides:       eject
 Provides:       base = %{version}-%{release}
 Provides:       login = 4.0-33.7
 Provides:       util = %{version}-%{release}
@@ -123,6 +122,7 @@ export SUID_LDFLAGS="-pie"
   --enable-mesg \
   --enable-partx \
   --disable-kill \
+  --disable-eject \
   --enable-write \
   --enable-line \
   --enable-new-mount \
@@ -220,7 +220,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %config(noreplace) /etc/default/su
 %{_bindir}/su
 %{_bindir}/cal
-%{_bindir}/eject
 #%{_bindir}/kill
 %{_bindir}/lslocks
 %{_bindir}/utmpdump
