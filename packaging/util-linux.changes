@@ -1,3 +1,15 @@
+* Fri Aug 16 2013 Mikko Ylinen <mikko.ylinen@intel.com> 1a08de4
+- blkid: enable evaluate by scan (TIVI-1121)
+
+* Wed Aug 07 2013 Maciej Wereski <m.wereski@partner.samsung.com> a801ef2
+- Enable mountpoint utility
+
+* Thu Jul 18 2013 Shane Bryan <shane.bryan@intel.com> e8cbe9e
+- Fix man8 file conflicts with -docs subpackage
+
+* Sat Jun 29 2013 Alexandru Cornea <alexandru.cornea@intel.com> 14b3f6f
+- resetting manifest requested domain to floor
+
 * Sat May 11 2013 Anas Nashif <anas.nashif@intel.com> submit/tizen/20130509.184703@07a1e5d
 - Set license using %license
 
