@@ -16,10 +16,10 @@ Release:        0
 # make the rpm install check of uuidd happy which has support to work without
 # these tools as well
 #!BuildIgnore:  pwdutils
-Url:            http://kernel.org/~kzak/util-linux/
+Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
-Group:          Base/Tools
+Group:          Base/Utilities
 Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.xz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
@@ -156,7 +156,7 @@ rm -f %{buildroot}/%{_libdir}/libblkid.la
 rm -f %{buildroot}/%{_libdir}/libuuid.la
 rm -f %{buildroot}/%{_libdir}/libmount.la
 install -m 644 nologin.8 %{buildroot}%{_mandir}/man8
-echo -e "#! /bin/bash\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
+echo -e "#! /bin/sh\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
 chmod 755 %{buildroot}%{_sbindir}/flushb
 # Stupid hack so we don't have a tcsh dependency
 chmod 644 %{buildroot}%{_datadir}/getopt/getopt*.tcsh
@@ -204,6 +204,9 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %lang_package
 
 %docs_package
+%dir %{_datadir}/getopt
+%attr (755,root,root) %{_datadir}/getopt/getopt-parse.bash
+%attr (755,root,root) %{_datadir}/getopt/getopt-parse.tcsh
 
 
 %files -f %{name}.files 
@@ -305,9 +308,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %verify(not mode) %attr(0755,root,tty) %{_bindir}/write
 %{_sbindir}/flushb
 %{_sbindir}/readprofile
-%dir %{_datadir}/getopt
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.bash
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.tcsh
 #XXX: post our patches upstream
 #XXX: call fdupes on /usr/share/man
 %{_sbindir}/fdisk
