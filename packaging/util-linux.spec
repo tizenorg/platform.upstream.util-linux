@@ -156,7 +156,7 @@ rm -f %{buildroot}/%{_libdir}/libblkid.la
 rm -f %{buildroot}/%{_libdir}/libuuid.la
 rm -f %{buildroot}/%{_libdir}/libmount.la
 install -m 644 nologin.8 %{buildroot}%{_mandir}/man8
-echo -e "#! /bin/bash\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
+echo -e "#! /bin/sh\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
 chmod 755 %{buildroot}%{_sbindir}/flushb
 # Stupid hack so we don't have a tcsh dependency
 chmod 644 %{buildroot}%{_datadir}/getopt/getopt*.tcsh
@@ -204,9 +204,12 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %lang_package
 
 %docs_package
+%dir %{_datadir}/getopt
+%attr (755,root,root) %{_datadir}/getopt/getopt-parse.bash
+%attr (755,root,root) %{_datadir}/getopt/getopt-parse.tcsh
 
 
-%files -f %{name}.files 
+%files -f %{name}.files
 %manifest %{name}.manifest
 %license COPYING
 # Common files for all archs
@@ -305,9 +308,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %verify(not mode) %attr(0755,root,tty) %{_bindir}/write
 %{_sbindir}/flushb
 %{_sbindir}/readprofile
-%dir %{_datadir}/getopt
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.bash
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.tcsh
 #XXX: post our patches upstream
 #XXX: call fdupes on /usr/share/man
 %{_sbindir}/fdisk
