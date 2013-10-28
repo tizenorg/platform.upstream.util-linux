@@ -16,10 +16,10 @@ Release:        0
 # make the rpm install check of uuidd happy which has support to work without
 # these tools as well
 #!BuildIgnore:  pwdutils
-Url:            http://kernel.org/~kzak/util-linux/
+Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
-Group:          Base/Tools
+Group:          Base/Utilities
 Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.xz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
