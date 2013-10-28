@@ -1,3 +1,7 @@
+* Mon Sep 30 2013 Aleksander Zdyb <a.zdyb@partner.samsung.com> accepted/tizen/20130913.063250@c0e303b
+- Removed unnecessary dependency on bash
+- Moved examples to docs package
+
 * Fri Aug 16 2013 Mikko Ylinen <mikko.ylinen@intel.com> 1a08de4
 - blkid: enable evaluate by scan (TIVI-1121)
 
