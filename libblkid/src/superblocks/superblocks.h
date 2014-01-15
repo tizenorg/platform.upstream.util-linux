@@ -29,6 +29,7 @@ extern const struct blkid_idinfo ext2_idinfo;
 extern const struct blkid_idinfo jbd_idinfo;
 extern const struct blkid_idinfo jfs_idinfo;
 extern const struct blkid_idinfo xfs_idinfo;
+extern const struct blkid_idinfo xfs_log_idinfo;
 extern const struct blkid_idinfo gfs_idinfo;
 extern const struct blkid_idinfo gfs2_idinfo;
 extern const struct blkid_idinfo romfs_idinfo;
@@ -40,6 +41,7 @@ extern const struct blkid_idinfo reiser4_idinfo;
 extern const struct blkid_idinfo hfs_idinfo;
 extern const struct blkid_idinfo hfsplus_idinfo;
 extern const struct blkid_idinfo ntfs_idinfo;
+extern const struct blkid_idinfo refs_idinfo;
 extern const struct blkid_idinfo iso9660_idinfo;
 extern const struct blkid_idinfo udf_idinfo;
 extern const struct blkid_idinfo vxfs_idinfo;
@@ -69,6 +71,8 @@ extern const struct blkid_idinfo drbdproxy_datalog_idinfo;
 extern const struct blkid_idinfo befs_idinfo;
 extern const struct blkid_idinfo nilfs2_idinfo;
 extern const struct blkid_idinfo exfat_idinfo;
+extern const struct blkid_idinfo f2fs_idinfo;
+extern const struct blkid_idinfo bcache_idinfo;
 
 /*
  * superblock functions
@@ -88,5 +92,7 @@ extern int blkid_probe_strncpy_uuid(blkid_probe pr, unsigned char *str, size_t l
 extern int blkid_probe_set_uuid(blkid_probe pr, unsigned char *uuid);
 extern int blkid_probe_set_uuid_as(blkid_probe pr, unsigned char *uuid, const char *name);
 
+extern int blkid_probe_set_id_label(blkid_probe pr, const char *name,
+			     unsigned char *data, size_t len);
 
 #endif /* _BLKID_SUPERBLOCKS_H */

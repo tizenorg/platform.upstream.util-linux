@@ -49,15 +49,15 @@ extern int optind;
 
 #include "closestream.h"
 #include "ttyutils.h"
-
-const char *progname = "blkid";
+#include "xalloc.h"
 
 int raw_chars;
 
 static void print_version(FILE *out)
 {
-	fprintf(out, "%s from %s (libblkid %s, %s)\n",
-		progname, PACKAGE_STRING, LIBBLKID_VERSION, LIBBLKID_DATE);
+	fprintf(out, "%s from %s  (libblkid %s, %s)\n",
+		program_invocation_short_name, PACKAGE_STRING,
+		LIBBLKID_VERSION, LIBBLKID_DATE);
 }
 
 static void usage(int error)
@@ -87,7 +87,7 @@ static void usage(int error)
 		" -l          look up only first device with token specified by -t\n"
 		" -L <label>  convert LABEL to device name\n"
 		" -U <uuid>   convert UUID to device name\n"
-		" -v          print version and exit\n"
+		" -V          print version and exit\n"
 		" <dev>       specify device(s) to probe (default: all devices)\n\n"
 		"Low-level probing options:\n"
 		" -p          low-level superblocks probing (bypass cache)\n"
@@ -96,7 +96,7 @@ static void usage(int error)
 		" -O <offset> probe at the given offset\n"
 		" -u <list>   filter by \"usage\" (e.g. -u filesystem,raid)\n"
 		" -n <list>   filter by filesystem type (e.g. -n vfat,ext3)\n"
-		"\n", progname);
+		"\n", program_invocation_short_name);
 
 	exit(error);
 }
@@ -253,6 +253,9 @@ static void print_udev_format(const char *name, const char *value)
 		blkid_encode_string(value, enc, sizeof(enc));
 		printf("ID_FS_%s_ENC=%s\n", name, enc);
 
+	} else if (!strcmp(name, "PTUUID")) {
+		printf("ID_PART_TABLE_UUID=%s\n", value);
+
 	} else if (!strcmp(name, "PTTYPE")) {
 		printf("ID_PART_TABLE_TYPE=%s\n", value);
 
@@ -367,14 +370,7 @@ static int append_str(char **res, size_t *sz, const char *a, const char *b)
 	if (!len)
 		return -1;
 
-	str = realloc(str, len + 1);
-	if (!str) {
-		free(*res);
-		*res = NULL;
-		return -1;
-	}
-
-	*res = str;
+	*res = str = xrealloc(str, len + 1);
 	str += *sz;
 
 	if (a) {
@@ -428,7 +424,7 @@ static int print_udev_ambivalent(blkid_probe pr)
 
 	if (count > 1) {
 		*(val + valsz - 1) = '\0';		/* rem tailing whitespace */
-		printf("ID_FS_AMBIVALEN=%s\n", val);
+		printf("ID_FS_AMBIVALENT=%s\n", val);
 		rc = 0;
 	}
 done:
@@ -491,7 +487,7 @@ static int lowprobe_device(blkid_probe pr, const char *devname,
 	int rc = 0;
 	static int first = 1;
 
-	fd = open(devname, O_RDONLY);
+	fd = open(devname, O_RDONLY|O_CLOEXEC);
 	if (fd < 0) {
 		fprintf(stderr, "error: %s: %m\n", devname);
 		return BLKID_EXIT_NOTFOUND;
@@ -621,25 +617,19 @@ static char **list_to_types(const char *list, int *flag)
 	}
 	for (i = 1; p && (p = strchr(p, ',')); i++, p++);
 
-	res = calloc(i + 1, sizeof(char *));
-	if (!res)
-		goto err_mem;
+	res = xcalloc(i + 1, sizeof(char *));
 	p = *flag & BLKID_FLTR_NOTIN ? list + 2 : list;
 	i = 0;
 
 	while(p) {
 		const char *word = p;
 		p = strchr(p, ',');
-		res[i] = p ? strndup(word, p - word) : strdup(word);
-		if (!res[i++])
-			goto err_mem;
+		res[i++] = p ? xstrndup(word, p - word) : xstrdup(word);
 		if (p)
 			p++;
 	}
 	res[i] = NULL;
 	return res;
-err_mem:
-	fprintf(stderr, "out of memory\n");
 err:
 	*flag = 0;
 	free(res);
@@ -686,7 +676,7 @@ int main(int argc, char **argv)
 	atexit(close_stdout);
 
 	while ((c = getopt (argc, argv,
-			    "c:df:ghilL:n:ko:O:ps:S:t:u:U:w:v")) != EOF) {
+			    "c:df:ghilL:n:ko:O:ps:S:t:u:U:w:Vv")) != EOF) {
 
 		err_exclusive_options(c, NULL, excl, excl_st);
 
@@ -702,8 +692,8 @@ int main(int argc, char **argv)
 			break;
 		case 'L':
 			eval++;
-			search_value = strdup(optarg);
-			search_type = strdup("LABEL");
+			search_value = xstrdup(optarg);
+			search_type = xstrdup("LABEL");
 			break;
 		case 'n':
 			fltr_type = list_to_types(optarg, &fltr_flag);
@@ -713,8 +703,8 @@ int main(int argc, char **argv)
 			break;
 		case 'U':
 			eval++;
-			search_value = strdup(optarg);
-			search_type = strdup("UUID");
+			search_value = xstrdup(optarg);
+			search_type = xstrdup("UUID");
 			break;
 		case 'i':
 			lowprobe |= LOWPROBE_TOPOLOGY;
@@ -784,6 +774,7 @@ int main(int argc, char **argv)
 				usage(err);
 			}
 			break;
+		case 'V':
 		case 'v':
 			version = 1;
 			break;
@@ -801,12 +792,7 @@ int main(int argc, char **argv)
 
 	/* The rest of the args are device names */
 	if (optind < argc) {
-		devices = calloc(argc - optind, sizeof(char *));
-		if (!devices) {
-			fprintf(stderr, "Failed to allocate device name array\n");
-			goto exit;
-		}
-
+		devices = xcalloc(argc - optind, sizeof(char *));
 		while (optind < argc)
 			devices[numdev++] = argv[optind++];
 	}

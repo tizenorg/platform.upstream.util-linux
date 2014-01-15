@@ -53,6 +53,14 @@
 #include "pathnames.h"
 #include "sysfs.h"
 
+/*
+ * sg_io_hdr_t driver_status -- see kernel include/scsi/scsi.h
+ */
+#ifndef DRIVER_SENSE
+# define DRIVER_SENSE	0x08
+#endif
+
+
 #define EJECT_DEFAULT_DEVICE "/dev/cdrom"
 
 
@@ -98,7 +106,6 @@ static long int c_arg;
 static long int x_arg;
 
 struct libmnt_table *mtab;
-struct libmnt_cache *cache;
 
 static void vinfo(const char *fmt, va_list va)
 {
@@ -398,6 +405,9 @@ static void close_tray(int fd)
 static int eject_cdrom(int fd)
 {
 #if defined(CDROMEJECT)
+	int ret = ioctl(fd, CDROM_LOCKDOOR, 0);
+	if (ret < 0)
+		return 0;
 	return ioctl(fd, CDROMEJECT) >= 0;
 #elif defined(CDIOCEJECT)
 	return ioctl(fd, CDIOCEJECT) >= 0;
@@ -499,7 +509,7 @@ static int read_speed(const char *devname)
 	if (!f)
 		err(EXIT_FAILURE, _("cannot open %s"), _PATH_PROC_CDROMINFO);
 
-	name = rindex(devname, '/') + 1;
+	name = strrchr(devname, '/') + 1;
 
 	while (name && !feof(f)) {
 		char line[512];
@@ -601,21 +611,31 @@ static int eject_scsi(int fd)
 
 	io_hdr.cmdp = allowRmBlk;
 	status = ioctl(fd, SG_IO, (void *)&io_hdr);
-	if (status < 0)
+	if (status < 0 || io_hdr.host_status || io_hdr.driver_status)
 		return 0;
 
 	io_hdr.cmdp = startStop1Blk;
 	status = ioctl(fd, SG_IO, (void *)&io_hdr);
-	if (status < 0)
+	if (status < 0 || io_hdr.host_status)
+		return 0;
+
+	/* Ignore errors when there is not medium -- in this case driver sense
+	 * buffer sets MEDIUM NOT PRESENT (3a) bit. For more details see:
+	 * http://www.tldp.org/HOWTO/archived/SCSI-Programming-HOWTO/SCSI-Programming-HOWTO-22.html#sec-sensecodes
+	 * -- kzak Jun 2013
+	 */
+	if (io_hdr.driver_status != 0 &&
+	    !(io_hdr.driver_status == DRIVER_SENSE && io_hdr.sbp &&
+		                                      io_hdr.sbp[12] == 0x3a))
 		return 0;
 
 	io_hdr.cmdp = startStop2Blk;
 	status = ioctl(fd, SG_IO, (void *)&io_hdr);
-	if (status < 0)
+	if (status < 0 || io_hdr.host_status || io_hdr.driver_status)
 		return 0;
 
 	/* force kernel to reread partition table when new disc inserted */
-	status = ioctl(fd, BLKRRPART);
+	ioctl(fd, BLKRRPART);
 	return 1;
 }
 
@@ -655,7 +675,7 @@ static void umount_one(const char *name)
 			err(EXIT_FAILURE, _("cannot set group id"));
 
 		if (setuid(getuid()) < 0)
-			err(EXIT_FAILURE, _("eject: cannot set user id"));
+			err(EXIT_FAILURE, _("cannot set user id"));
 
 		if (p_option)
 			execl("/bin/umount", "/bin/umount", name, "-n", NULL);
@@ -704,12 +724,15 @@ static int device_get_mountpoint(char **devname, char **mnt)
 	*mnt = NULL;
 
 	if (!mtab) {
+		struct libmnt_cache *cache;
+
 		mtab = mnt_new_table();
 		if (!mtab)
 			err(EXIT_FAILURE, _("failed to initialize libmount table"));
 
 		cache = mnt_new_cache();
 		mnt_table_set_cache(mtab, cache);
+		mnt_unref_cache(cache);
 
 		if (p_option)
 			rc = mnt_table_parse_file(mtab, _PATH_PROC_MOUNTINFO);
@@ -1125,8 +1148,7 @@ int main(int argc, char **argv)
 	free(device);
 	free(mountpoint);
 
-	mnt_free_table(mtab);
-	mnt_free_cache(cache);
+	mnt_unref_table(mtab);
 
 	return EXIT_SUCCESS;
 }

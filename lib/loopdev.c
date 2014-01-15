@@ -1,5 +1,8 @@
 /*
- * Copyright (C) 2011 Karel Zak <kzak@redhat.com>
+ * No copyright is claimed.  This code is in the public domain; do with
+ * it what you wish.
+ *
+ * Written by Karel Zak <kzak@redhat.com>
  *
  * -- based on mount/losetup.c
  *
@@ -38,6 +41,7 @@
 #include "loopdev.h"
 #include "canonicalize.h"
 #include "at.h"
+#include "blkdev.h"
 
 #define CONFIG_LOOPDEV_DEBUG
 
@@ -286,7 +290,7 @@ int loopcxt_get_fd(struct loopdev_cxt *lc)
 
 	if (lc->fd < 0) {
 		lc->mode = lc->flags & LOOPDEV_FL_RDWR ? O_RDWR : O_RDONLY;
-		lc->fd = open(lc->device, lc->mode);
+		lc->fd = open(lc->device, lc->mode | O_CLOEXEC);
 		DBG(lc, loopdev_debug("open %s [%s]: %s", lc->device,
 				lc->flags & LOOPDEV_FL_RDWR ? "rw" : "ro",
 				lc->fd < 0 ? "failed" : "ok"));
@@ -489,7 +493,7 @@ static int loopcxt_next_from_proc(struct loopdev_cxt *lc)
 	DBG(lc, loopdev_debug("iter: scan /proc/partitions"));
 
 	if (!iter->proc)
-		iter->proc = fopen(_PATH_PROC_PARTITIONS, "r");
+		iter->proc = fopen(_PATH_PROC_PARTITIONS, "r" UL_CLOEXECSTR);
 	if (!iter->proc)
 		return 1;
 
@@ -864,7 +868,7 @@ int loopmod_supports_partscan(void)
 	if (get_linux_version() >= KERNEL_VERSION(3,2,0))
 		return 1;
 
-	f = fopen("/sys/module/loop/parameters/max_part", "r");
+	f = fopen("/sys/module/loop/parameters/max_part", "r" UL_CLOEXECSTR);
 	if (!f)
 		return 0;
 	rc = fscanf(f, "%d", &ret);
@@ -1068,59 +1072,93 @@ int loopcxt_set_backing_file(struct loopdev_cxt *lc, const char *filename)
 	return 0;
 }
 
-static int digits_only(const char *s)
-{
-	while (*s)
-		if (!isdigit(*s++))
-			return 0;
-	return 1;
-}
-
 /*
- * @lc: context
- * @encryption: encryption name / type (see lopsetup man page)
- * @password
+ * In kernels prior to v3.9, if the offset or sizelimit options
+ * are used, the block device's size won't be synced automatically.
+ * blockdev --getsize64 and filesystems will use the backing
+ * file size until the block device has been re-opened or the
+ * LOOP_SET_CAPACITY ioctl is called to sync the sizes.
  *
- * Note that the encryption functionality is deprecated an unmaintained. Use
- * cryptsetup (it also supports AES-loops).
- *
- * The setting is removed by loopcxt_set_device() loopcxt_next()!
- *
- * Returns: 0 on success, <0 on error.
+ * Since mount -oloop uses the LO_FLAGS_AUTOCLEAR option and passes
+ * the open file descriptor to the mount system call, we need to use
+ * the ioctl. Calling losetup directly doesn't have this problem since
+ * it closes the device when it exits and whatever consumes the device
+ * next will re-open it, causing the resync.
  */
-int loopcxt_set_encryption(struct loopdev_cxt *lc,
-			   const char *encryption,
-			   const char *password)
+static int loopcxt_check_size(struct loopdev_cxt *lc, int file_fd)
 {
-	if (!lc)
-		return -EINVAL;
+	uint64_t size, expected_size;
+	int dev_fd;
+	struct stat st;
 
-	DBG(lc, loopdev_debug("setting encryption '%s'", encryption));
+	if (!lc->info.lo_offset && !lc->info.lo_sizelimit)
+		return 0;
 
-	if (encryption && *encryption) {
-		if (digits_only(encryption)) {
-			lc->info.lo_encrypt_type = atoi(encryption);
-		} else {
-			lc->info.lo_encrypt_type = LO_CRYPT_CRYPTOAPI;
-			snprintf((char *)lc->info.lo_crypt_name, LO_NAME_SIZE,
-				 "%s", encryption);
+	if (fstat(file_fd, &st)) {
+		DBG(lc, loopdev_debug("failed to fstat backing file"));
+		return -errno;
+	}
+	if (S_ISBLK(st.st_mode)) {
+		if (blkdev_get_size(file_fd,
+				(unsigned long long *) &expected_size)) {
+			DBG(lc, loopdev_debug("failed to determine device size"));
+			return -errno;
+		}
+	} else
+		expected_size = st.st_size;
+
+	if (expected_size == 0 || expected_size <= lc->info.lo_offset) {
+		DBG(lc, loopdev_debug("failed to determine expected size"));
+		return 0;	/* ignore this error */
+	}
+
+	if (lc->info.lo_offset > 0)
+		expected_size -= lc->info.lo_offset;
+
+	if (lc->info.lo_sizelimit > 0 && lc->info.lo_sizelimit < expected_size)
+		expected_size = lc->info.lo_sizelimit;
+
+	dev_fd = loopcxt_get_fd(lc);
+	if (dev_fd < 0) {
+		DBG(lc, loopdev_debug("failed to get loop FD"));
+		return -errno;
+	}
+
+	if (blkdev_get_size(dev_fd, (unsigned long long *) &size)) {
+		DBG(lc, loopdev_debug("failed to determine loopdev size"));
+		return -errno;
+	}
+
+	/* It's block device, so, align to 512-byte sectors */
+	if (expected_size % 512) {
+		DBG(lc, loopdev_debug("expected size misaligned to 512-byte sectors"));
+		expected_size = (expected_size >> 9) << 9;
+	}
+
+	if (expected_size != size) {
+		DBG(lc, loopdev_debug("warning: loopdev and expected "
+				      "size dismatch (%ju/%ju)",
+				      size, expected_size));
+
+		if (loopcxt_set_capacity(lc)) {
+			/* ioctl not available */
+			if (errno == ENOTTY || errno == EINVAL)
+				errno = ERANGE;
+			return -errno;
+		}
+
+		if (blkdev_get_size(dev_fd, (unsigned long long *) &size))
+			return -errno;
+
+		if (expected_size != size) {
+			errno = ERANGE;
+			DBG(lc, loopdev_debug("failed to set loopdev size, "
+					"size: %ju, expected: %ju",
+					size, expected_size));
+			return -errno;
 		}
 	}
 
-	switch (lc->info.lo_encrypt_type) {
-	case LO_CRYPT_NONE:
-		lc->info.lo_encrypt_key_size = 0;
-		break;
-	default:
-		DBG(lc, loopdev_debug("setting encryption key"));
-		memset(lc->info.lo_encrypt_key, 0, LO_KEY_SIZE);
-		strncpy((char *)lc->info.lo_encrypt_key, password, LO_KEY_SIZE);
-		lc->info.lo_encrypt_key[LO_KEY_SIZE - 1] = '\0';
-		lc->info.lo_encrypt_key_size = LO_KEY_SIZE;
-		break;
-	}
-
-	DBG(lc, loopdev_debug("encryption successfully set"));
 	return 0;
 }
 
@@ -1157,7 +1195,7 @@ int loopcxt_setup_device(struct loopdev_cxt *lc)
 	if (lc->info.lo_flags & LO_FLAGS_READ_ONLY)
 		mode = O_RDONLY;
 
-	if ((file_fd = open(lc->filename, mode)) < 0) {
+	if ((file_fd = open(lc->filename, mode | O_CLOEXEC)) < 0) {
 		if (mode != O_RDONLY && (errno == EROFS || errno == EACCES))
 			file_fd = open(lc->filename, mode = O_RDONLY);
 
@@ -1203,15 +1241,17 @@ int loopcxt_setup_device(struct loopdev_cxt *lc)
 
 	DBG(lc, loopdev_debug("setup: LOOP_SET_FD: OK"));
 
-	close(file_fd);
-	file_fd = -1;
-
 	if (ioctl(dev_fd, LOOP_SET_STATUS64, &lc->info)) {
 		DBG(lc, loopdev_debug("LOOP_SET_STATUS64 failed: %m"));
 		goto err;
 	}
 
 	DBG(lc, loopdev_debug("setup: LOOP_SET_STATUS64: OK"));
+
+	if ((rc = loopcxt_check_size(lc, file_fd)))
+		goto err;
+
+	close(file_fd);
 
 	memset(&lc->info, 0, sizeof(lc->info));
 	lc->has_info = 0;
@@ -1227,6 +1267,24 @@ err:
 
 	DBG(lc, loopdev_debug("setup failed [rc=%d]", rc));
 	return rc;
+}
+
+int loopcxt_set_capacity(struct loopdev_cxt *lc)
+{
+	int fd = loopcxt_get_fd(lc);
+
+	if (fd < 0)
+		return -EINVAL;
+
+	/* Kernels prior to v2.6.30 don't support this ioctl */
+	if (ioctl(fd, LOOP_SET_CAPACITY, 0) < 0) {
+		int rc = -errno;
+		DBG(lc, loopdev_debug("LOOP_SET_CAPACITY failed: %m"));
+		return rc;
+	}
+
+	DBG(lc, loopdev_debug("capacity set"));
+	return 0;
 }
 
 int loopcxt_delete_device(struct loopdev_cxt *lc)
@@ -1245,6 +1303,36 @@ int loopcxt_delete_device(struct loopdev_cxt *lc)
 	return 0;
 }
 
+int loopcxt_add_device(struct loopdev_cxt *lc)
+{
+	int rc = -EINVAL;
+	int ctl, nr = -1;
+	const char *p, *dev = loopcxt_get_device(lc);
+
+	if (!dev)
+		goto done;
+
+	if (!(lc->flags & LOOPDEV_FL_CONTROL)) {
+		rc = -ENOSYS;
+		goto done;
+	}
+
+	p = strrchr(dev, '/');
+	if (!p || (sscanf(p, "/loop%d", &nr) != 1 && sscanf(p, "/%d", &nr) != 1)
+	       || nr < 0)
+		goto done;
+
+	ctl = open(_PATH_DEV_LOOPCTL, O_RDWR|O_CLOEXEC);
+	if (ctl >= 0) {
+		DBG(lc, loopdev_debug("add_device %d", nr));
+		rc = ioctl(ctl, LOOP_CTL_ADD, nr);
+		close(ctl);
+	}
+done:
+	DBG(lc, loopdev_debug("add_device done [rc=%d]", rc));
+	return rc;
+}
+
 /*
  * Note that LOOP_CTL_GET_FREE ioctl is supported since kernel 3.1. In older
  * kernels we have to check all loop devices to found unused one.
@@ -1258,7 +1346,7 @@ int loopcxt_find_unused(struct loopdev_cxt *lc)
 	DBG(lc, loopdev_debug("find_unused requested"));
 
 	if (lc->flags & LOOPDEV_FL_CONTROL) {
-		int ctl = open(_PATH_DEV_LOOPCTL, O_RDWR);
+		int ctl = open(_PATH_DEV_LOOPCTL, O_RDWR|O_CLOEXEC);
 
 		if (ctl >= 0)
 			rc = ioctl(ctl, LOOP_CTL_GET_FREE);
@@ -1409,7 +1497,7 @@ char *loopdev_find_by_backing_file(const char *filename, uint64_t offset, int fl
 
 	if (loopcxt_init(&lc, 0))
 		return NULL;
-	if (loopcxt_find_by_backing_file(&lc, filename, offset, flags))
+	if (loopcxt_find_by_backing_file(&lc, filename, offset, flags) == 0)
 		res = loopcxt_strdup_device(&lc);
 	loopcxt_deinit(&lc);
 

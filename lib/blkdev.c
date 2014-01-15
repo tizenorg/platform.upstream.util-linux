@@ -1,4 +1,9 @@
-
+/*
+ * No copyright is claimed.  This code is in the public domain; do with
+ * it what you wish.
+ *
+ * Written by Karel Zak <kzak@redhat.com>
+ */
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -23,7 +28,6 @@
 #include "blkdev.h"
 #include "c.h"
 #include "linux_version.h"
-#include "xalloc.h"
 
 static long
 blkdev_valid_offset (int fd, off_t offset) {
@@ -331,7 +335,7 @@ const char *blkdev_scsi_type_to_name(int type)
 	return NULL;
 }
 
-#ifdef TEST_PROGRAM
+#ifdef TEST_PROGRAM_BLKDEV
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -348,7 +352,7 @@ main(int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 
-	if ((fd = open(argv[1], O_RDONLY)) < 0)
+	if ((fd = open(argv[1], O_RDONLY|O_CLOEXEC)) < 0)
 		err(EXIT_FAILURE, "open %s failed", argv[1]);
 
 	if (blkdev_get_size(fd, &bytes) < 0)

@@ -37,7 +37,7 @@
  *                           last line that has no newline correctly.
  * 3-Jun-1998: Patched by Nicolai Langfeldt to work better on Linux:
  *	Handle any-length-lines.  Code copied from util-linux' setpwnam.c
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  *	added Native Language Support
  * 1999-09-19 Bruno Haible <haible@clisp.cons.org>
  *	modified to work correctly in multi-byte locales
@@ -86,13 +86,29 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
+static void reverse_str(wchar_t *str, size_t n)
+{
+	size_t i;
+
+	for (i = 0; i < n / 2; ++i) {
+		wchar_t tmp = str[i];
+		str[i] = str[n - 1 - i];
+		str[n - 1 - i] = tmp;
+	}
+}
+
 int main(int argc, char *argv[])
 {
 	char *filename = "stdin";
-	wchar_t *t;
 	size_t len, bufsiz = BUFSIZ;
 	FILE *fp = stdin;
 	int ch, rval = EXIT_SUCCESS;
+
+	static const struct option longopts[] = {
+		{ "version",    no_argument,       0, 'V' },
+		{ "help",       no_argument,       0, 'h' },
+		{ NULL,         0, 0, 0 }
+	};
 
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
@@ -101,12 +117,6 @@ int main(int argc, char *argv[])
 
 	signal(SIGINT, sig_handler);
 	signal(SIGTERM, sig_handler);
-
-	static const struct option longopts[] = {
-		{ "version",    no_argument,       0, 'V' },
-		{ "help",       no_argument,       0, 'h' },
-		{ NULL,         0, 0, 0 }
-	};
 
 	while ((ch = getopt_long(argc, argv, "Vh", longopts, NULL)) != -1)
 		switch(ch) {
@@ -153,22 +163,16 @@ int main(int argc, char *argv[])
 
 				len = wcslen(buf);
 			}
-
-			t = buf + len - 1 - (*(buf+len-1)=='\r' || *(buf+len-1)=='\n');
-			for ( ; t >= buf; --t) {
-				if (*t != 0)
-					putwchar(*t);
-			}
-			putwchar('\n');
+			if (buf[len - 1] == '\n')
+				buf[len--] = '\0';
+			reverse_str(buf, len);
+			fputws(buf, stdout);
 		}
-
-		fflush(fp);
 		if (ferror(fp)) {
 			warn("%s", filename);
 			rval = EXIT_FAILURE;
 		}
-		if (fclose(fp))
-			rval = EXIT_FAILURE;
+		fclose(fp);
 	} while(*argv);
 
 	free(buf);

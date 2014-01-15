@@ -28,9 +28,11 @@
 #include <time.h>
 #include <sys/file.h>
 #include <sys/socket.h>
-#include <netdb.h>
 #include <langinfo.h>
 #include <grp.h>
+#include <arpa/inet.h>
+#include <netdb.h>
+#include <ifaddrs.h>
 
 #include "strutils.h"
 #include "all-io.h"
@@ -103,22 +105,6 @@
 #define LOGIN		"login: "
 #define LOGIN_ARGV_MAX	16		/* Numbers of args for login */
 
-/* Some shorthands for control characters. */
-#define CTL(x)		(x ^ 0100)	/* Assumes ASCII dialect */
-#define	CR		CTL('M')	/* carriage return */
-#define	NL		CTL('J')	/* line feed */
-#define	BS		CTL('H')	/* back space */
-#define	DEL		CTL('?')	/* delete */
-
-/* Defaults for line-editing etc. characters; you may want to change these. */
-#define DEF_ERASE	DEL		/* default erase character */
-#define DEF_INTR	CTL('C')	/* default interrupt character */
-#define DEF_QUIT	CTL('\\')	/* default quit char */
-#define DEF_KILL	CTL('U')	/* default kill char */
-#define DEF_EOF		CTL('D')	/* default EOF char */
-#define DEF_EOL		0
-#define DEF_SWITCH	0		/* default switch char */
-
 /*
  * When multiple baud rates are specified on the command line, the first one
  * we will try is the first one specified.
@@ -141,16 +127,26 @@ struct options {
 	char *term;			/* terminal type */
 	char *initstring;		/* modem init string */
 	char *issue;			/* alternative issue file */
+	char *erasechars;		/* string with erase chars */
+	char *killchars;		/* string with kill chars */
+	char *osrelease;		/* /etc/os-release data */
 	int delay;			/* Sleep seconds before prompt */
 	int nice;			/* Run login with this priority */
 	int numspeed;			/* number of baud rates to try */
+	int clocal;			/* CLOCAL_MODE_* */
 	speed_t speeds[MAX_SPEED];	/* baud rates to be tried */
+};
+
+enum {
+	CLOCAL_MODE_AUTO = 0,
+	CLOCAL_MODE_ALWAYS,
+	CLOCAL_MODE_NEVER
 };
 
 #define	F_PARSE		(1<<0)	/* process modem status messages */
 #define	F_ISSUE		(1<<1)	/* display /etc/issue */
 #define	F_RTSCTS	(1<<2)	/* enable RTS/CTS flow control */
-#define F_LOCAL		(1<<3)	/* force local */
+
 #define F_INITSTRING    (1<<4)	/* initstring is set */
 #define F_WAITCRLF	(1<<5)	/* wait for CR or LF */
 #define F_CUSTISSUE	(1<<6)	/* give alternative issue file */
@@ -173,24 +169,6 @@ struct options {
 #define serial_tty_option(opt, flag)	\
 	(((opt)->flags & (F_VCONSOLE|(flag))) == (flag))
 
-/* Storage for things detected while the login name was read. */
-struct chardata {
-	int erase;		/* erase character */
-	int kill;		/* kill character */
-	int eol;		/* end-of-line character */
-	int parity;		/* what parity did we see */
-	int capslock;		/* upper case without lower case */
-};
-
-/* Initial values for the above. */
-static const struct chardata init_chardata = {
-	DEF_ERASE,		/* default erase character */
-	DEF_KILL,		/* default kill character */
-	13,			/* default eol char */
-	0,			/* space parity */
-	0,			/* no capslock */
-};
-
 struct Speedtab {
 	long speed;
 	speed_t code;
@@ -210,16 +188,14 @@ static const struct Speedtab speedtab[] = {
 	{2400, B2400},
 	{4800, B4800},
 	{9600, B9600},
-#ifdef	B19200
+#ifdef B19200
 	{19200, B19200},
-#endif
-#ifdef	B38400
-	{38400, B38400},
-#endif
-#ifdef	EXTA
+#elif defined(EXTA)
 	{19200, EXTA},
 #endif
-#ifdef	EXTB
+#ifdef B38400
+	{38400, B38400},
+#elif defined(EXTB)
 	{38400, EXTB},
 #endif
 #ifdef B57600
@@ -230,6 +206,42 @@ static const struct Speedtab speedtab[] = {
 #endif
 #ifdef B230400
 	{230400, B230400},
+#endif
+#ifdef B460800
+	{460800, B460800},
+#endif
+#ifdef B500000
+	{500000, B500000},
+#endif
+#ifdef B576000
+	{576000, B576000},
+#endif
+#ifdef B921600
+	{921600, B921600},
+#endif
+#ifdef B1000000
+	{1000000, B1000000},
+#endif
+#ifdef B1152000
+	{1152000, B1152000},
+#endif
+#ifdef B1500000
+	{1500000, B1500000},
+#endif
+#ifdef B2000000
+	{2000000, B2000000},
+#endif
+#ifdef B2500000
+	{2500000, B2500000},
+#endif
+#ifdef B3000000
+	{3000000, B3000000},
+#endif
+#ifdef B3500000
+	{3500000, B3500000},
+#endif
+#ifdef B4000000
+	{4000000, B4000000},
 #endif
 	{0, 0},
 };
@@ -242,7 +254,8 @@ static void open_tty(char *tty, struct termios *tp, struct options *op);
 static void termio_init(struct options *op, struct termios *tp);
 static void reset_vc (const struct options *op, struct termios *tp);
 static void auto_baud(struct termios *tp);
-static void output_special_char (unsigned char c, struct options *op, struct termios *tp);
+static void output_special_char (unsigned char c, struct options *op,
+		struct termios *tp, FILE *fp);
 static void do_prompt(struct options *op, struct termios *tp);
 static void next_speed(struct options *op, struct termios *tp);
 static char *get_logname(struct options *op,
@@ -264,10 +277,13 @@ static void login_options_to_argv(char *argv[], int *argc, char *str, char *user
 static char *fakehost;
 
 #ifdef DEBUGGING
-#define debug(s) do { fprintf(dbf,s); fflush(dbf); } while (0)
+# ifndef DEBUG_OUTPUT
+#  define DEBUG_OUTPUT "/dev/ttyp0"
+# endif
+# define debug(s) do { fprintf(dbf,s); fflush(dbf); } while (0)
 FILE *dbf;
 #else
-#define debug(s) do { ; } while (0)
+# define debug(s) do { ; } while (0)
 #endif
 
 int main(int argc, char **argv)
@@ -299,7 +315,7 @@ int main(int argc, char **argv)
 	sigaction(SIGINT, &sa, &sa_int);
 
 #ifdef DEBUGGING
-	dbf = fopen("/dev/ttyp0", "w");
+	dbf = fopen(DEBUG_OUTPUT, "w");
 	for (int i = 1; i < argc; i++)
 		debug(argv[i]);
 #endif				/* DEBUGGING */
@@ -340,8 +356,10 @@ int main(int argc, char **argv)
 			   strlen(options.initstring));
 	}
 
-	if (!serial_tty_option(&options, F_LOCAL))
-		/* Go to blocking write mode unless -L is specified. */
+	if (options.flags & F_VCONSOLE || options.clocal != CLOCAL_MODE_ALWAYS)
+		/* Go to blocking mode unless -L is specified, this change
+		 * affects stdout, stdin and stderr as all the file descriptors
+		 * are created by dup().   */
 		fcntl(STDOUT_FILENO, F_SETFL,
 		      fcntl(STDOUT_FILENO, F_GETFL, 0) & ~O_NONBLOCK);
 
@@ -370,19 +388,23 @@ int main(int argc, char **argv)
 		}
 	}
 
-	chardata = init_chardata;
+	INIT_CHARDATA(&chardata);
+
+	if (options.autolog) {
+		debug("doing auto login\n");
+		username = options.autolog;
+	}
+
 	if ((options.flags & F_NOPROMPT) == 0) {
 		if (options.autolog) {
-			/* Do the auto login. */
-			debug("doing auto login\n");
+			/* Autologin prompt */
 			do_prompt(&options, &termios);
-			printf("%s%s (automatic login)\n", LOGIN, options.autolog);
-			username = options.autolog;
+			printf(_("%s%s (automatic login)\n"), LOGIN, options.autolog);
 		} else {
 			/* Read the login name. */
 			debug("reading login name\n");
 			while ((username =
-				get_logname(&options, &termios, &chardata)) == 0)
+				get_logname(&options, &termios, &chardata)) == NULL)
 				if ((options.flags & F_VCONSOLE) == 0)
 					next_speed(&options, &termios);
 		}
@@ -444,6 +466,13 @@ int main(int argc, char **argv)
 			log_warn(_("%s: can't change process priority: %m"),
 				options.tty);
 	}
+	if (options.osrelease)
+		free(options.osrelease);
+#ifdef DEBUGGING
+	fprintf(dbf, "read %c\n", ch);
+	if (close_stream(dbf) != 0)
+		log_err("write failed: %s", DEBUG_OUTPUT);
+#endif
 
 	/* Let the login program take care of password validation. */
 	execv(options.login, login_argv);
@@ -470,9 +499,11 @@ static char *replace_u(char *str, char *username)
 		}
 		sz = strlen(str);
 
-		if (p == str && sz == 2)
+		if (p == str && sz == 2) {
 			/* 'str' contains only '\u' */
+			free(old);
 			return username;
+		}
 
 		tp = entry = malloc(sz + usz);
 		if (!tp)
@@ -539,7 +570,9 @@ static void parse_args(int argc, char **argv, struct options *op)
 		NOHINTS_OPTION,
 		NOHOSTNAME_OPTION,
 		LONGHOSTNAME_OPTION,
-		HELP_OPTION
+		HELP_OPTION,
+		ERASE_CHARS_OPTION,
+		KILL_CHARS_OPTION,
 	};
 	const struct option longopts[] = {
 		{  "8bits",	     no_argument,	 0,  '8'  },
@@ -555,7 +588,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 		{  "init-string",    required_argument,  0,  'I'  },
 		{  "noclear",	     no_argument,	 0,  'J'  },
 		{  "login-program",  required_argument,  0,  'l'  },
-		{  "local-line",     no_argument,	 0,  'L'  },
+		{  "local-line",     optional_argument,	 0,  'L'  },
 		{  "extract-baud",   no_argument,	 0,  'm'  },
 		{  "skip-login",     no_argument,	 0,  'n'  },
 		{  "nonewline",	     no_argument,	 0,  'N'  },
@@ -573,11 +606,13 @@ static void parse_args(int argc, char **argv, struct options *op)
 		{  "long-hostname",  no_argument,	 0,  LONGHOSTNAME_OPTION },
 		{  "version",	     no_argument,	 0,  VERSION_OPTION  },
 		{  "help",	     no_argument,	 0,  HELP_OPTION     },
+		{  "erase-chars",    required_argument,  0,  ERASE_CHARS_OPTION },
+		{  "kill-chars",     required_argument,  0,  KILL_CHARS_OPTION },
 		{ NULL, 0, 0, 0 }
 	};
 
 	while ((c = getopt_long(argc, argv,
-			   "8a:cC:d:Ef:hH:iI:Jl:LmnNo:pP:r:Rst:Uw", longopts,
+			   "8a:cC:d:Ef:hH:iI:Jl:L::mnNo:pP:r:Rst:Uw", longopts,
 			    NULL)) != -1) {
 		switch (c) {
 		case '8':
@@ -622,7 +657,18 @@ static void parse_args(int argc, char **argv, struct options *op)
 			op->login = optarg;
 			break;
 		case 'L':
-			op->flags |= F_LOCAL;
+			/* -L and -L=always have the same meaning */
+			op->clocal = CLOCAL_MODE_ALWAYS;
+			if (optarg) {
+				if (strcmp(optarg, "=always") == 0)
+					op->clocal = CLOCAL_MODE_ALWAYS;
+				else if (strcmp(optarg, "=never") == 0)
+					op->clocal = CLOCAL_MODE_NEVER;
+				else if (strcmp(optarg, "=auto") == 0)
+					op->clocal = CLOCAL_MODE_AUTO;
+				else
+					log_err(_("invalid argument of --local-line"));
+			}
 			break;
 		case 'm':
 			op->flags |= F_PARSE;
@@ -666,6 +712,12 @@ static void parse_args(int argc, char **argv, struct options *op)
 			break;
 		case LONGHOSTNAME_OPTION:
 			op->flags |= F_LONGHNAME;
+			break;
+		case ERASE_CHARS_OPTION:
+			op->erasechars = optarg;
+			break;
+		case KILL_CHARS_OPTION:
+			op->killchars = optarg;
 			break;
 		case VERSION_OPTION:
 			printf(_("%s from %s\n"), program_invocation_short_name,
@@ -761,7 +813,7 @@ static void parse_speeds(struct options *op, char *arg)
 	char *cp;
 
 	debug("entered parse_speeds\n");
-	for (cp = strtok(arg, ","); cp != 0; cp = strtok((char *)0, ",")) {
+	for (cp = strtok(arg, ","); cp != NULL; cp = strtok((char *)0, ",")) {
 		if ((op->speeds[op->numspeed++] = bcode(cp)) <= 0)
 			log_err(_("bad speed: %s"), cp);
 		if (op->numspeed >= MAX_SPEED)
@@ -833,7 +885,11 @@ static void update_utmp(struct options *op)
 	if (fakehost)
 		strncpy(ut.ut_host, fakehost, sizeof(ut.ut_host));
 	time(&t);
+#if defined(_HAVE_UT_TV)
+	ut.ut_tv.tv_sec = t;
+#else
 	ut.ut_time = t;
+#endif
 	ut.ut_type = LOGIN_PROCESS;
 	ut.ut_pid = pid;
 	ut.ut_session = sid;
@@ -894,7 +950,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 		 * Linux login(1) will change tty permissions. Use root owner and group
 		 * with permission -rw------- for the period between getty and login.
 		 */
-		if (chown(buf, 0, gid) || chmod(buf, (gid ? 0660 : 0600))) {
+		if (chown(buf, 0, gid) || chmod(buf, (gid ? 0620 : 0600))) {
 			if (errno == EROFS)
 				log_warn("%s: %m", buf);
 			else
@@ -915,7 +971,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 
 		if (((tid = tcgetsid(fd)) < 0) || (pid != tid)) {
 			if (ioctl(fd, TIOCSCTTY, 1) == -1)
-				log_warn("/dev/%s: cannot get controlling tty: %m", tty);
+				log_warn(_("/dev/%s: cannot get controlling tty: %m"), tty);
 		}
 
 		close(STDIN_FILENO);
@@ -937,7 +993,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 			closed = 1;
 
 			if (vhangup())
-				log_err("/dev/%s: vhangup() failed: %m", tty);
+				log_err(_("/dev/%s: vhangup() failed: %m"), tty);
 		} else
 			close(fd);
 
@@ -947,7 +1003,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 
 		if (((tid = tcgetsid(STDIN_FILENO)) < 0) || (pid != tid)) {
 			if (ioctl(STDIN_FILENO, TIOCSCTTY, 1) == -1)
-				log_warn("/dev/%s: cannot get controlling tty: %m", tty);
+				log_warn(_("/dev/%s: cannot get controlling tty: %m"), tty);
 		}
 
 	} else {
@@ -963,7 +1019,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 	}
 
 	if (tcsetpgrp(STDIN_FILENO, pid))
-		log_warn("/dev/%s: cannot set process group: %m", tty);
+		log_warn(_("/dev/%s: cannot set process group: %m"), tty);
 
 	/* Get rid of the present outputs. */
 	if (!closed) {
@@ -994,7 +1050,7 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 	 */
 	memset(tp, 0, sizeof(struct termios));
 	if (tcgetattr(STDIN_FILENO, tp) < 0)
-		log_err("%s: tcgetattr: %m", tty);
+		log_err(_("%s: failed to get terminal attributes: %m"), tty);
 
 	/*
 	 * Detect if this is a virtual console or serial/modem line.
@@ -1103,8 +1159,19 @@ static void termio_init(struct options *op, struct termios *tp)
 	cfsetispeed(tp, ispeed);
 	cfsetospeed(tp, ospeed);
 
-	if (op->flags & F_LOCAL)
-		tp->c_cflag |= CLOCAL;
+	/* The default is to follow setting from kernel, but it's possible
+	 * to explicitly remove/add CLOCAL flag by -L[=<mode>]*/
+	switch (op->clocal) {
+	case CLOCAL_MODE_ALWAYS:
+		tp->c_cflag |= CLOCAL;		/* -L or -L=always */
+		break;
+	case CLOCAL_MODE_NEVER:
+		tp->c_cflag &= ~CLOCAL;		/* -L=never */
+		break;
+	case CLOCAL_MODE_AUTO:			/* -L=auto */
+		break;
+	}
+
 #ifdef HAVE_STRUCT_TERMIOS_C_LINE
 	tp->c_line = 0;
 #endif
@@ -1152,7 +1219,7 @@ static void reset_vc(const struct options *op, struct termios *tp)
 	reset_virtual_console(tp, fl);
 
 	if (tcsetattr(STDIN_FILENO, TCSADRAIN, tp))
-		log_warn("tcsetattr problem: %m");
+		log_warn(_("setting terminal attributes failed: %m"));
 }
 
 /* Extract baud rate from modem status message. */
@@ -1215,6 +1282,121 @@ static void auto_baud(struct termios *tp)
 	tcsetattr(STDIN_FILENO, TCSANOW, tp);
 }
 
+static char *xgethostname(void)
+{
+	char *name;
+	size_t sz = get_hostname_max() + 1;
+
+	name = malloc(sizeof(char) * sz);
+	if (!name)
+		log_err(_("failed to allocate memory: %m"));
+
+	if (gethostname(name, sz) != 0) {
+		free(name);
+		return NULL;
+	}
+	name[sz - 1] = '\0';
+	return name;
+}
+
+static char *xgetdomainname(void)
+{
+#ifdef HAVE_GETDOMAINNAME
+	char *name;
+	size_t sz = get_hostname_max() + 1;
+
+	name = malloc(sizeof(char) * sz);
+	if (!name)
+		log_err(_("failed to allocate memory: %m"));
+
+	if (getdomainname(name, sz) != 0) {
+		free(name);
+		return NULL;
+	}
+	name[sz - 1] = '\0';
+	return name;
+#endif
+	return NULL;
+}
+
+static char *read_os_release(struct options *op, const char *varname)
+{
+	int fd = -1;
+	struct stat st;
+	size_t varsz = strlen(varname);
+	char *p, *buf = NULL, *ret = NULL;
+
+	/* read the file only once */
+	if (!op->osrelease) {
+		fd = open(_PATH_OS_RELEASE, O_RDONLY);
+		if (fd == -1) {
+			log_warn(_("cannot open: %s: %m"), _PATH_OS_RELEASE);
+			return NULL;
+		}
+
+		if (fstat(fd, &st) < 0 || st.st_size > 4 * 1024 * 1024)
+			goto done;
+
+		op->osrelease = malloc(st.st_size + 1);
+		if (!op->osrelease)
+			log_err(_("failed to allocate memory: %m"));
+		if (read_all(fd, op->osrelease, st.st_size) != (ssize_t) st.st_size) {
+			free(op->osrelease);
+			op->osrelease = NULL;
+			goto done;
+		}
+		op->osrelease[st.st_size] = 0;
+	}
+	buf = strdup(op->osrelease);
+	if (!buf)
+		log_err(_("failed to allocate memory: %m"));
+	p = buf;
+
+	for (;;) {
+		char *eol, *eon;
+
+		p += strspn(p, "\n\r");
+		p += strspn(p, " \t\n\r");
+		if (!*p)
+			break;
+		if (strspn(p, "#;\n") != 0) {
+			p += strcspn(p, "\n\r");
+			continue;
+		}
+		if (strncmp(p, varname, varsz) != 0) {
+			p += strcspn(p, "\n\r");
+			continue;
+		}
+		p += varsz;
+		p += strspn(p, " \t\n\r=\"");
+		eol = p + strcspn(p, "\n\r");
+		*eol = '\0';
+		eon = eol-1;
+		while (eon > p) {
+			if (*eon == '\t' || *eon == ' ') {
+				eon--;
+				continue;
+			}
+			if (*eon == '"') {
+				*eon = '\0';
+				break;
+			}
+			break;
+		}
+		if (ret)
+			free(ret);
+		ret = strdup(p);
+		if (!ret)
+			log_err(_("failed to allocate memory: %m"));
+		p = eol + 1;
+	}
+done:
+	free(buf);
+	if (fd >= 0)
+		close(fd);
+	return ret;
+}
+
 /* Show login prompt, optionally preceded by /etc/issue contents. */
 static void do_prompt(struct options *op, struct termios *tp)
 {
@@ -1239,7 +1421,7 @@ static void do_prompt(struct options *op, struct termios *tp)
 
 		while ((c = getc(fd)) != EOF) {
 			if (c == '\\')
-				output_special_char(getc(fd), op, tp);
+				output_special_char(getc(fd), op, tp, fd);
 			else
 				putchar(c);
 		}
@@ -1255,7 +1437,7 @@ static void do_prompt(struct options *op, struct termios *tp)
 	}
 #endif	/* ISSUE */
 	if (op->flags & F_LOGINPAUSE) {
-		puts("[press ENTER to login]");
+		puts(_("[press ENTER to login]"));
 		getc(stdin);
 	}
 #ifdef KDGKBLED
@@ -1288,24 +1470,37 @@ static void do_prompt(struct options *op, struct termios *tp)
 	}
 #endif /* KDGKBLED */
 	if ((op->flags & F_NOHOSTNAME) == 0) {
-		char hn[MAXHOSTNAMELEN + 1];
-		if (gethostname(hn, sizeof(hn)) == 0) {
-			struct hostent *ht;
-			char *dot = strchr(hn, '.');
+		char *hn = xgethostname();
 
-			hn[MAXHOSTNAMELEN] = '\0';
+		if (hn) {
+			char *dot = strchr(hn, '.');
+			char *cn = hn;
+			struct addrinfo *res = NULL;
+
 			if ((op->flags & F_LONGHNAME) == 0) {
 				if (dot)
 					*dot = '\0';
-				write_all(STDOUT_FILENO, hn, strlen(hn));
-			} else if (dot == NULL && (ht = gethostbyname(hn)))
-				write_all(STDOUT_FILENO, ht->h_name, strlen(ht->h_name));
-			else
-				write_all(STDOUT_FILENO, hn, strlen(hn));
+
+			} else if (dot == NULL) {
+				struct addrinfo hints;
+
+				memset(&hints, 0, sizeof(hints));
+				hints.ai_flags = AI_CANONNAME;
+
+				if (!getaddrinfo(hn, NULL, &hints, &res)
+				    && res && res->ai_canonname)
+					cn = res->ai_canonname;
+			}
+
+			write_all(STDOUT_FILENO, cn, strlen(cn));
 			write_all(STDOUT_FILENO, " ", 1);
+
+			if (res)
+				freeaddrinfo(res);
+			free(hn);
 		}
 	}
-	if (op->autolog == (char*)0) {
+	if (!op->autolog) {
 		/* Always show login prompt. */
 		write_all(STDOUT_FILENO, LOGIN, sizeof(LOGIN) - 1);
 	}
@@ -1347,7 +1542,7 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 	};
 
 	/* Initialize kill, erase, parity etc. (also after switching speeds). */
-	*cp = init_chardata;
+	INIT_CHARDATA(cp);
 
 	/*
 	 * Flush pending input (especially important after parsing or switching
@@ -1371,11 +1566,14 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 		/* Read name, watch for break and end-of-line. */
 		while (cp->eol == '\0') {
 
+			char key;
+
 			if (read(STDIN_FILENO, &c, 1) < 1) {
 
-				/* Do not report trivial like EINTR/EIO errors. */
+				/* The terminal could be open with O_NONBLOCK when
+				 * -L (force CLOCAL) is specified...  */
 				if (errno == EINTR || errno == EAGAIN) {
-					usleep(1000);
+					usleep(250000);
 					continue;
 				}
 				switch (errno) {
@@ -1403,8 +1601,15 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 				cp->parity |= ((bits & 1) ? 1 : 2);
 			}
 
+			if (op->killchars && strchr(op->killchars, ascval))
+				key = CTL('U');
+			else if (op->erasechars && strchr(op->erasechars, ascval))
+				key = DEL;
+			else
+				key = ascval;
+
 			/* Do erase, kill and end-of-line processing. */
-			switch (ascval) {
+			switch (key) {
 			case 0:
 				*bp = 0;
 				if (op->numspeed > 1)
@@ -1417,7 +1622,6 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 				break;
 			case BS:
 			case DEL:
-			case '#':
 				cp->erase = ascval; /* set erase character */
 				if (bp > logname) {
 					if ((tp->c_lflag & ECHO) == 0)
@@ -1426,7 +1630,6 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 				}
 				break;
 			case CTL('U'):
-			case '@':
 				cp->kill = ascval;		/* set kill character */
 				while (bp > logname) {
 					if ((tp->c_lflag & ECHO) == 0)
@@ -1456,7 +1659,7 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 
 		len = mbstowcs((wchar_t *)0, logname, 0);
 		if (len < 0)
-			log_err("%s: invalid character conversion for login name", op->tty);
+			log_err(_("%s: invalid character conversion for login name"), op->tty);
 
 		wcs = (wchar_t *) malloc((len + 1) * sizeof(wchar_t));
 		if (!wcs)
@@ -1464,13 +1667,13 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 
 		len = mbstowcs(wcs, logname, len + 1);
 		if (len < 0)
-			log_err("%s: invalid character conversion for login name", op->tty);
+			log_err(_("%s: invalid character conversion for login name"), op->tty);
 
 		wcp = wcs;
 		while (*wcp) {
 			const wint_t wc = *wcp++;
 			if (!iswprint(wc))
-				log_err("%s: invalid character 0x%x in login name", op->tty, wc);
+				log_err(_("%s: invalid character 0x%x in login name"), op->tty, wc);
 		}
 		free(wcs);
 	} else
@@ -1555,7 +1758,7 @@ static void termio_final(struct options *op, struct termios *tp, struct chardata
 
 	/* Finally, make the new settings effective. */
 	if (tcsetattr(STDIN_FILENO, TCSANOW, tp) < 0)
-		log_err("%s: tcsetattr: TCSANOW: %m", op->tty);
+		log_err(_("%s: failed to set terminal attributes: %m"), op->tty);
 }
 
 /*
@@ -1588,40 +1791,43 @@ static speed_t bcode(char *s)
 	return 0;
 }
 
-static void __attribute__ ((__noreturn__)) usage(FILE * out)
+static void __attribute__ ((__noreturn__)) usage(FILE *out)
 {
-	fprintf(out, _("\nUsage:\n"
-		       " %1$s [options] line baud_rate,... [termtype]\n"
-		       " %1$s [options] baud_rate,... line [termtype]\n"),
-		program_invocation_short_name);
-
-	fprintf(out, _("\nOptions:\n"
-		       " -8, --8bits                assume 8-bit tty\n"
-		       " -a, --autologin <user>     login the specified user automatically\n"
-		       " -c, --noreset              do not reset control mode\n"
-		       " -f, --issue-file <file>    display issue file\n"
-		       " -h, --flow-control         enable hardware flow control\n"
-		       " -H, --host <hostname>      specify login host\n"
-		       " -i, --noissue              do not display issue file\n"
-		       " -I, --init-string <string> set init string\n"
-		       " -l, --login-program <file> specify login program\n"
-		       " -L, --local-line           force local line\n"
-		       " -m, --extract-baud         extract baud rate during connect\n"
-		       " -n, --skip-login           do not prompt for login\n"
-		       " -o, --login-options <opts> options that are passed to login\n"
-		       " -p, --loginpause           wait for any key before the login\n"
-		       " -R, --hangup               do virtually hangup on the tty\n"
-		       " -s, --keep-baud            try to keep baud rate after break\n"
-		       " -t, --timeout <number>     login process timeout\n"
-		       " -U, --detect-case          detect uppercase terminal\n"
-		       " -w, --wait-cr              wait carriage-return\n"
-		       "     --noclear              do not clear the screen before prompt\n"
-		       "     --nohints              do not print hints\n"
-		       "     --nonewline            do not print a newline before issue\n"
-		       "     --no-hostname          no hostname at all will be shown\n"
-		       "     --long-hostname        show full qualified hostname\n"
-		       "     --version              output version information and exit\n"
-		       "     --help                 display this help and exit\n\n"));
+	fputs(USAGE_HEADER, out);
+	fprintf(out, _(" %1$s [options] <line> [<baud_rate>,...] [<termtype>]\n"
+		       " %1$s [options] <baud_rate>,... <line> [<termtype>]\n"), program_invocation_short_name);
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -8, --8bits                assume 8-bit tty\n"), out);
+	fputs(_(" -a, --autologin <user>     login the specified user automatically\n"), out);
+	fputs(_(" -c, --noreset              do not reset control mode\n"), out);
+	fputs(_(" -E, --remote               use -r <hostname> for login(1)\n"), out);
+	fputs(_(" -f, --issue-file <file>    display issue file\n"), out);
+	fputs(_(" -h, --flow-control         enable hardware flow control\n"), out);
+	fputs(_(" -H, --host <hostname>      specify login host\n"), out);
+	fputs(_(" -i, --noissue              do not display issue file\n"), out);
+	fputs(_(" -I, --init-string <string> set init string\n"), out);
+	fputs(_(" -l, --login-program <file> specify login program\n"), out);
+	fputs(_(" -L, --local-line[=<mode>]  control the local line flag\n"), out);
+	fputs(_(" -m, --extract-baud         extract baud rate during connect\n"), out);
+	fputs(_(" -n, --skip-login           do not prompt for login\n"), out);
+	fputs(_(" -o, --login-options <opts> options that are passed to login\n"), out);
+	fputs(_(" -p, --login-pause          wait for any key before the login\n"), out);
+	fputs(_(" -r, --chroot <dir>         change root to the directory\n"), out);
+	fputs(_(" -R, --hangup               do virtually hangup on the tty\n"), out);
+	fputs(_(" -s, --keep-baud            try to keep baud rate after break\n"), out);
+	fputs(_(" -t, --timeout <number>     login process timeout\n"), out);
+	fputs(_(" -U, --detect-case          detect uppercase terminal\n"), out);
+	fputs(_(" -w, --wait-cr              wait carriage-return\n"), out);
+	fputs(_("     --noclear              do not clear the screen before prompt\n"), out);
+	fputs(_("     --nohints              do not print hints\n"), out);
+	fputs(_("     --nonewline            do not print a newline before issue\n"), out);
+	fputs(_("     --nohostname           no hostname at all will be shown\n"), out);
+	fputs(_("     --long-hostname        show full qualified hostname\n"), out);
+	fputs(_("     --erase-chars <string> additional backspace chars\n"), out);
+	fputs(_("     --kill-chars <string>  additional kill chars\n"), out);
+	fputs(_("     --help                 display this help and exit\n"), out);
+	fputs(_("     --version              output version information and exit\n"), out);
+	fprintf(out, USAGE_MAN_TAIL("agetty(8)"));
 
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
@@ -1695,8 +1901,100 @@ static void log_warn(const char *fmt, ...)
 	va_end(ap);
 }
 
+static void output_iface_ip(struct ifaddrs *addrs, const char *iface, sa_family_t family)
+{
+	if (!iface)
+		return;
+
+	if (addrs->ifa_name
+	    && strcmp(addrs->ifa_name, iface) == 0
+	    && addrs->ifa_addr
+	    && addrs->ifa_addr->sa_family == family) {
+
+		void *addr = NULL;
+		char buff[INET6_ADDRSTRLEN + 1];
+
+		switch (addrs->ifa_addr->sa_family) {
+		case AF_INET:
+			addr = &((struct sockaddr_in *)	addrs->ifa_addr)->sin_addr;
+			break;
+		case AF_INET6:
+			addr = &((struct sockaddr_in6 *) addrs->ifa_addr)->sin6_addr;
+			break;
+		}
+		if (addr) {
+			inet_ntop(addrs->ifa_addr->sa_family, addr, buff, sizeof(buff));
+			printf("%s", buff);
+		}
+
+	} else if (addrs->ifa_next)
+		output_iface_ip(addrs->ifa_next, iface, family);
+}
+
+static void output_ip(sa_family_t family)
+{
+	char *host;
+	struct addrinfo hints, *info = NULL;
+
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = family;
+	if (family == AF_INET6)
+		hints.ai_flags = AI_V4MAPPED;
+
+	host = xgethostname();
+	if (host && getaddrinfo(host, NULL, &hints, &info) == 0 && info) {
+
+		void *addr = NULL;
+
+		switch (info->ai_family) {
+		case AF_INET:
+			addr = &((struct sockaddr_in *) info->ai_addr)->sin_addr;
+			break;
+		case AF_INET6:
+			addr = &((struct sockaddr_in6 *) info->ai_addr)->sin6_addr;
+			break;
+		}
+		if (addr) {
+			char buff[INET6_ADDRSTRLEN + 1];
+
+			inet_ntop(info->ai_family, (void *) addr, buff, sizeof(buff));
+			printf("%s", buff);
+		}
+
+		freeaddrinfo(info);
+	}
+	free(host);
+}
+
+/*
+ * parses \x{argument}, if not argument specified then returns NULL, the @fd
+ * has to point to one char after the sequence (it means '{').
+ */
+static char *get_escape_argument(FILE *fd, char *buf, size_t bufsz)
+{
+	size_t i = 0;
+	int c = fgetc(fd);
+
+	if (c == EOF || (unsigned char) c != '{') {
+		ungetc(c, fd);
+		return NULL;
+	}
+
+	do {
+		c = fgetc(fd);
+		if (c == EOF)
+			return NULL;
+		if ((unsigned char) c != '}' && i < bufsz - 1)
+			buf[i++] = (unsigned char) c;
+
+	} while ((unsigned char) c != '}');
+
+	buf[i] = '\0';
+	return buf;
+}
+
 static void output_special_char(unsigned char c, struct options *op,
-				struct termios *tp)
+				struct termios *tp, FILE *fp)
 {
 	struct utsname uts;
 
@@ -1720,36 +2018,32 @@ static void output_special_char(unsigned char c, struct options *op,
 		break;
 	case 'o':
 	{
-		char domainname[MAXHOSTNAMELEN+1];
-#ifdef HAVE_GETDOMAINNAME
-		if (getdomainname(domainname, sizeof(domainname)))
-#endif
-		strcpy(domainname, "unknown_domain");
-		domainname[sizeof(domainname)-1] = '\0';
-		printf("%s", domainname);
+		char *dom = xgetdomainname();
+
+		fputs(dom ? dom : "unknown_domain", stdout);
+		free(dom);
 		break;
 	}
 	case 'O':
 	{
-		char *dom = "unknown_domain";
-		char host[MAXHOSTNAMELEN+1];
+		char *dom = NULL;
+		char *host = xgethostname();
 		struct addrinfo hints, *info = NULL;
 
 		memset(&hints, 0, sizeof(hints));
 		hints.ai_flags = AI_CANONNAME;
 
-		if (gethostname(host, sizeof(host)) ||
-		    getaddrinfo(host, NULL, &hints, &info) ||
-		    info == NULL)
-			fputs(dom, stdout);
-		else {
+		if (host && getaddrinfo(host, NULL, &hints, &info) == 0 && info) {
 			char *canon;
+
 			if (info->ai_canonname &&
 			    (canon = strchr(info->ai_canonname, '.')))
 				dom = canon + 1;
-			fputs(dom, stdout);
-			freeaddrinfo(info);
 		}
+		fputs(dom ? dom : "unknown_domain", stdout);
+		if (info)
+			freeaddrinfo(info);
+		free(host);
 		break;
 	}
 	case 'd':
@@ -1792,6 +2086,24 @@ static void output_special_char(unsigned char c, struct options *op,
 		}
 		break;
 	}
+	case 'S':
+	{
+		char *var = NULL, varname[64];
+
+		if (get_escape_argument(fp, varname, sizeof(varname)))
+			var = read_os_release(op, varname);
+		else if (!(var = read_os_release(op, "PRETTY_NAME")))
+			var = uts.sysname;
+		if (var) {
+			if (strcmp(varname, "ANSI_COLOR") == 0)
+				printf("\033[%sm", var);
+			else
+				printf("%s", var);
+			if (var != uts.sysname)
+				free(var);
+		}
+		break;
+	}
 	case 'u':
 	case 'U':
 	{
@@ -1802,9 +2114,27 @@ static void output_special_char(unsigned char c, struct options *op,
 			if (ut->ut_type == USER_PROCESS)
 				users++;
 		endutent();
-		printf ("%d ", users);
 		if (c == 'U')
-			printf((users == 1) ? _("user") : _("users"));
+			printf(P_("%d user", "%d users", users), users);
+		else
+			printf ("%d ", users);
+		break;
+	}
+	case '4':
+	case '6':
+	{
+		sa_family_t family = c == '4' ? AF_INET : AF_INET6;
+		char iface[128];
+
+		if (get_escape_argument(fp, iface, sizeof(iface))) {	/* interface IP */
+			struct ifaddrs *addrs;
+			int status = getifaddrs(&addrs);
+			if (status != 0)
+				break;
+			output_iface_ip(addrs, iface, family);
+			freeifaddrs(addrs);
+		} else							/* host IP */
+			output_ip(family);
 		break;
 	}
 	default:
@@ -1908,6 +2238,6 @@ static void check_username(const char* nm)
 	return;
 err:
 	errno = EPERM;
-	log_err("checkname: %m");
+	log_err(_("checkname failed: %m"));
 }
 

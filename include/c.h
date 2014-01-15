@@ -19,6 +19,10 @@
 # include <err.h>
 #endif
 
+#ifndef HAVE_USLEEP
+# include <time.h>
+#endif
+
 /*
  * Compiler specific stuff
  */
@@ -52,7 +56,7 @@
  */
 #ifndef __ul_alloc_size
 # if __GNUC_PREREQ (4, 3)
-#  define __ul_alloc_size(s) __attribute__((alloc_size(s)))
+#  define __ul_alloc_size(s) __attribute__((alloc_size(s), warn_unused_result))
 # else
 #  define __ul_alloc_size(s)
 # endif
@@ -60,7 +64,7 @@
 
 #ifndef __ul_calloc_size
 # if __GNUC_PREREQ (4, 3)
-#  define __ul_calloc_size(n, s) __attribute__((alloc_size(n, s)))
+#  define __ul_calloc_size(n, s) __attribute__((alloc_size(n, s), warn_unused_result))
 # else
 #  define __ul_calloc_size(n, s)
 # endif
@@ -211,9 +215,17 @@ static inline int dirfd(DIR *d)
  * Fallback defines for old versions of glibc
  */
 #include <fcntl.h>
+
+#ifdef O_CLOEXEC
+#define UL_CLOEXECSTR	"e"
+#else
+#define UL_CLOEXECSTR	""
+#endif
+
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
 #endif
+
 
 #ifndef AI_ADDRCONFIG
 #define AI_ADDRCONFIG 0x0020
@@ -224,19 +236,41 @@ static inline int dirfd(DIR *d)
 #endif
 
 /*
- * Fallback for MAXHOSTNAMELEN
+ * MAXHOSTNAMELEN replacement
  */
-#ifndef MAXHOSTNAMELEN
-# ifdef HOST_NAME_MAX
-#  define MAXHOSTNAMELEN HOST_NAME_MAX
-# else
-#  define MAXHOSTNAMELEN 64
-# endif
+static inline size_t get_hostname_max(void)
+{
+	long len = sysconf(_SC_HOST_NAME_MAX);
+
+	if (0 < len)
+		return len;
+
+#ifdef MAXHOSTNAMELEN
+	return MAXHOSTNAMELEN;
+#elif HOST_NAME_MAX
+	return HOST_NAME_MAX;
+#endif
+	return 64;
+}
+
+#ifndef HAVE_USLEEP
+/*
+ * This function is marked obsolete in POSIX.1-2001 and removed in
+ * POSIX.1-2008. It is replaced with nanosleep().
+ */
+static inline int usleep(useconds_t usec)
+{
+	struct timespec waittime = {
+		.tv_sec   =  usec / 1000000L,
+		.tv_nsec  = (usec % 1000000L) * 1000
+	};
+	return nanosleep(&waittime, NULL);
+}
 #endif
 
 /*
  * Constant strings for usage() functions. For more info see
- * Documentation/howto-usage-function.txt and sys-utils/arch.c
+ * Documentation/howto-usage-function.txt and disk-utils/delpart.c
  */
 #define USAGE_HEADER     _("\nUsage:\n")
 #define USAGE_OPTIONS    _("\nOptions:\n")

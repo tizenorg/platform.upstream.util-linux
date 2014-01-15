@@ -1,38 +1,26 @@
 
-fdisk_common_sources = \
-	fdisks/common.h \
-	fdisks/gpt.c \
-	fdisks/gpt.h \
-	fdisks/i386_sys_types.c
-
 if !ARCH_M68K
 
+if BUILD_FDISK
 sbin_PROGRAMS += fdisk
 dist_man_MANS += fdisks/fdisk.8
 fdisk_SOURCES = \
-	fdisks/utils.c \
 	fdisks/fdisk.c \
 	fdisks/fdisk.h \
-	fdisks/fdiskaixlabel.c \
-	fdisks/fdiskaixlabel.h \
-	fdisks/fdiskbsdlabel.c \
-	fdisks/fdiskbsdlabel.h \
-	fdisks/fdiskmaclabel.c \
-	fdisks/fdiskmaclabel.h \
-	fdisks/fdisksgilabel.c \
-	fdisks/fdisksgilabel.h \
-	fdisks/fdisksunlabel.c \
-	fdisks/fdisksunlabel.h \
-	fdisks/fdiskdoslabel.c \
-	fdisks/fdiskdoslabel.h \
-	fdisks/partname.c \
-	$(fdisk_common_sources)
+	fdisks/fdisk-ask.c \
+	fdisks/fdisk-menu.c
 
-fdisk_LDADD = $(LDADD) libcommon.la
+fdisk_LDADD = $(LDADD) libcommon.la libfdisk.la
+fdisk_CFLAGS = $(AM_CFLAGS) -I$(ul_libfdisk_incdir)
 
 if BUILD_LIBBLKID
-fdisk_CFLAGS = -I$(ul_libblkid_incdir)
+fdisk_CFLAGS += -I$(ul_libblkid_incdir)
 fdisk_LDADD += libblkid.la
+endif
+
+if BUILD_LIBUUID
+fdisk_CFLAGS += -I$(ul_libuuid_incdir)
+fdisk_LDADD += libuuid.la
 endif
 
 if HAVE_STATIC_FDISK
@@ -43,6 +31,8 @@ fdisk_static_CFLAGS = $(fdisk_CFLAGS)
 fdisk_static_LDADD = $(fdisk_LDADD)
 endif
 
+endif # BUILD_FDISK
+
 
 if !ARCH_SPARC
 
@@ -51,7 +41,7 @@ dist_man_MANS += fdisks/sfdisk.8
 sfdisk_SOURCES = \
 	fdisks/partname.c \
 	fdisks/sfdisk.c \
-	$(fdisk_common_sources)
+	fdisks/partname.h
 sfdisk_LDADD = $(LDADD) libcommon.la
 
 if HAVE_STATIC_SFDISK
@@ -65,8 +55,8 @@ endif
 if BUILD_CFDISK
 sbin_PROGRAMS += cfdisk
 dist_man_MANS += fdisks/cfdisk.8
-cfdisk_SOURCES = fdisks/cfdisk.c $(fdisk_common_sources)
-cfdisk_CFLAGS =
+cfdisk_SOURCES = fdisks/cfdisk.c
+cfdisk_CFLAGS = $(AM_CFLAGS)
 cfdisk_LDADD = $(LDADD) libcommon.la
 
 if BUILD_LIBBLKID
@@ -77,9 +67,8 @@ endif
 if HAVE_SLANG
 cfdisk_LDADD += -lslang
 else
-if HAVE_NCURSES
-cfdisk_LDADD += @NCURSES_LIBS@
-endif
+cfdisk_CFLAGS += $(NCURSES_CFLAGS)
+cfdisk_LDADD += $(NCURSES_LIBS)
 endif
 endif # BUILD_CFDISK
 

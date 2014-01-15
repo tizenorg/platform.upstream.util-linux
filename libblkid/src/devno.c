@@ -37,30 +37,7 @@
 #include "at.h"
 #include "sysfs.h"
 
-char *blkid_strndup(const char *s, int length)
-{
-	char *ret;
-
-	if (!s)
-		return NULL;
-
-	if (!length)
-		length = strlen(s);
-
-	ret = malloc(length + 1);
-	if (ret) {
-		strncpy(ret, s, length);
-		ret[length] = '\0';
-	}
-	return ret;
-}
-
-char *blkid_strdup(const char *s)
-{
-	return blkid_strndup(s, 0);
-}
-
-char *blkid_strconcat(const char *a, const char *b, const char *c)
+static char *blkid_strconcat(const char *a, const char *b, const char *c)
 {
 	char *res, *p;
 	size_t len, al, bl, cl;
@@ -103,7 +80,8 @@ static void add_to_dirlist(const char *dir, const char *subdir,
 	if (!dp)
 		return;
 	dp->name = subdir ? blkid_strconcat(dir, "/", subdir) :
-			    blkid_strdup(dir);
+		   dir ? strdup(dir) : NULL;
+
 	if (!dp->name) {
 		free(dp);
 		return;
@@ -137,7 +115,7 @@ void blkid__scan_dir(char *dirname, dev_t devno, struct dir_list **list,
 	if ((dir = opendir(dirname)) == NULL)
 		return;
 
-	while ((dp = readdir(dir)) != 0) {
+	while ((dp = readdir(dir)) != NULL) {
 #ifdef _DIRENT_HAVE_D_TYPE
 		if (dp->d_type != DT_UNKNOWN && dp->d_type != DT_BLK &&
 		    dp->d_type != DT_LNK && dp->d_type != DT_DIR)
@@ -153,8 +131,7 @@ void blkid__scan_dir(char *dirname, dev_t devno, struct dir_list **list,
 
 		if (S_ISBLK(st.st_mode) && st.st_rdev == devno) {
 			*devname = blkid_strconcat(dirname, "/", dp->d_name);
-			DBG(DEBUG_DEVNO,
-			    printf("found 0x%llx at %s\n", (long long)devno,
+			DBG(DEVNO, blkid_debug("found 0x%llx at %s", (long long)devno,
 				   *devname));
 			break;
 		}
@@ -216,7 +193,7 @@ static char *scandev_devno_to_devpath(dev_t devno)
 		struct dir_list *current = list;
 
 		list = list->next;
-		DBG(DEBUG_DEVNO, printf("directory %s\n", current->name));
+		DBG(DEVNO, blkid_debug("directory %s", current->name));
 		blkid__scan_dir(current->name, devno, &new_list, &devname);
 		free(current->name);
 		free(current);
@@ -259,12 +236,10 @@ char *blkid_devno_to_devname(dev_t devno)
 		path = scandev_devno_to_devpath(devno);
 
 	if (!path) {
-		DBG(DEBUG_DEVNO,
-		    printf("blkid: couldn't find devno 0x%04lx\n",
+		DBG(DEVNO, blkid_debug("blkid: couldn't find devno 0x%04lx",
 			   (unsigned long) devno));
 	} else {
-		DBG(DEBUG_DEVNO,
-		    printf("found devno 0x%04llx as %s\n", (long long)devno, path));
+		DBG(DEVNO, blkid_debug("found devno 0x%04llx as %s", (long long)devno, path));
 	}
 
 	return path;
@@ -322,7 +297,7 @@ int blkid_driver_has_major(const char *drvname, int major)
 	char buf[128];
 	int match = 0;
 
-	f = fopen(_PATH_PROC_DEVICES, "r");
+	f = fopen(_PATH_PROC_DEVICES, "r" UL_CLOEXECSTR);
 	if (!f)
 		return 0;
 
@@ -346,7 +321,7 @@ int blkid_driver_has_major(const char *drvname, int major)
 
 	fclose(f);
 
-	DBG(DEBUG_DEVNO, printf("major %d %s associated with '%s' driver\n",
+	DBG(DEVNO, blkid_debug("major %d %s associated with '%s' driver",
 			major, match ? "is" : "is NOT", drvname));
 	return match;
 }
@@ -361,7 +336,7 @@ int main(int argc, char** argv)
 	dev_t	devno, disk_devno;
 	const char *errmsg = "Couldn't parse %s: %s\n";
 
-	blkid_init_debug(DEBUG_ALL);
+	blkid_init_debug(BLKID_DEBUG_ALL);
 	if ((argc != 2) && (argc != 3)) {
 		fprintf(stderr, "Usage:\t%s device_number\n\t%s major minor\n"
 			"Resolve a device number to a device name\n",
@@ -392,7 +367,9 @@ int main(int argc, char** argv)
 	free(devname);
 
 	printf("Looking for whole-device for 0x%04llx\n", (long long)devno);
-	blkid_devno_to_wholedisk(devno, diskname, sizeof(diskname), &disk_devno);
+	if (blkid_devno_to_wholedisk(devno, diskname,
+				sizeof(diskname), &disk_devno) == 0)
+		printf("found devno 0x%04llx as /dev/%s\n", (long long) disk_devno, diskname);
 
 	return 0;
 }

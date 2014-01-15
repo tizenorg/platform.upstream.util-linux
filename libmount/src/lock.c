@@ -10,9 +10,9 @@
  * @title: Locking
  * @short_description: locking methods for /etc/mtab or another libmount files
  *
- * The mtab lock is backwardly compatible with the standard linux /etc/mtab
+ * The mtab lock is backwards compatible with the standard linux /etc/mtab
  * locking.  Note, it's necessary to use the same locking schema in all
- * application that access the file.
+ * applications that access the file.
  */
 #include <sys/time.h>
 #include <time.h>
@@ -21,6 +21,8 @@
 #include <limits.h>
 #include <sys/file.h>
 
+#include "strutils.h"
+#include "closestream.h"
 #include "pathnames.h"
 #include "mountP.h"
 
@@ -53,8 +55,7 @@ struct libmnt_lock *mnt_new_lock(const char *datafile, pid_t id)
 	char *lo = NULL, *ln = NULL;
 	size_t losz;
 
-	if (!datafile)
-		return NULL;
+	assert(datafile);
 
 	/* for flock we use "foo.lock, for mtab "foo~"
 	 */
@@ -247,7 +248,7 @@ static void mnt_lockalrm_handler(int sig __attribute__((__unused__)))
 
 /*
  * Waits for F_SETLKW, unfortunately we have to use SIGALRM here to interrupt
- * fcntl() to avoid never ending waiting.
+ * fcntl() to avoid neverending waiting.
  *
  * Returns: 0 on success, 1 on timeout, -errno on error.
  */
@@ -293,7 +294,7 @@ static int mnt_wait_mtab_lock(struct libmnt_lock *ml, struct flock *fl, time_t m
  * soon as the lock file is deleted by the first mount, and immediately
  * afterwards a third mount comes, creates a new /etc/mtab~, applies
  * flock to that, and also proceeds, so that the second and third mount
- * now both are scribbling in /etc/mtab.
+ * are now both scribbling in /etc/mtab.
  *
  * The new code uses a link() instead of a creat(), where we proceed
  * only if it was us that created the lock, and hence we always have
@@ -308,13 +309,13 @@ static int mnt_wait_mtab_lock(struct libmnt_lock *ml, struct flock *fl, time_t m
  * The original mount locking code has used sleep(1) between attempts and
  * maximal number of attempts has been 5.
  *
- * There was very small number of attempts and extremely long waiting (1s)
+ * There was a very small number of attempts and extremely long waiting (1s)
  * that is useless on machines with large number of mount processes.
  *
- * Now we wait few thousand microseconds between attempts and we have a global
- * time limit (30s) rather than limit for number of attempts. The advantage
+ * Now we wait for a few thousand microseconds between attempts and we have a global
+ * time limit (30s) rather than a limit for the number of attempts. The advantage
  * is that this method also counts time which we spend in fcntl(F_SETLKW) and
- * number of attempts is not restricted.
+ * the number of attempts is not restricted.
  * -- kzak@redhat.com [Mar-2007]
  *
  *
@@ -327,7 +328,7 @@ static int mnt_wait_mtab_lock(struct libmnt_lock *ml, struct flock *fl, time_t m
  * -- kzak@redhat.com [May-2009]
  */
 
-/* maximum seconds between first and last attempt */
+/* maximum seconds between the first and the last attempt */
 #define MOUNTLOCK_MAXTIME		30
 
 /* sleep time (in microseconds, max=999999) between attempts */
@@ -340,9 +341,9 @@ static void unlock_mtab(struct libmnt_lock *ml)
 
 	if (!ml->locked && ml->lockfile && ml->linkfile)
 	{
-		/* We have (probably) all files, but we don't own the lock,
+		/* We (probably) have all the files, but we don't own the lock,
 		 * Really? Check it! Maybe ml->locked wasn't set properly
-		 * because code was interrupted by signal. Paranoia? Yes.
+		 * because the code was interrupted by a signal. Paranoia? Yes.
 		 *
 		 * We own the lock when linkfile == lockfile.
 		 */
@@ -396,7 +397,7 @@ static int lock_mtab(struct libmnt_lock *ml)
 		sigprocmask(SIG_BLOCK, &sigs, &ml->oldsigmask);
 	}
 
-	i = open(linkfile, O_WRONLY|O_CREAT, S_IRUSR|S_IWUSR);
+	i = open(linkfile, O_WRONLY|O_CREAT|O_CLOEXEC, S_IRUSR|S_IWUSR);
 	if (i < 0) {
 		/* linkfile does not exist (as a file) and we cannot create it.
 		 * Read-only or full filesystem? Too many files open in the system?
@@ -428,7 +429,7 @@ static int lock_mtab(struct libmnt_lock *ml)
 				rc = -errno;
 			goto failed;
 		}
-		ml->lockfile_fd = open(lockfile, O_WRONLY);
+		ml->lockfile_fd = open(lockfile, O_WRONLY|O_CLOEXEC);
 
 		if (ml->lockfile_fd < 0) {
 			/* Strange... Maybe the file was just deleted? */
@@ -492,10 +493,10 @@ failed:
  * mnt_lock_file
  * @ml: pointer to struct libmnt_lock instance
  *
- * Creates lock file (e.g. /etc/mtab~). Note that this function may
+ * Creates a lock file (e.g. /etc/mtab~). Note that this function may
  * use alarm().
  *
- * Your application has to always call mnt_unlock_file() before exit.
+ * Your application always has to call mnt_unlock_file() before exit.
  *
  * Traditional mtab locking scheme:
  *
@@ -522,7 +523,7 @@ int mnt_lock_file(struct libmnt_lock *ml)
  * mnt_unlock_file:
  * @ml: lock struct
  *
- * Unlocks the file. The function could be called independently on the
+ * Unlocks the file. The function could be called independently of the
  * lock status (for example from exit(3)).
  */
 void mnt_unlock_file(struct libmnt_lock *ml)
@@ -561,7 +562,7 @@ void increment_data(const char *filename, int verbose, int loopno)
 	FILE *f;
 	char buf[256];
 
-	if (!(f = fopen(filename, "r")))
+	if (!(f = fopen(filename, "r" UL_CLOEXECSTR)))
 		err(EXIT_FAILURE, "%d: failed to open: %s", getpid(), filename);
 
 	if (!fgets(buf, sizeof(buf), f))
@@ -570,11 +571,13 @@ void increment_data(const char *filename, int verbose, int loopno)
 	fclose(f);
 	num = atol(buf) + 1;
 
-	if (!(f = fopen(filename, "w")))
+	if (!(f = fopen(filename, "w" UL_CLOEXECSTR)))
 		err(EXIT_FAILURE, "%d: failed to open: %s", getpid(), filename);
 
 	fprintf(f, "%ld", num);
-	fclose(f);
+
+	if (close_stream(f) != 0)
+		err(EXIT_FAILURE, "write failed: %s", filename);
 
 	if (verbose)
 		fprintf(stderr, "%d: %s: %ld --> %ld (loop=%d)\n", getpid(),
@@ -668,7 +671,7 @@ int test_lock(struct libmnt_test *ts, int argc, char *argv[])
 		mnt_free_lock(lock);
 		lock = NULL;
 
-		/* The mount command usually finish after mtab update. We
+		/* The mount command usually finishes after a mtab update. We
 		 * simulate this via short sleep -- it's also enough to make
 		 * concurrent processes happy.
 		 */

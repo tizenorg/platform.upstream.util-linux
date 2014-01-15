@@ -32,7 +32,7 @@
  */
  
 /*
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * 	added Native Language Support
  * 1999-09-19 Bruno Haible <haible@clisp.cons.org>
  * 	modified to work correctly in multi-byte locales
@@ -75,7 +75,8 @@ static char *mtsafe_strtok(char *, const char *, char **);
 static int input(FILE *fp, int *maxlength, wchar_t ***list, int *entries);
 static void c_columnate(int maxlength, long termwidth, wchar_t **list, int entries);
 static void r_columnate(int maxlength, long termwidth, wchar_t **list, int entries);
-static void maketbl(wchar_t **list, int entries, wchar_t *separator);
+static wchar_t *local_wcstok(wchar_t *p, const wchar_t *separator, int greedy, wchar_t **wcstok_state);
+static void maketbl(wchar_t **list, int entries, wchar_t *separator, int greedy, wchar_t *colsep);
 static void print(wchar_t **list, int entries);
 
 typedef struct _tbl {
@@ -87,19 +88,20 @@ static void __attribute__((__noreturn__)) usage(int rc)
 {
 	FILE *out = rc == EXIT_FAILURE ? stderr : stdout;
 
-	fprintf(out, _("\nUsage: %s [options] [file ...]\n"),
-				program_invocation_short_name);
-	fprintf(out, _("\nOptions:\n"));
+	fputs(USAGE_HEADER, out);
+	fprintf(out, _(" %s [options] [<file>...]\n"), program_invocation_short_name);
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -c, --columns <width>    width of output in number of characters\n"), out);
+	fputs(_(" -t, --table              create a table\n"), out);
+	fputs(_(" -s, --separator <string> possible table delimiters\n"), out);
+	fputs(_(" -o, --output-separator <string>\n"
+	        "                          columns separator for table output; default is two spaces\n"), out);
+	fputs(_(" -x, --fillrows           fill rows before columns\n"), out);
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
+	fprintf(out, USAGE_MAN_TAIL("column(1)"));
 
-	fprintf(out, _(
-	" -h, --help               displays this help text\n"
-	" -V, --version            output version information and exit\n"
-	" -c, --columns <width>    width of output in number of characters\n"
-	" -t, --table              create a table\n"
-	" -s, --separator <string> table delimeter\n"
-	" -x, --fillrows           fill rows before columns\n"));
-
-	fprintf(out, _("\nFor more information see column(1).\n"));
 	exit(rc);
 }
 
@@ -112,6 +114,8 @@ int main(int argc, char **argv)
 	unsigned int eval = 0;		/* exit value */
 	int maxlength = 0;		/* longest record */
 	wchar_t **list = NULL;		/* array of pointers to records */
+	int greedy = 1;
+	wchar_t *colsep;		/* table column output separator */
 
 	/* field separator for table option */
 	wchar_t default_separator[] = { '\t', ' ', 0 };
@@ -124,6 +128,7 @@ int main(int argc, char **argv)
 		{ "columns",	1, 0, 'c' },
 		{ "table",	0, 0, 't' },
 		{ "separator",	1, 0, 's' },
+		{ "output-separator", 1, 0, 'o' },
 		{ "fillrows",	0, 0, 'x' },
 		{ NULL,		0, 0, 0 },
 	};
@@ -136,8 +141,9 @@ int main(int argc, char **argv)
 	termwidth = get_terminal_width();
 	if (termwidth <= 0)
 		termwidth = 80;
+	colsep = mbs_to_wcs("  ");
 
-	while ((ch = getopt_long(argc, argv, "hVc:s:tx", longopts, NULL)) != -1)
+	while ((ch = getopt_long(argc, argv, "hVc:s:txo:", longopts, NULL)) != -1)
 		switch(ch) {
 		case 'h':
 			usage(EXIT_SUCCESS);
@@ -151,6 +157,11 @@ int main(int argc, char **argv)
 			break;
 		case 's':
 			separator = mbs_to_wcs(optarg);
+			greedy = 0;
+			break;
+		case 'o':
+			free(colsep);
+			colsep = mbs_to_wcs(optarg);
 			break;
 		case 't':
 			tflag = 1;
@@ -183,7 +194,7 @@ int main(int argc, char **argv)
 		exit(eval);
 
 	if (tflag)
-		maketbl(list, entries, separator);
+		maketbl(list, entries, separator, greedy, colsep);
 	else if (maxlength >= termwidth)
 		print(list, entries);
 	else if (xflag)
@@ -270,16 +281,40 @@ static void print(wchar_t **list, int entries)
 	}
 }
 
-static void maketbl(wchar_t **list, int entries, wchar_t *separator)
+wchar_t *local_wcstok(wchar_t * p, const wchar_t * separator, int greedy,
+		      wchar_t ** wcstok_state)
+{
+	wchar_t *result;
+	if (greedy)
+		return wcstok(p, separator, wcstok_state);
+
+	if (p == NULL) {
+		if (*wcstok_state == NULL)
+			return NULL;
+		else
+			p = *wcstok_state;
+	}
+	result = p;
+	p = wcspbrk(result, separator);
+	if (p == NULL)
+		*wcstok_state = NULL;
+	else {
+		*p = '\0';
+		*wcstok_state = p + 1;
+	}
+	return result;
+}
+
+static void maketbl(wchar_t **list, int entries, wchar_t *separator, int greedy, wchar_t *colsep)
 {
 	TBL *t;
-	int cnt, i;
+	int cnt;
 	wchar_t *p, **lp;
 	ssize_t *lens;
 	ssize_t maxcols = DEFCOLS, coloff;
 	TBL *tbl;
 	wchar_t **cols;
-	wchar_t *wcstok_state;
+	wchar_t *wcstok_state = NULL;
 
 	t = tbl = xcalloc(entries, sizeof(TBL));
 	cols = xcalloc(maxcols, sizeof(wchar_t *));
@@ -288,7 +323,7 @@ static void maketbl(wchar_t **list, int entries, wchar_t *separator)
 	for (lp = list, cnt = 0; cnt < entries; ++cnt, ++lp, ++t) {
 		coloff = 0;
 		p = *lp;
-		while ((cols[coloff] = wcstok(p, separator, &wcstok_state)) != NULL) {
+		while ((cols[coloff] = local_wcstok(p, separator, greedy, &wcstok_state)) != NULL) {
 			if (++coloff == maxcols) {
 				maxcols += DEFCOLS;
 				cols = xrealloc(cols, maxcols * sizeof(wchar_t *));
@@ -312,8 +347,8 @@ static void maketbl(wchar_t **list, int entries, wchar_t *separator)
 	for (t = tbl, cnt = 0; cnt < entries; ++cnt, ++t) {
 		for (coloff = 0; coloff < t->cols - 1; ++coloff) {
 			fputws(t->list[coloff], stdout);
-			for (i = lens[coloff] - t->len[coloff] + 2; i > 0; i--)
-				putwchar(' ');
+			wprintf(L"%*s", lens[coloff] - t->len[coloff], "");
+			fputws(colsep, stdout);
 		}
 		if (coloff < t->cols) {
 			fputws(t->list[coloff], stdout);
@@ -356,7 +391,7 @@ static int input(FILE *fp, int *maxlength, wchar_t ***list, int *entries)
 			continue;
 		}
 		lineno++;
-		if (!feof(fp))
+		if (!feof(fp) && p)
 			*p = '\0';
 		len = wcs_width(buf);	/* len = p - buf; */
 		if (*maxlength < len)

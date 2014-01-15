@@ -3,7 +3,7 @@
  *
  * added fcntl locking by Kjetil T. (kjetilho@math.uio.no) - aeb, 950927
  *
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  *
  */
@@ -21,20 +21,6 @@ int mount_quiet;
 int verbose;
 int nocanonicalize;
 char *progname;
-
-char *
-xstrndup (const char *s, int n) {
-     char *t;
-
-     if (s == NULL)
-	  die (EX_SOFTWARE, _("bug in xstrndup call"));
-
-     t = xmalloc(n+1);
-     strncpy(t,s,n);
-     t[n] = 0;
-
-     return t;
-}
 
 /* reallocates its first arg - typical use: s = xstrconcat3(s,t,u); */
 char *

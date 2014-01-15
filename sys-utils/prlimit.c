@@ -144,8 +144,6 @@ static int prlimit(pid_t p, int resource,
 }
 #endif
 
-static void rem_prlim(struct prlimit *lim);
-
 static void __attribute__ ((__noreturn__)) usage(FILE * out)
 {
 	size_t i;
@@ -225,23 +223,24 @@ static void add_tt_line(struct tt *tt, struct prlimit *l)
 
 	for (i = 0; i < ncolumns; i++) {
 		char *str = NULL;
-		int rc = 0;
 
 		switch (get_column_id(i)) {
 		case COL_RES:
-			rc = xasprintf(&str, "%s", l->desc->name);
+			str = xstrdup(l->desc->name);
 			break;
 		case COL_HELP:
-			rc = xasprintf(&str, "%s", l->desc->help);
+			str = xstrdup(l->desc->help);
 			break;
 		case COL_SOFT:
-			rc = l->rlim.rlim_cur == RLIM_INFINITY ?
-				xasprintf(&str, "%s", "unlimited") :
+			if (l->rlim.rlim_cur == RLIM_INFINITY)
+				str = xstrdup(_("unlimited"));
+			else
 				xasprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_cur);
 			break;
 		case COL_HARD:
-			rc = l->rlim.rlim_max == RLIM_INFINITY ?
-				xasprintf(&str, "%s", "unlimited") :
+			if (l->rlim.rlim_max == RLIM_INFINITY)
+				str = xstrdup(_("unlimited"));
+			else
 				xasprintf(&str, "%llu", (unsigned long long) l->rlim.rlim_max);
 			break;
 		case COL_UNITS:
@@ -251,7 +250,7 @@ static void add_tt_line(struct tt *tt, struct prlimit *l)
 			break;
 		}
 
-		if (rc || str)
+		if (str)
 			tt_line_set_data(line, i, str);
 	}
 }
@@ -272,13 +271,21 @@ static int column_name_to_id(const char *name, size_t namesz)
 	return -1;
 }
 
+static void rem_prlim(struct prlimit *lim)
+{
+	if (!lim)
+		return;
+	list_del(&lim->lims);
+	free(lim);
+}
+
 static int show_limits(struct list_head *lims, int tt_flags)
 {
 	int i;
 	struct list_head *p, *pnext;
 	struct tt *tt;
 
-	tt = tt_new_table(tt_flags);
+	tt = tt_new_table(tt_flags | TT_FL_FREEDATA);
 	if (!tt) {
 		warn(_("failed to initialize output table"));
 		return -1;
@@ -371,8 +378,6 @@ static void do_prlimit(struct list_head *lims)
 	}
 }
 
-
-
 static int get_range(char *str, rlim_t *soft, rlim_t *hard, int *found)
 {
 	char *end = NULL;
@@ -463,14 +468,6 @@ static int add_prlim(char *ops, struct list_head *lims, size_t id)
 
 	list_add_tail(&lim->lims, lims);
 	return 0;
-}
-
-static void rem_prlim(struct prlimit *lim)
-{
-	if (!lim)
-		return;
-	list_del(&lim->lims);
-	free(lim);
 }
 
 int main(int argc, char **argv)
@@ -636,7 +633,7 @@ int main(int argc, char **argv)
 	if (argc > optind) {
 		/* prlimit [options] COMMAND */
 		execvp(argv[optind], &argv[optind]);
-		err(EXIT_FAILURE, _("executing %s failed"), argv[optind]);
+		err(EXIT_FAILURE, _("failed to execute %s"), argv[optind]);
 	}
 
 	return EXIT_SUCCESS;

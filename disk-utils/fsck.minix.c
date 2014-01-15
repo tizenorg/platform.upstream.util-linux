@@ -62,7 +62,7 @@
  * 06.11.96  - Added v2 code submitted by Joerg Dorchain, but written by
  *             Andreas Schwab.
  *
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  *
  * 2008-04-06 James Youngman <jay@gnu.org>
@@ -111,6 +111,7 @@
 #include "ismounted.h"
 #include "all-io.h"
 #include "closestream.h"
+#include "rpmatch.h"
 
 #define ROOT_INO 1
 #define YESNO_LENGTH 64
@@ -168,7 +169,7 @@ static char *zone_map;
 static void
 reset(void) {
 	if (termios_set)
-		tcsetattr(0, TCSANOW, &termios);
+		tcsetattr(STDIN_FILENO, TCSANOW, &termios);
 }
 
 static void
@@ -213,7 +214,7 @@ static void
 die(const char *fmt, ...) {
 	va_list ap;
 
-	fprintf(stderr, "%s: ", program_invocation_short_name);
+	fprintf(stderr, UTIL_LINUX_VERSION);
 	va_start(ap, fmt);
 	vfprintf(stderr, fmt, ap);
 	va_end(ap);
@@ -294,7 +295,7 @@ check_mount(void) {
 		return;
 
 	printf(_("%s is mounted.	 "), device_name);
-	if (isatty(0) && isatty(1))
+	if (isatty(STDIN_FILENO) && isatty(STDOUT_FILENO))
 		cont = ask(_("Do you really want to continue"), 0);
 	else
 		cont = 0;
@@ -506,10 +507,11 @@ write_super_block(void) {
 
 static void
 write_tables(void) {
-	write_super_block();
 	unsigned long buffsz = get_inode_buffer_size();
 	unsigned long imaps = get_nimaps();
 	unsigned long zmaps = get_nzmaps();
+
+	write_super_block();
 
 	if (write_all(IN, inode_map, imaps * MINIX_BLOCK_SIZE))
 		die(_("Unable to write inode map"));
@@ -584,9 +586,9 @@ read_superblock(void) {
 static void
 read_tables(void) {
 	unsigned long inodes = get_ninodes();
-	unsigned long buffsz = get_inode_buffer_size();
-	unsigned long norm_first_zone = first_zone_data();
-	unsigned long first_zone = get_first_zone();
+	size_t buffsz = get_inode_buffer_size();
+	off_t norm_first_zone = first_zone_data();
+	off_t first_zone = get_first_zone();
 	unsigned long zones = get_nzones();
 	unsigned long imaps = get_nimaps();
 	unsigned long zmaps = get_nzmaps();
@@ -627,9 +629,9 @@ read_tables(void) {
 	if (show) {
 		printf(_("%ld inodes\n"), inodes);
 		printf(_("%ld blocks\n"), zones);
-		printf(_("Firstdatazone=%ld (%ld)\n"), first_zone, norm_first_zone);
+		printf(_("Firstdatazone=%jd (%jd)\n"), first_zone, norm_first_zone);
 		printf(_("Zonesize=%d\n"), MINIX_BLOCK_SIZE << get_zone_size());
-		printf(_("Maxsize=%ld\n"), get_max_size());
+		printf(_("Maxsize=%zu\n"), get_max_size());
 		printf(_("Filesystem state=%d\n"), Super.s_state);
 		printf(_("namelen=%zd\n\n"), namelen);
 	}
@@ -999,7 +1001,7 @@ static void
 check_file2(struct minix2_inode *dir, unsigned int offset) {
 	static char blk[MINIX_BLOCK_SIZE];
 	struct minix2_inode *inode;
-	unsigned long ino;
+	ino_t ino;
 	char *name;
 	int block;
 
@@ -1045,7 +1047,7 @@ check_file2(struct minix2_inode *dir, unsigned int offset) {
 	name_depth++;
 	if (list) {
 		if (verbose)
-			printf("%6zd %07o %3d ", ino, inode->i_mode,
+			printf("%6ju %07o %3d ", ino, inode->i_mode,
 			       inode->i_nlinks);
 		get_current_name();
 		printf("%s", current_name);
@@ -1064,7 +1066,7 @@ check_file2(struct minix2_inode *dir, unsigned int offset) {
 static void
 recursive_check(unsigned int ino) {
 	struct minix_inode *dir;
-	unsigned int offset;
+	off_t offset;
 
 	dir = Inode + ino;
 	if (!S_ISDIR(dir->i_mode))
@@ -1081,7 +1083,7 @@ recursive_check(unsigned int ino) {
 static void
 recursive_check2(unsigned int ino) {
 	struct minix2_inode *dir;
-	unsigned int offset;
+	off_t offset;
 
 	dir = Inode2 + ino;
 	if (!S_ISDIR(dir->i_mode))
@@ -1238,7 +1240,7 @@ int
 main(int argc, char **argv) {
 	struct termios tmp;
 	int count;
-	int retcode = 0;
+	int retcode = FSCK_EX_OK;
 
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
@@ -1297,7 +1299,7 @@ main(int argc, char **argv) {
 		usage();
 	check_mount();		/* trying to check a mounted filesystem? */
 	if (repair && !automatic) {
-		if (!isatty(0) || !isatty(1))
+		if (!isatty(STDIN_FILENO) || !isatty(STDOUT_FILENO))
 			die(_("need terminal for interactive repairs"));
 	}
 	IN = open(device_name, repair ? O_RDWR : O_RDONLY);
@@ -1330,10 +1332,10 @@ main(int argc, char **argv) {
 	signal(SIGTERM, fatalsig);
 
 	if (repair && !automatic) {
-		tcgetattr(0, &termios);
+		tcgetattr(STDIN_FILENO, &termios);
 		tmp = termios;
 		tmp.c_lflag &= ~(ICANON | ECHO);
-		tcsetattr(0, TCSANOW, &tmp);
+		tcsetattr(STDIN_FILENO, TCSANOW, &tmp);
 		termios_set = 1;
 	}
 
@@ -1381,8 +1383,10 @@ main(int argc, char **argv) {
 		write_super_block();
 
 	if (repair && !automatic)
-		tcsetattr(0, TCSANOW, &termios);
+		tcsetattr(STDIN_FILENO, TCSANOW, &termios);
 
+	if (close_fd(IN) != 0)
+		err(FSCK_EX_ERROR, _("write failed"));
 	if (changed)
 		retcode += 3;
 	if (errors_uncorrected)

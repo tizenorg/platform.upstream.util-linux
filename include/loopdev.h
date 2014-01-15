@@ -149,6 +149,7 @@ extern void loopcxt_enable_debug(struct loopdev_cxt *lc, int enable);
 extern int loopcxt_set_device(struct loopdev_cxt *lc, const char *device)
 				__attribute__ ((warn_unused_result));
 extern int loopcxt_has_device(struct loopdev_cxt *lc);
+extern int loopcxt_add_device(struct loopdev_cxt *lc);
 extern char *loopcxt_strdup_device(struct loopdev_cxt *lc);
 extern const char *loopcxt_get_device(struct loopdev_cxt *lc);
 extern struct sysfs_cxt *loopcxt_get_sysfs(struct loopdev_cxt *lc);
@@ -163,14 +164,12 @@ extern int loopcxt_next(struct loopdev_cxt *lc);
 
 extern int loopcxt_setup_device(struct loopdev_cxt *lc);
 extern int loopcxt_delete_device(struct loopdev_cxt *lc);
+extern int loopcxt_set_capacity(struct loopdev_cxt *lc);
 
 int loopcxt_set_offset(struct loopdev_cxt *lc, uint64_t offset);
 int loopcxt_set_sizelimit(struct loopdev_cxt *lc, uint64_t sizelimit);
 int loopcxt_set_flags(struct loopdev_cxt *lc, uint32_t flags);
 int loopcxt_set_backing_file(struct loopdev_cxt *lc, const char *filename);
-int loopcxt_set_encryption(struct loopdev_cxt *lc,
-                           const char *encryption,
-                           const char *password);
 
 extern char *loopcxt_get_backing_file(struct loopdev_cxt *lc);
 extern int loopcxt_get_backing_devno(struct loopdev_cxt *lc, dev_t *devno);

@@ -1,7 +1,6 @@
 mkswap:  libblkid libselinux libuuid 
 swaplabel:  libblkid libuuid 
 blockdev:  
-elvtune:  
 fdformat:  
 fsck.cramfs:  libz 
 fsck.minix:  
@@ -56,7 +55,6 @@ uuidgen:  libuuid
 wipefs:  libblkid libuuid 
 blkid.static: STATIC
 cal:  libncursesw libtinfo 
-ddate:  
 kill:  
 logger:  
 look:  

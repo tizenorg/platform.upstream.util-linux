@@ -20,7 +20,6 @@
 
 #include "partitions.h"
 #include "crc32.h"
-#include "dos.h"
 
 #define GPT_PRIMARY_LBA	1
 
@@ -170,13 +169,11 @@ static int is_pmbr_valid(blkid_probe pr)
 	if (!data)
 		goto failed;
 
-	if (!is_valid_mbr_signature(data))
+	if (!mbr_is_valid_magic(data))
 		goto failed;
 
-	p = (struct dos_partition *) (data + BLKID_MSDOS_PT_OFFSET);
-
-	for (i = 0; i < 4; i++, p++) {
-		if (p->sys_type == BLKID_GPT_PARTITION)
+	for (i = 0, p = mbr_get_partition(data, 0); i < 4; i++, p++) {
+		if (p->sys_ind == MBR_GPT_PARTITION)
 			goto ok;
 	}
 failed:
@@ -232,14 +229,14 @@ static struct gpt_header *get_gpt_header(
 	h->header_crc32 = orgcrc;
 
 	if (crc != le32_to_cpu(orgcrc)) {
-		DBG(DEBUG_LOWPROBE, printf("GPT header corrupted\n"));
+		DBG(LOWPROBE, blkid_debug("GPT header corrupted"));
 		return NULL;
 	}
 
 	/* Valid header has to be at MyLBA */
 	if (le64_to_cpu(h->my_lba) != lba) {
-		DBG(DEBUG_LOWPROBE, printf(
-			"GPT->MyLBA mismatch with real position\n"));
+		DBG(LOWPROBE, blkid_debug(
+			"GPT->MyLBA mismatch with real position"));
 		return NULL;
 	}
 
@@ -248,14 +245,14 @@ static struct gpt_header *get_gpt_header(
 
 	/* Check if First and Last usable LBA makes sense */
 	if (lu < fu || fu > lastlba || lu > lastlba) {
-		DBG(DEBUG_LOWPROBE, printf(
-			"GPT->{First,Last}UsableLBA out of range\n"));
+		DBG(LOWPROBE, blkid_debug(
+			"GPT->{First,Last}UsableLBA out of range"));
 		return NULL;
 	}
 
 	/* The header has to be outside usable range */
 	if (fu < lba && lba < lu) {
-		DBG(DEBUG_LOWPROBE, printf("GPT header is inside usable area\n"));
+		DBG(LOWPROBE, blkid_debug("GPT header is inside usable area"));
 		return NULL;
 	}
 
@@ -263,7 +260,7 @@ static struct gpt_header *get_gpt_header(
 	esz = le32_to_cpu(h->num_partition_entries) *
 			le32_to_cpu(h->sizeof_partition_entry);
 	if (!esz) {
-		DBG(DEBUG_LOWPROBE, printf("GPT entries undefined\n"));
+		DBG(LOWPROBE, blkid_debug("GPT entries undefined"));
 		return NULL;
 	}
 
@@ -276,14 +273,14 @@ static struct gpt_header *get_gpt_header(
 	*ents = (struct gpt_entry *) get_lba_buffer(pr,
 				le64_to_cpu(h->partition_entries_lba), esz);
 	if (!*ents) {
-		DBG(DEBUG_LOWPROBE, printf("GPT entries unreadable\n"));
+		DBG(LOWPROBE, blkid_debug("GPT entries unreadable"));
 		return NULL;
 	}
 
 	/* Validate entries */
 	crc = count_crc32((unsigned char *) *ents, esz);
 	if (crc != le32_to_cpu(h->partition_entry_array_crc32)) {
-		DBG(DEBUG_LOWPROBE, printf("GPT entries corrupted\n"));
+		DBG(LOWPROBE, blkid_debug("GPT entries corrupted"));
 		return NULL;
 	}
 
@@ -322,9 +319,15 @@ static int probe_gpt_pt(blkid_probe pr,
 			      (unsigned char *) GPT_HEADER_SIGNATURE_STR))
 		goto err;
 
-	if (blkid_partitions_need_typeonly(pr))
-		/* caller does not ask for details about partitions */
+	guid = h->disk_guid;
+	swap_efi_guid(&guid);
+
+	if (blkid_partitions_need_typeonly(pr)) {
+		/* Non-binary interface -- caller does not ask for details
+		 * about partitions, just set generic varibles only. */
+		blkid_partitions_set_ptuuid(pr, (unsigned char *) &guid);
 		return 0;
+	}
 
 	ls = blkid_probe_get_partlist(pr);
 	if (!ls)
@@ -333,6 +336,8 @@ static int probe_gpt_pt(blkid_probe pr,
 	tab = blkid_partlist_new_parttable(ls, "gpt", lba << 9);
 	if (!tab)
 		goto err;
+
+	blkid_parttable_set_uuid(tab, (const unsigned char *) &guid);
 
 	ssf = blkid_probe_get_sectorsize(pr) / 512;
 
@@ -353,8 +358,8 @@ static int probe_gpt_pt(blkid_probe pr,
 		}
 		/* the partition has to inside usable range */
 		if (start < fu || start + size - 1 > lu) {
-			DBG(DEBUG_LOWPROBE, printf(
-				"GPT entry[%d] overflows usable area - ignore\n",
+			DBG(LOWPROBE, blkid_debug(
+				"GPT entry[%d] overflows usable area - ignore",
 				i));
 			blkid_partlist_increment_partno(ls);
 			continue;

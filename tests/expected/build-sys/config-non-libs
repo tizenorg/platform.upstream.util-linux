@@ -1,4 +1,5 @@
 agetty:  
+blkdiscard:  
 blockdev:  
 cal:  libncursesw libtinfo 
 cfdisk:  libncursesw libtinfo 
@@ -10,10 +11,9 @@ colrm:
 column:  
 ctrlaltdel:  
 cytune:  
-dmesg:  
+dmesg:  librt 
 fallocate:  
 fdformat:  
-fdisk:  ld-linux-x86-64 
 flock:  
 fsck.cramfs:  libz 
 fsck.minix:  
@@ -28,14 +28,15 @@ ipcrm:
 ipcs:  
 isosize:  
 kill:  
+last:  
 ldattach:  
 logger:  
 login:  libpam libpam_misc 
 look:  
 losetup:  
 lscpu:  
-lslocks:  
 mcookie:  
+mesg:  
 mkfs:  
 mkfs.bfs:  
 mkfs.cramfs:  libz 
@@ -43,6 +44,8 @@ mkfs.minix:
 mkswap:  
 more:  libtinfo 
 namei:  
+nologin:  
+nsenter:  
 pg:  libncursesw libtinfo 
 pivot_root:  
 prlimit:  
@@ -52,9 +55,11 @@ rename:
 renice:  
 rev:  
 rtcwake:  
+runuser:  libpam libpam_misc 
 script:  libutil 
 scriptreplay:  
 setarch:  
+setpriv:  ap-ng 
 setsid:  
 setterm:  libtinfo 
 sfdisk:  
@@ -63,7 +68,6 @@ sulogin:  rypt
 switch_root:  
 tailf:  
 taskset:  
-tunelp:  
 ul:  libtinfo 
 unshare:  
 utmpdump:  

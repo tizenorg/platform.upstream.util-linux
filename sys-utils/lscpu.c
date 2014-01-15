@@ -43,6 +43,7 @@
 #include "path.h"
 #include "closestream.h"
 #include "optutils.h"
+#include "lscpu.h"
 
 #define CACHE_MAX 100
 
@@ -54,35 +55,37 @@
 #define _PATH_PROC_CPUINFO	"/proc/cpuinfo"
 #define _PATH_PROC_PCIDEVS	"/proc/bus/pci/devices"
 #define _PATH_PROC_SYSINFO	"/proc/sysinfo"
+#define _PATH_PROC_STATUS	"/proc/self/status"
+#define _PATH_PROC_VZ	"/proc/vz"
+#define _PATH_PROC_BC	"/proc/bc"
+#define _PATH_DEV_MEM 		"/dev/mem"
 
 /* virtualization types */
 enum {
 	VIRT_NONE	= 0,
 	VIRT_PARA,
-	VIRT_FULL
+	VIRT_FULL,
+	VIRT_CONT
 };
 const char *virt_types[] = {
 	[VIRT_NONE]	= N_("none"),
 	[VIRT_PARA]	= N_("para"),
-	[VIRT_FULL]	= N_("full")
+	[VIRT_FULL]	= N_("full"),
+	[VIRT_CONT]	= N_("container"),
 };
 
-/* hypervisor vendors */
-enum {
-	HYPER_NONE	= 0,
-	HYPER_XEN,
-	HYPER_KVM,
-	HYPER_MSHV,
-	HYPER_VMWARE,
-	HYPER_IBM
-};
 const char *hv_vendors[] = {
 	[HYPER_NONE]	= NULL,
 	[HYPER_XEN]	= "Xen",
 	[HYPER_KVM]	= "KVM",
 	[HYPER_MSHV]	= "Microsoft",
 	[HYPER_VMWARE]  = "VMware",
-	[HYPER_IBM]	= "IBM"
+	[HYPER_IBM]	= "IBM",
+	[HYPER_VSERVER]	= "Linux-VServer",
+	[HYPER_UML]	= "User-mode Linux",
+	[HYPER_INNOTEK]	= "Innotek GmbH",
+	[HYPER_HITACHI]	= "Hitachi",
+	[HYPER_PARALLELS] = "Parallels"
 };
 
 /* CPU modes */
@@ -139,11 +142,14 @@ struct lscpu_desc {
 	char	*vendor;
 	char	*family;
 	char	*model;
+	char	*modelname;
 	char	*virtflag;	/* virtualization flag (vmx, svm) */
 	char	*hypervisor;	/* hypervisor software */
 	int	hyper;		/* hypervisor vendor ID */
 	int	virtype;	/* VIRT_PARA|FULL|NONE ? */
 	char	*mhz;
+	char	**maxmhz;	/* maximum mega hertz */
+	char	**minmhz;	/* minimum mega hertz */
 	char	*stepping;
 	char    *bogomips;
 	char	*flags;
@@ -226,6 +232,8 @@ enum {
 	COL_ADDRESS,
 	COL_CONFIGURED,
 	COL_ONLINE,
+	COL_MAXMHZ,
+	COL_MINMHZ,
 };
 
 /* column description
@@ -248,7 +256,9 @@ static struct lscpu_coldesc coldescs[] =
 	[COL_POLARIZATION] = { "POLARIZATION", N_("CPU dispatching mode on virtual hardware") },
 	[COL_ADDRESS]      = { "ADDRESS", N_("physical address of a CPU") },
 	[COL_CONFIGURED]   = { "CONFIGURED", N_("shows if the hypervisor has allocated the CPU") },
-	[COL_ONLINE]       = { "ONLINE", N_("shows if Linux currently makes use of the CPU") }
+	[COL_ONLINE]       = { "ONLINE", N_("shows if Linux currently makes use of the CPU") },
+	[COL_MAXMHZ]	   = { "MAXMHZ", N_("shows the maximum MHz of the CPU") },
+	[COL_MINMHZ]	   = { "MINMHZ", N_("shows the minimum MHz of the CPU") }
 };
 
 static int
@@ -353,6 +363,7 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		else if (lookup(buf, "family", &desc->family)) ;
 		else if (lookup(buf, "cpu family", &desc->family)) ;
 		else if (lookup(buf, "model", &desc->model)) ;
+		else if (lookup(buf, "model name", &desc->modelname)) ;
 		else if (lookup(buf, "stepping", &desc->stepping)) ;
 		else if (lookup(buf, "cpu MHz", &desc->mhz)) ;
 		else if (lookup(buf, "flags", &desc->flags)) ;		/* x86 */
@@ -380,11 +391,18 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 			desc->mode |= MODE_32BIT | MODE_64BIT;		/* sparc64 */
 	}
 
+	if (desc->arch && mod->system != SYSTEM_SNAPSHOT) {
+		if (strcmp(desc->arch, "ppc64") == 0)
+			desc->mode |= MODE_32BIT | MODE_64BIT;
+		else if (strcmp(desc->arch, "ppc") == 0)
+			desc->mode |= MODE_32BIT;
+	}
+
 	fclose(fp);
 
 	if (path_exist(_PATH_SYS_SYSTEM "/cpu/kernel_max"))
 		/* note that kernel_max is maximum index [NR_CPUS-1] */
-		maxcpus = path_getnum(_PATH_SYS_SYSTEM "/cpu/kernel_max") + 1;
+		maxcpus = path_read_s32(_PATH_SYS_SYSTEM "/cpu/kernel_max") + 1;
 
 	else if (mod->system == SYSTEM_LIVE)
 		/* the root is '/' so we are working with data from the current kernel */
@@ -398,7 +416,7 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 	setsize = CPU_ALLOC_SIZE(maxcpus);
 
 	if (path_exist(_PATH_SYS_SYSTEM "/cpu/possible")) {
-		cpu_set_t *tmp = path_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/possible");
+		cpu_set_t *tmp = path_read_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/possible");
 		desc->ncpuspos = CPU_COUNT_S(setsize, tmp);
 		cpuset_free(tmp);
 	} else
@@ -408,19 +426,19 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 
 	/* get mask for present CPUs */
 	if (path_exist(_PATH_SYS_SYSTEM "/cpu/present")) {
-		desc->present = path_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/present");
+		desc->present = path_read_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/present");
 		desc->ncpus = CPU_COUNT_S(setsize, desc->present);
 	}
 
 	/* get mask for online CPUs */
 	if (path_exist(_PATH_SYS_SYSTEM "/cpu/online")) {
-		desc->online = path_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/online");
+		desc->online = path_read_cpulist(maxcpus, _PATH_SYS_SYSTEM "/cpu/online");
 		desc->nthreads = CPU_COUNT_S(setsize, desc->online);
 	}
 
 	/* get dispatching mode */
 	if (path_exist(_PATH_SYS_SYSTEM "/cpu/dispatching"))
-		desc->dispatching = path_getnum(_PATH_SYS_SYSTEM "/cpu/dispatching");
+		desc->dispatching = path_read_s32(_PATH_SYS_SYSTEM "/cpu/dispatching");
 	else
 		desc->dispatching = -1;
 }
@@ -512,24 +530,29 @@ read_hypervisor_cpuid(struct lscpu_desc *desc)
 
 #else	/* ! __x86_64__ */
 static void
-read_hypervisor_cpuid(struct lscpu_desc *desc)
+read_hypervisor_cpuid(struct lscpu_desc *desc __attribute__((__unused__)))
 {
 }
 #endif
 
 static void
-read_hypervisor(struct lscpu_desc *desc)
+read_hypervisor(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 {
-	read_hypervisor_cpuid(desc);
+	FILE *fd;
+
+	if (mod->system != SYSTEM_SNAPSHOT) {
+		read_hypervisor_cpuid(desc);
+		if (!desc->hyper)
+			desc->hyper = read_hypervisor_dmi();
+	}
 
 	if (desc->hyper)
-		/* hvm */
 		desc->virtype = VIRT_FULL;
 
+	/* Xen para-virt or dom0 */
 	else if (path_exist(_PATH_PROC_XEN)) {
-		/* Xen para-virt or dom0 */
-		FILE *fd = path_fopen("r", 0, _PATH_PROC_XENCAP);
 		int dom0 = 0;
+		fd = path_fopen("r", 0, _PATH_PROC_XENCAP);
 
 		if (fd) {
 			char buf[256];
@@ -542,18 +565,22 @@ read_hypervisor(struct lscpu_desc *desc)
 		desc->virtype = dom0 ? VIRT_NONE : VIRT_PARA;
 		desc->hyper = HYPER_XEN;
 
+	/* Xen full-virt on non-x86_64 */
 	} else if (has_pci_device(0x5853, 0x0001)) {
-		/* Xen full-virt on non-x86_64 */
 		desc->hyper = HYPER_XEN;
 		desc->virtype = VIRT_FULL;
+
+	/* IBM PR/SM */
 	} else if (path_exist(_PATH_PROC_SYSINFO)) {
-		FILE *fd = path_fopen("r", 0, _PATH_PROC_SYSINFO);
+		FILE *sysinfo_fd = path_fopen("r", 0, _PATH_PROC_SYSINFO);
 		char buf[BUFSIZ];
 
+		if (!sysinfo_fd)
+			return;
 		desc->hyper = HYPER_IBM;
 		desc->hypervisor = "PR/SM";
 		desc->virtype = VIRT_FULL;
-		while (fgets(buf, sizeof(buf), fd) != NULL) {
+		while (fgets(buf, sizeof(buf), sysinfo_fd) != NULL) {
 			char *str;
 
 			if (!strstr(buf, "Control Program:"))
@@ -565,8 +592,8 @@ read_hypervisor(struct lscpu_desc *desc)
 			str = strchr(buf, ':');
 			if (!str)
 				continue;
-			if (xasprintf(&str, "%s", str + 1) == -1)
-				errx(EXIT_FAILURE, _("failed to allocate memory"));
+			xasprintf(&str, "%s", str + 1);
+
 			/* remove leading, trailing and repeating whitespace */
 			while (*str == ' ')
 				str++;
@@ -577,7 +604,47 @@ read_hypervisor(struct lscpu_desc *desc)
 			while ((str = strstr(desc->hypervisor, "  ")))
 				memmove(str, str + 1, strlen(str));
 		}
+		fclose(sysinfo_fd);
+	}
+
+	/* OpenVZ/Virtuozzo - /proc/vz dir should exist
+	 *		      /proc/bc should not */
+	else if (path_exist(_PATH_PROC_VZ) && !path_exist(_PATH_PROC_BC)) {
+		desc->hyper = HYPER_PARALLELS;
+		desc->virtype = VIRT_CONT;
+
+	/* IBM */
+	} else if (desc->vendor &&
+		 (strcmp(desc->vendor, "PowerVM Lx86") == 0 ||
+		  strcmp(desc->vendor, "IBM/S390") == 0)) {
+		desc->hyper = HYPER_IBM;
+		desc->virtype = VIRT_FULL;
+
+	/* User-mode-linux */
+	} else if (desc->modelname && strstr(desc->modelname, "UML")) {
+		desc->hyper = HYPER_UML;
+		desc->virtype = VIRT_PARA;
+
+	/* Linux-VServer */
+	} else if (path_exist(_PATH_PROC_STATUS)) {
+		char buf[BUFSIZ];
+		char *val = NULL;
+
+		fd = path_fopen("r", 1, _PATH_PROC_STATUS);
+		while (fgets(buf, sizeof(buf), fd) != NULL) {
+			if (lookup(buf, "VxID", &val))
+				break;
+		}
 		fclose(fd);
+
+		if (val) {
+			while (isdigit(*val))
+				++val;
+			if (!*val) {
+				desc->hyper = HYPER_VSERVER;
+				desc->virtype = VIRT_CONT;
+			}
+		}
 	}
 }
 
@@ -611,13 +678,13 @@ read_topology(struct lscpu_desc *desc, int num)
 	if (!path_exist(_PATH_SYS_CPU "/cpu%d/topology/thread_siblings", num))
 		return;
 
-	thread_siblings = path_cpuset(maxcpus, _PATH_SYS_CPU
+	thread_siblings = path_read_cpuset(maxcpus, _PATH_SYS_CPU
 					"/cpu%d/topology/thread_siblings", num);
-	core_siblings = path_cpuset(maxcpus, _PATH_SYS_CPU
+	core_siblings = path_read_cpuset(maxcpus, _PATH_SYS_CPU
 					"/cpu%d/topology/core_siblings", num);
 	book_siblings = NULL;
 	if (path_exist(_PATH_SYS_CPU "/cpu%d/topology/book_siblings", num)) {
-		book_siblings = path_cpuset(maxcpus, _PATH_SYS_CPU
+		book_siblings = path_read_cpuset(maxcpus, _PATH_SYS_CPU
 					    "/cpu%d/topology/book_siblings", num);
 	}
 
@@ -683,7 +750,7 @@ read_polarization(struct lscpu_desc *desc, int num)
 		return;
 	if (!desc->polarization)
 		desc->polarization = xcalloc(desc->ncpuspos, sizeof(int));
-	path_getstr(mode, sizeof(mode), _PATH_SYS_CPU "/cpu%d/polarization", num);
+	path_read_str(mode, sizeof(mode), _PATH_SYS_CPU "/cpu%d/polarization", num);
 	if (strncmp(mode, "vertical:low", sizeof(mode)) == 0)
 		desc->polarization[num] = POLAR_VLOW;
 	else if (strncmp(mode, "vertical:medium", sizeof(mode)) == 0)
@@ -703,7 +770,7 @@ read_address(struct lscpu_desc *desc, int num)
 		return;
 	if (!desc->addresses)
 		desc->addresses = xcalloc(desc->ncpuspos, sizeof(int));
-	desc->addresses[num] = path_getnum(_PATH_SYS_CPU "/cpu%d/address", num);
+	desc->addresses[num] = path_read_s32(_PATH_SYS_CPU "/cpu%d/address", num);
 }
 
 static void
@@ -713,7 +780,31 @@ read_configured(struct lscpu_desc *desc, int num)
 		return;
 	if (!desc->configured)
 		desc->configured = xcalloc(desc->ncpuspos, sizeof(int));
-	desc->configured[num] = path_getnum(_PATH_SYS_CPU "/cpu%d/configure", num);
+	desc->configured[num] = path_read_s32(_PATH_SYS_CPU "/cpu%d/configure", num);
+}
+
+static void
+read_max_mhz(struct lscpu_desc *desc, int num)
+{
+	if (!path_exist(_PATH_SYS_CPU "/cpu%d/cpufreq/cpuinfo_max_freq", num))
+		return;
+	if (!desc->maxmhz)
+		desc->maxmhz = xcalloc(desc->ncpuspos, sizeof(char *));
+	xasprintf(&(desc->maxmhz[num]), "%.4f",
+		  (float)path_read_s32(_PATH_SYS_CPU
+				       "/cpu%d/cpufreq/cpuinfo_max_freq", num) / 1000);
+}
+
+static void
+read_min_mhz(struct lscpu_desc *desc, int num)
+{
+	if (!path_exist(_PATH_SYS_CPU "/cpu%d/cpufreq/cpuinfo_min_freq", num))
+		return;
+	if (!desc->minmhz)
+		desc->minmhz = xcalloc(desc->ncpuspos, sizeof(char *));
+	xasprintf(&(desc->minmhz[num]), "%.4f",
+		  (float)path_read_s32(_PATH_SYS_CPU
+				       "/cpu%d/cpufreq/cpuinfo_min_freq", num) / 1000);
 }
 
 static int
@@ -752,7 +843,7 @@ read_cache(struct lscpu_desc *desc, int num)
 			int type, level;
 
 			/* cache type */
-			path_getstr(buf, sizeof(buf),
+			path_read_str(buf, sizeof(buf),
 					_PATH_SYS_CPU "/cpu%d/cache/index%d/type",
 					num, i);
 			if (!strcmp(buf, "Data"))
@@ -763,7 +854,7 @@ read_cache(struct lscpu_desc *desc, int num)
 				type = 0;
 
 			/* cache level */
-			level = path_getnum(_PATH_SYS_CPU "/cpu%d/cache/index%d/level",
+			level = path_read_s32(_PATH_SYS_CPU "/cpu%d/cache/index%d/level",
 					num, i);
 			if (type)
 				snprintf(buf, sizeof(buf), "L%d%c", level, type);
@@ -773,14 +864,14 @@ read_cache(struct lscpu_desc *desc, int num)
 			ca->name = xstrdup(buf);
 
 			/* cache size */
-			path_getstr(buf, sizeof(buf),
+			path_read_str(buf, sizeof(buf),
 					_PATH_SYS_CPU "/cpu%d/cache/index%d/size",
 					num, i);
 			ca->size = xstrdup(buf);
 		}
 
 		/* information about how CPUs share different caches */
-		map = path_cpuset(maxcpus,
+		map = path_read_cpuset(maxcpus,
 				  _PATH_SYS_CPU "/cpu%d/cache/index%d/shared_cpu_map",
 				  num, i);
 
@@ -806,7 +897,7 @@ read_nodes(struct lscpu_desc *desc)
 
 	/* information about how nodes share different CPUs */
 	for (i = 0; i < desc->nnodes; i++)
-		desc->nodemaps[i] = path_cpuset(maxcpus,
+		desc->nodemaps[i] = path_read_cpuset(maxcpus,
 					_PATH_SYS_SYSTEM "/node/node%d/cpumap",
 					i);
 }
@@ -903,6 +994,14 @@ get_cell_data(struct lscpu_desc *desc, int cpu, int col,
 		else
 			snprintf(buf, bufsz,
 				 is_cpu_online(desc, cpu) ? _("yes") : _("no"));
+		break;
+	case COL_MAXMHZ:
+		if (desc->maxmhz)
+			xstrncpy(buf, desc->maxmhz[cpu], bufsz);
+		break;
+	case COL_MINMHZ:
+		if (desc->minmhz)
+			xstrncpy(buf, desc->minmhz[cpu], bufsz);
 		break;
 	}
 	return buf;
@@ -1047,7 +1146,7 @@ print_readable(struct lscpu_desc *desc, int cols[], int ncols,
 {
 	int i;
 	char buf[BUFSIZ], *data;
-	struct tt *tt = tt_new_table(0);
+	struct tt *tt = tt_new_table(TT_FL_FREEDATA);
 
 	if (!tt)
 		 err(EXIT_FAILURE, _("failed to initialize output table"));
@@ -1073,11 +1172,13 @@ print_readable(struct lscpu_desc *desc, int cols[], int ncols,
 		for (c = 0; c < ncols; c++) {
 			data = get_cell_data(desc, i, cols[c], mod,
 					     buf, sizeof(buf));
-			tt_line_set_data(line, c, data && *data ? xstrdup(data) : "-");
+			tt_line_set_data(line, c,
+					xstrdup(data && *data ? data : "-"));
 		}
 	}
 
 	tt_print_table(tt);
+	tt_free_table(tt);
 }
 
 /* output formats "<key>  <value>"*/
@@ -1205,10 +1306,16 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		print_s(_("CPU family:"), desc->family);
 	if (desc->model)
 		print_s(_("Model:"), desc->model);
+	if (desc->modelname)
+		print_s(_("Model name:"), desc->modelname);
 	if (desc->stepping)
 		print_s(_("Stepping:"), desc->stepping);
 	if (desc->mhz)
 		print_s(_("CPU MHz:"), desc->mhz);
+	if (desc->maxmhz)
+		print_s(_("CPU max MHz:"), desc->maxmhz[0]);
+	if (desc->minmhz)
+		print_s(_("CPU min MHz:"), desc->minmhz[0]);
 	if (desc->bogomips)
 		print_s(_("BogoMIPS:"), desc->bogomips);
 	if (desc->virtflag) {
@@ -1246,19 +1353,19 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	size_t i;
 
 	fputs(USAGE_HEADER, out);
-	fprintf(out,
-	      _(" %s [options]\n"), program_invocation_short_name);
+	fprintf(out, _(" %s [options]\n"), program_invocation_short_name);
 
 	fputs(USAGE_OPTIONS, out);
-	fputs(_(" -a, --all               print online and offline CPUs (default for -e)\n"
-		" -b, --online            print online CPUs only (default for -p)\n"
-		" -c, --offline           print offline CPUs only\n"
-		" -e, --extended[=<list>] print out an extended readable format\n"
-		" -h, --help              print this help\n"
-		" -p, --parse[=<list>]    print out a parsable format\n"
-		" -s, --sysroot <dir>     use directory DIR as system root\n"
-		" -V, --version           print version information and exit\n"
-		" -x, --hex               print hexadecimal masks rather than lists of CPUs\n"), out);
+	fputs(_(" -a, --all               print both online and offline CPUs (default for -e)\n"), out);
+	fputs(_(" -b, --online            print online CPUs only (default for -p)\n"), out);
+	fputs(_(" -c, --offline           print offline CPUs only\n"), out);
+	fputs(_(" -e, --extended[=<list>] print out an extended readable format\n"), out);
+	fputs(_(" -p, --parse[=<list>]    print out a parsable format\n"), out);
+	fputs(_(" -s, --sysroot <dir>     use specified directory as system root\n"), out);
+	fputs(_(" -x, --hex               print hexadecimal masks rather than lists of CPUs\n"), out);
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
 
 	fprintf(out, _("\nAvailable columns:\n"));
 
@@ -1323,9 +1430,7 @@ int main(int argc, char *argv[])
 		case 'h':
 			usage(stdout);
 		case 'p':
-			goto hop_over;
 		case 'e':
-			hop_over:
 			if (optarg) {
 				if (*optarg == '=')
 					optarg++;
@@ -1338,7 +1443,7 @@ int main(int argc, char *argv[])
 			mod->mode = c == 'p' ? OUTPUT_PARSABLE : OUTPUT_READABLE;
 			break;
 		case 's':
-			path_setprefix(optarg);
+			path_set_prefix(optarg);
 			mod->system = SYSTEM_SNAPSHOT;
 			break;
 		case 'x':
@@ -1356,7 +1461,7 @@ int main(int argc, char *argv[])
 	if (cpu_modifier_specified && mod->mode == OUTPUT_SUMMARY) {
 		fprintf(stderr,
 			_("%s: options --all, --online and --offline may only "
-			  "be used with options --extended or --parsable.\n"),
+			  "be used with options --extended or --parse.\n"),
 			program_invocation_short_name);
 		return EXIT_FAILURE;
 	}
@@ -1378,6 +1483,8 @@ int main(int argc, char *argv[])
 		read_polarization(desc, i);
 		read_address(desc, i);
 		read_configured(desc, i);
+		read_max_mhz(desc, i);
+		read_min_mhz(desc, i);
 	}
 
 	if (desc->caches)
@@ -1385,7 +1492,7 @@ int main(int argc, char *argv[])
 				sizeof(struct cpu_cache), cachecmp);
 
 	read_nodes(desc);
-	read_hypervisor(desc);
+	read_hypervisor(desc, mod);
 
 	switch(mod->mode) {
 	case OUTPUT_SUMMARY:
@@ -1424,6 +1531,10 @@ int main(int argc, char *argv[])
 				columns[ncolumns++] = COL_POLARIZATION;
 			if (desc->addresses)
 				columns[ncolumns++] = COL_ADDRESS;
+			if (desc->maxmhz)
+				columns[ncolumns++] = COL_MAXMHZ;
+			if (desc->minmhz)
+				columns[ncolumns++] = COL_MINMHZ;
 		}
 		print_readable(desc, columns, ncolumns, mod);
 		break;

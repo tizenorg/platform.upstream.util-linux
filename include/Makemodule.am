@@ -8,9 +8,12 @@ dist_noinst_HEADERS += \
 	include/canonicalize.h \
 	include/carefulputc.h \
 	include/closestream.h \
+	include/colors.h \
 	include/cpuset.h \
 	include/crc32.h \
+	include/crc64.h \
 	include/env.h \
+	include/exec_shell.h \
 	include/exitcodes.h \
 	include/fileutils.h \
 	include/ismounted.h \
@@ -23,6 +26,7 @@ dist_noinst_HEADERS += \
 	include/mbsalign.h \
 	include/md5.h \
 	include/minix.h \
+	include/namespace.h \
 	include/nls.h \
 	include/optutils.h \
 	include/pager.h \
@@ -36,10 +40,16 @@ dist_noinst_HEADERS += \
 	include/strutils.h \
 	include/swapheader.h \
 	include/sysfs.h \
+	include/timer.h \
+	include/timeutils.h \
 	include/tt.h \
 	include/ttyutils.h \
-	include/usleep.h \
 	include/wholedisk.h \
 	include/widechar.h \
 	include/xalloc.h \
-	include/xgetpass.h
+	include/xgetpass.h \
+	include/pt-sgi.h \
+	include/pt-bsd.h \
+	include/pt-mbr.h \
+	include/pt-mbr-partnames.h \
+	include/pt-sun.h

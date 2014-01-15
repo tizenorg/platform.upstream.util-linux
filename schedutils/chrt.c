@@ -62,9 +62,9 @@ static void __attribute__((__noreturn__)) show_usage(int rc)
 	fprintf(out, _(
 	"\nchrt - manipulate real-time attributes of a process\n"
 	"\nSet policy:\n"
-	"  chrt [options] <policy> <priority> {<pid> | <command> [<arg> ...]}\n"
+	"  chrt [options] [<policy>] <priority> [-p <pid> | <command> [<arg>...]]\n"
 	"\nGet policy:\n"
-	"  chrt [options] {<pid> | <command> [<arg> ...]}\n"));
+	"  chrt [options] -p <pid>\n"));
 
 	fprintf(out, _(
 	"\nScheduling policies:\n"
@@ -263,8 +263,8 @@ int main(int argc, char **argv)
 			verbose = 1;
 			break;
 		case 'V':
-			printf("%s from %s\n", program_invocation_short_name,
-					       PACKAGE_STRING);
+			printf(_("%s from %s\n"), program_invocation_short_name,
+			       PACKAGE_STRING);
 			return EXIT_SUCCESS;
 		case 'h':
 			ret = EXIT_SUCCESS;
@@ -302,7 +302,7 @@ int main(int argc, char **argv)
 	/* sanity check */
 	if ((policy_flag & SCHED_RESET_ON_FORK) &&
 	    !(policy == SCHED_FIFO || policy == SCHED_RR))
-		errx(EXIT_FAILURE, _("SCHED_RESET_ON_FORK flag is suppoted for "
+		errx(EXIT_FAILURE, _("SCHED_RESET_ON_FORK flag is supported for "
 				     "SCHED_FIFO and SCHED_RR policies only"));
 #endif
 
@@ -331,7 +331,6 @@ int main(int argc, char **argv)
 	if (!pid) {
 		argv += optind + 1;
 		execvp(argv[0], argv);
-		perror("execvp");
 		err(EXIT_FAILURE, _("failed to execute %s"), argv[0]);
 	}
 

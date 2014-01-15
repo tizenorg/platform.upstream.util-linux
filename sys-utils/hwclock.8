@@ -111,13 +111,16 @@ option based on the adjtime file. This is useful for example if you
 need to set an RTC wakeup time to distant future and want to account
 for the RTC drift.
 .TP
+.BR \-c , \ \-\-compare
+Periodically compare the Hardware Clock to the System Time and output
+the difference every 10 seconds.  This will also print the frequency
+offset and tick.
+.TP
 .BR \-h , \ \-\-help
-Display a help text and exit.
+Display help text and exit.
 .TP
 .BR \-V , \ \-\-version
-Display the version of
-.B hwclock
-and exit.
+Display version information and exit.
 
 .SH OPTIONS
 .PP
@@ -244,7 +247,7 @@ if you have one of these machines.  When
 .B hwclock
 knows it's working with a brain-damaged clock, it ignores the year part of
 the Hardware Clock value and instead tries to guess the year based on the
-last calibrated date in the adjtime file, by assuming that that date is
+last calibrated date in the adjtime file, by assuming that date is
 within the past year.  For this to work, you had better do a
 .B hwclock \-\-set
 or
@@ -370,9 +373,7 @@ would happen if you used the
 program to set it while the system is running.  You can, however, do whatever
 you want to the Hardware Clock while the system is running, and the next
 time Linux starts up, it will do so with the adjusted time from the Hardware
-Clock.  You can also use the program
-.BR adjtimex (8)
-to smoothly adjust the System Time while the system runs.
+Clock.
 .PP
 A Linux kernel maintains a concept of a local timezone for the system.
 But don't be misled -- almost nobody cares what timezone the kernel
@@ -593,13 +594,6 @@ can turn it off by running anything, including
 .IR "hwclock \-\-hctosys" ,
 that sets the System Time the old fashioned way.
 
-To see if it is on or
-off, use the command
-.I adjtimex \-\-print
-and look at the value of "status".  If the "64" bit of this number
-(expressed in binary) equal to 0, 11 minute mode is on.  Otherwise, it
-is off.
-
 If your system runs with 11 minute mode on, don't use
 .I hwclock \-\-adjust
 or
@@ -645,7 +639,6 @@ on old systems)
 .I /proc/cpuinfo
 
 .SH "SEE ALSO"
-.BR adjtimex (8),
 .BR date (1),
 .BR gettimeofday (2),
 .BR settimeofday (2),

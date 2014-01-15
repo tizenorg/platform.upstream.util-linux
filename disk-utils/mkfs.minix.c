@@ -188,7 +188,7 @@ static void super_set_state(void)
 static void write_tables(void) {
 	unsigned long imaps = get_nimaps();
 	unsigned long zmaps = get_nzmaps();
-	unsigned long buffsz = get_inode_buffer_size();
+	size_t buffsz = get_inode_buffer_size();
 
 	/* Mark the super block valid. */
 	super_set_state();
@@ -482,7 +482,7 @@ static void setup_tables(void) {
 
 	super_block_buffer = calloc(1, MINIX_BLOCK_SIZE);
 	if (!super_block_buffer)
-		err(MKFS_EX_ERROR, _("%s: unable to alloc buffer for superblock"),
+		err(MKFS_EX_ERROR, _("%s: unable to allocate buffer for superblock"),
 				device_name);
 
 	memset(boot_block_buffer,0,512);
@@ -541,19 +541,19 @@ static void setup_tables(void) {
 		err(MKFS_EX_ERROR, _("%s: unable to allocate buffer for inodes"),
 				device_name);
 	memset(inode_buffer,0, get_inode_buffer_size());
-	printf(_("%lu inodes\n"), inodes);
-	printf(_("%lu blocks\n"), zones);
-	printf(_("Firstdatazone=%ld (%ld)\n"), get_first_zone(), first_zone_data());
-	printf(_("Zonesize=%d\n"),MINIX_BLOCK_SIZE<<get_zone_size());
-	printf(_("Maxsize=%ld\n\n"),get_max_size());
+	printf(P_("%lu inode\n", "%lu inodes\n", inodes), inodes);
+	printf(P_("%lu block\n", "%lu blocks\n", zones), zones);
+	printf(_("Firstdatazone=%jd (%jd)\n"), get_first_zone(), first_zone_data());
+	printf(_("Zonesize=%zu\n"), (size_t) MINIX_BLOCK_SIZE << get_zone_size());
+	printf(_("Maxsize=%zu\n\n"),get_max_size());
 }
 
 /*
  * Perform a test of a block; return the number of
  * blocks readable/writeable.
  */
-static long do_check(char * buffer, int try, unsigned int current_block) {
-	long got;
+static size_t do_check(char * buffer, int try, unsigned int current_block) {
+	ssize_t got;
 	
 	/* Seek to the correct loc. */
 	if (lseek(DEV, current_block * MINIX_BLOCK_SIZE, SEEK_SET) !=
@@ -587,7 +587,7 @@ static void alarm_intr(int alnum __attribute__ ((__unused__))) {
 }
 
 static void check_blocks(void) {
-	int try,got;
+	size_t try, got;
 	static char buffer[MINIX_BLOCK_SIZE * TEST_BUFFER_BLOCKS];
 	unsigned long zones = get_nzones();
 	unsigned long first_zone = get_first_zone();
@@ -614,10 +614,8 @@ static void check_blocks(void) {
 		badblocks++;
 		currently_testing++;
 	}
-	if (badblocks > 1)
-		printf(_("%d bad blocks\n"), badblocks);
-	else if (badblocks == 1)
-		printf(_("one bad block\n"));
+	if (badblocks > 0)
+		printf(P_("%d bad block\n", "%d bad blocks\n", badblocks), badblocks);
 }
 
 static void get_list_blocks(char *filename) {
@@ -640,10 +638,8 @@ static void get_list_blocks(char *filename) {
 	}
 	fclose(listfile);
 
-	if(badblocks > 1)
-		printf(_("%d bad blocks\n"), badblocks);
-	else if (badblocks == 1)
-		printf(_("one bad block\n"));
+	if (badblocks > 0)
+		printf(P_("%d bad block\n", "%d bad blocks\n", badblocks), badblocks);
 }
 
 int main(int argc, char ** argv) {
@@ -666,7 +662,7 @@ int main(int argc, char ** argv) {
 	if (argc == 2 &&
 	    (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version"))) {
 		printf(_("%s (%s)\n"), program_name, PACKAGE_STRING);
-		exit(0);
+		exit(MKFS_EX_OK);
 	}
 
 	if (INODE_SIZE * MINIX_INODES_PER_BLOCK != MINIX_BLOCK_SIZE)
@@ -680,14 +676,14 @@ int main(int argc, char ** argv) {
 		case 'c':
 			check=1; break;
 		case 'i':
-			req_nr_inodes = (unsigned long) atol(optarg);
+			req_nr_inodes = strtoul_or_err(optarg,
+					_("failed to parse number of inodes"));
 			break;
 		case 'l':
 			listfile = optarg; break;
 		case 'n':
-			i = strtoul(optarg,&tmp,0);
-			if (*tmp)
-				usage();
+			i = strtoul_or_err(optarg,
+					_("failed to parse maximum length of filenames"));
 			if (i == 14)
 				magic = MINIX_SUPER_MAGIC;
 			else if (i == 30)
@@ -719,13 +715,8 @@ int main(int argc, char ** argv) {
 		argc--;
 		argv++;
 	}
-	if (argc > 0) {
-		BLOCKS = strtol(argv[0],&tmp,0);
-		if (*tmp) {
-			printf(_("strtol error: number of blocks not specified"));
-			usage();
-		}
-	}
+	if (argc > 0)
+		BLOCKS = strtoul_or_err(argv[0], _("failed to parse number of blocks"));
 
 	if (!device_name) {
 		usage();
@@ -809,7 +800,8 @@ int main(int argc, char ** argv) {
 
 	mark_good_blocks();
 	write_tables();
-	close(DEV);
+	if (close_fd(DEV) != 0)
+		err(MKFS_EX_ERROR, _("write failed"));
 
-	return 0;
+	return MKFS_EX_OK;
 }

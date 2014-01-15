@@ -25,7 +25,7 @@ struct libmnt_tabdiff {
 	int nchanges;			/* number of changes */
 
 	struct list_head changes;	/* list with modified entries */
-	struct list_head unused;	/* list with unuused entries */
+	struct list_head unused;	/* list with unused entries */
 };
 
 /**
@@ -54,6 +54,8 @@ static void free_tabdiff_entry(struct tabdiff_entry *de)
 	if (!de)
 		return;
 	list_del(&de->changes);
+	mnt_unref_fs(de->new_fs);
+	mnt_unref_fs(de->old_fs);
 	free(de);
 }
 
@@ -89,7 +91,7 @@ void mnt_free_tabdiff(struct libmnt_tabdiff *df)
  *
  * The options @old_fs, @new_fs and @oper are optional.
  *
- * Returns: 0 on success, negative number in case of error or 1 at end of list.
+ * Returns: 0 on success, negative number in case of error or 1 at the end of list.
  */
 int mnt_tabdiff_next_change(struct libmnt_tabdiff *df, struct libmnt_iter *itr,
 		struct libmnt_fs **old_fs, struct libmnt_fs **new_fs, int *oper)
@@ -124,9 +126,9 @@ static int tabdiff_reset(struct libmnt_tabdiff *df)
 {
 	assert(df);
 
-	DBG(DIFF, mnt_debug_h(df, "reseting"));
+	DBG(DIFF, mnt_debug_h(df, "resetting"));
 
-	/* zeroize all entries and move them to the list of unuused
+	/* zeroize all entries and move them to the list of unused
 	 */
 	while (!list_empty(&df->changes)) {
 		struct tabdiff_entry *de = list_entry(df->changes.next,
@@ -134,6 +136,9 @@ static int tabdiff_reset(struct libmnt_tabdiff *df)
 
 		list_del(&de->changes);
 		list_add_tail(&de->changes, &df->unused);
+
+		mnt_unref_fs(de->new_fs);
+		mnt_unref_fs(de->old_fs);
 
 		de->new_fs = de->old_fs = NULL;
 		de->oper = 0;
@@ -163,6 +168,12 @@ static int tabdiff_add_entry(struct libmnt_tabdiff *df, struct libmnt_fs *old,
 	}
 
 	INIT_LIST_HEAD(&de->changes);
+
+	mnt_ref_fs(new);
+	mnt_ref_fs(old);
+
+	mnt_unref_fs(de->new_fs);
+	mnt_unref_fs(de->old_fs);
 
 	de->old_fs = old;
 	de->new_fs = new;
@@ -280,6 +291,8 @@ int mnt_diff_tables(struct libmnt_tabdiff *df, struct libmnt_table *old_tab,
 
 			de = tabdiff_get_mount(df, src,	mnt_fs_get_id(fs));
 			if (de) {
+				mnt_ref_fs(fs);
+				mnt_unref_fs(de->old_fs);
 				de->oper = MNT_TABDIFF_MOVE;
 				de->old_fs = fs;
 			} else
@@ -342,8 +355,8 @@ int test_diff(struct libmnt_test *ts, int argc, char *argv[])
 
 	rc = 0;
 done:
-	mnt_free_table(tb_old);
-	mnt_free_table(tb_new);
+	mnt_unref_table(tb_old);
+	mnt_unref_table(tb_new);
 	mnt_free_tabdiff(diff);
 	mnt_free_iter(itr);
 	return rc;

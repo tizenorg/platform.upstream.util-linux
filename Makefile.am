@@ -23,8 +23,11 @@ dist_noinst_DATA = $(dist_man_MANS)
 ul_libblkid_incdir = $(top_builddir)/libblkid/src
 ul_libmount_incdir = $(top_builddir)/libmount/src
 ul_libuuid_incdir  = $(top_srcdir)/libuuid/src
+ul_libfdisk_incdir  = $(top_srcdir)/libfdisk/src
 
 pkgconfigdir = $(usrlib_execdir)/pkgconfig
+
+bashcompletiondir = @bashcompletiondir@
 
 dist_noinst_HEADERS =
 noinst_PROGRAMS =
@@ -39,7 +42,6 @@ bin_PROGRAMS =
 sbin_PROGRAMS =
 dist_usrbin_exec_SCRIPTS =
 systemdsystemunit_DATA =
-ruman1_DATA =
 check_PROGRAMS =
 TESTS =
 
@@ -51,7 +53,7 @@ INSTALL_DATA_HOOKS =
 CLEAN_LOCALS =
 CHECK_LOCALS =
 
-EXTRA_DIST = man/ru/ddate.1
+EXTRA_DIST =
 CLEANFILES =
 
 SUBDIRS = po
@@ -75,6 +77,7 @@ include lib/Makemodule.am
 include libuuid/Makemodule.am
 include libblkid/Makemodule.am
 include libmount/Makemodule.am
+include libfdisk/Makemodule.am
 
 include schedutils/Makemodule.am
 include text-utils/Makemodule.am
@@ -85,6 +88,8 @@ include sys-utils/Makemodule.am
 include misc-utils/Makemodule.am
 include disk-utils/Makemodule.am
 include fdisks/Makemodule.am
+
+include bash-completion/Makemodule.am
 
 include tests/Makemodule.am
 
@@ -157,6 +162,7 @@ checkdecl:
 ENABLE_ALL = --enable-static-programs --enable-most-builds
 DISTCHECK_CONFIGURE_FLAGS = --disable-use-tty-group \
 			    --disable-silent-rules $(ENABLE_ALL) \
+			    --with-bashcompletiondir=$$dc_install_base/$(bashcompletiondir) \
 			    --with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
 
 

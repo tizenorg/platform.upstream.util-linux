@@ -23,35 +23,52 @@
 #include "env.h"
 #include "match.h"
 
-int endswith(const char *s, const char *sx)
+int append_string(char **a, const char *b)
 {
-	ssize_t off;
+	size_t al, bl;
+	char *tmp;
 
-	assert(s);
-	assert(sx);
+	assert(a);
 
-	off = strlen(s);
-	if (!off)
+	if (!b || !*b)
 		return 0;
-	off -= strlen(sx);
-	if (off < 0)
-		return 0;
+	if (!*a) {
+		*a = strdup(b);
+		return !*a ? -ENOMEM : 0;
+	}
 
-        return !strcmp(s + off, sx);
+	al = strlen(*a);
+	bl = strlen(b);
+
+	tmp = realloc(*a, al + bl + 1);
+	if (!tmp)
+		return -ENOMEM;
+	*a = tmp;
+	memcpy((*a) + al, b, bl + 1);
+	return 0;
 }
 
-int startswith(const char *s, const char *sx)
+/*
+ * Return 1 if the file is not accessible or empty
+ */
+int is_file_empty(const char *name)
 {
-	size_t off;
+	struct stat st;
+	assert(name);
 
-	assert(s);
-	assert(sx);
+	return (stat(name, &st) != 0 || st.st_size == 0);
+}
 
-	off = strlen(sx);
-	if (!off)
-		return 0;
+int mnt_valid_tagname(const char *tagname)
+{
+	if (tagname && *tagname && (
+	    strcmp("UUID", tagname) == 0 ||
+	    strcmp("LABEL", tagname) == 0 ||
+	    strcmp("PARTUUID", tagname) == 0 ||
+	    strcmp("PARTLABEL", tagname) == 0))
+		return 1;
 
-        return !strncmp(s, sx, off);
+	return 0;
 }
 
 int mnt_parse_offset(const char *str, size_t len, uintmax_t *res)
@@ -83,7 +100,7 @@ static int fstype_cmp(const void *v1, const void *v2)
 
 /* returns basename and keeps dirname in the @path, if @path is "/" (root)
  * then returns empty string */
-static char *stripoff_last_component(char *path)
+char *stripoff_last_component(char *path)
 {
 	char *p = path ? strrchr(path, '/') : NULL;
 
@@ -94,8 +111,8 @@ static char *stripoff_last_component(char *path)
 }
 
 /*
- * Note that the @target has to be absolute path (so at least "/").  The
- * @filename returns allocated buffer with last path component, for example:
+ * Note that the @target has to be an absolute path (so at least "/").  The
+ * @filename returns an allocated buffer with the last path component, for example:
  *
  * mnt_chdir_to_parent("/mnt/test", &buf) ==> chdir("/mnt"), buf="test"
  */
@@ -142,12 +159,15 @@ int mnt_chdir_to_parent(const char *target, char **filename)
 		"current directory moved to %s [last_component='%s']",
 		parent, last));
 
-	*filename = buf;
+	if (filename) {
+		*filename = buf;
 
-	if (!last || !*last)
-		memcpy(*filename, ".", 2);
-	else
-		memcpy(*filename, last, strlen(last) + 1);
+		if (!last || !*last)
+			memcpy(*filename, ".", 2);
+		else
+			memmove(*filename, last, strlen(last) + 1);
+	} else
+		free(buf);
 	return 0;
 err:
 	free(buf);
@@ -155,7 +175,7 @@ err:
 }
 
 /*
- * Check if @path is on read-only filesystem independently on file permissions.
+ * Check if @path is on a read-only filesystem independently of file permissions.
  */
 int mnt_is_readonly(const char *path)
 {
@@ -174,7 +194,7 @@ int mnt_is_readonly(const char *path)
 	 *   accessible for the current rUID. (Note that euidaccess(2) does not
 	 *   check for EROFS at all).
 	 *
-	 * - for read-write filesystem with read-only VFS node (aka -o remount,ro,bind)
+	 * - for a read-write filesystem with a read-only VFS node (aka -o remount,ro,bind)
 	 */
 	{
 		struct timespec times[2];
@@ -195,7 +215,7 @@ int mnt_is_readonly(const char *path)
  *
  * Encode @str to be compatible with fstab/mtab
  *
- * Returns: new allocated string or NULL in case of error.
+ * Returns: newly allocated string or NULL in case of error.
  */
 char *mnt_mangle(const char *str)
 {
@@ -208,7 +228,7 @@ char *mnt_mangle(const char *str)
  *
  * Decode @str from fstab/mtab
  *
- * Returns: new allocated string or NULL in case of error.
+ * Returns: newly allocated string or NULL in case of error.
  */
 char *mnt_unmangle(const char *str)
 {
@@ -256,6 +276,8 @@ int mnt_fstype_is_pseudofs(const char *type)
 		"tmpfs"
 	};
 
+	assert(type);
+
 	return !(bsearch(&type, pseudofs, ARRAY_SIZE(pseudofs),
 				sizeof(char*), fstype_cmp) == NULL);
 }
@@ -268,8 +290,8 @@ int mnt_fstype_is_pseudofs(const char *type)
  */
 int mnt_fstype_is_netfs(const char *type)
 {
-	if (!type)
-		return 0;
+	assert(type);
+
 	if (strcmp(type, "cifs")   == 0 ||
 	    strcmp(type, "smbfs")  == 0 ||
 	    strncmp(type,"nfs", 3) == 0 ||
@@ -285,7 +307,7 @@ int mnt_fstype_is_netfs(const char *type)
  * @type: filesystem type
  * @pattern: filesystem name or comma delimited list of names
  *
- * The @pattern list of filesystem can be prefixed with a global
+ * The @pattern list of filesystems can be prefixed with a global
  * "no" prefix to invert matching of the whole list. The "no" could
  * also be used for individual items in the @pattern list. So,
  * "nofoo,bar" has the same meaning as "nofoo,nobar".
@@ -343,14 +365,14 @@ static int check_option(const char *haystack, size_t len,
  * @optstr: options string
  * @pattern: comma delimited list of options
  *
- * The "no" could used for individual items in the @options list. The "no"
+ * The "no" could be used for individual items in the @options list. The "no"
  * prefix does not have a global meaning.
  *
  * Unlike fs type matching, nonetdev,user and nonetdev,nouser have
  * DIFFERENT meanings; each option is matched explicitly as specified.
  *
- * The "no" prefix interpretation could be disable by "+" prefix, for example
- * "+noauto" matches if @optstr literally contains "noauto" string.
+ * The "no" prefix interpretation could be disabled by the "+" prefix, for example
+ * "+noauto" matches if @optstr literally contains the "noauto" string.
  *
  * "xxx,yyy,zzz" : "nozzz"	-> False
  *
@@ -451,7 +473,7 @@ static int get_filesystems(const char *filename, char ***filesystems, const char
 	FILE *f;
 	char line[128];
 
-	f = fopen(filename, "r");
+	f = fopen(filename, "r" UL_CLOEXECSTR);
 	if (!f)
 		return 1;
 
@@ -480,7 +502,7 @@ static int get_filesystems(const char *filename, char ***filesystems, const char
 }
 
 /*
- * Always check @filesystems pointer!
+ * Always check the @filesystems pointer!
  *
  * man mount:
  *
@@ -488,7 +510,7 @@ static int get_filesystems(const char *filename, char ***filesystems, const char
  * exist, /proc/filesystems. All of the filesystem  types  listed  there  will
  * be tried,  except  for  those  that  are  labeled  "nodev"  (e.g.,  devpts,
  * proc  and  nfs).  If /etc/filesystems ends in a line with a single * only,
- * mount will read /proc/filesystems after‐ wards.
+ * mount will read /proc/filesystems afterwards.
  */
 int mnt_get_filesystems(char ***filesystems, const char *pattern)
 {
@@ -505,7 +527,7 @@ int mnt_get_filesystems(char ***filesystems, const char *pattern)
 
 	rc = get_filesystems(_PATH_PROC_FILESYSTEMS, filesystems, pattern);
 	if (rc == 1 && *filesystems)
-		rc = 0;			/* not found /proc/filesystems */
+		rc = 0;			/* /proc/filesystems not found */
 
 	return rc;
 }
@@ -521,7 +543,7 @@ static size_t get_pw_record_size(void)
 }
 
 /*
- * Returns allocated string with username or NULL.
+ * Returns an allocated string with username or NULL.
  */
 char *mnt_get_username(const uid_t uid)
 {
@@ -633,8 +655,8 @@ static int try_write(const char *filename)
 	if (!filename)
 		return -EINVAL;
 
-	fd = open(filename, O_RDWR|O_CREAT, S_IWUSR| \
-					    S_IRUSR|S_IRGRP|S_IROTH);
+	fd = open(filename, O_RDWR|O_CREAT|O_CLOEXEC,
+			    S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 	if (fd >= 0) {
 		close(fd);
 		return 0;
@@ -647,8 +669,8 @@ static int try_write(const char *filename)
  * @mtab: returns path to mtab
  * @writable: returns 1 if the file is writable
  *
- * If the file does not exist and @writable argument is not NULL then it will
- * try to create the file
+ * If the file does not exist and @writable argument is not NULL, then it will
+ * try to create the file.
  *
  * Returns: 1 if /etc/mtab is a regular file, and 0 in case of error (check
  *          errno for more details).
@@ -669,7 +691,7 @@ int mnt_has_regular_mtab(const char **mtab, int *writable)
 	rc = lstat(filename, &st);
 
 	if (rc == 0) {
-		/* file exist */
+		/* file exists */
 		if (S_ISREG(st.st_mode)) {
 			if (writable)
 				*writable = !try_write(filename);
@@ -693,7 +715,7 @@ done:
 /*
  * Don't export this to libmount API -- utab is private library stuff.
  *
- * If the file does not exist and @writable argument is not NULL then it will
+ * If the file does not exist and @writable argument is not NULL, then it will
  * try to create the directory (e.g. /run/mount) and the file.
  *
  * Returns: 1 if utab is a regular file, and 0 in case of
@@ -715,13 +737,13 @@ int mnt_has_regular_utab(const char **utab, int *writable)
 	rc = lstat(filename, &st);
 
 	if (rc == 0) {
-		/* file exist */
+		/* file exists */
 		if (S_ISREG(st.st_mode)) {
 			if (writable)
 				*writable = !try_write(filename);
 			return 1;
 		}
-		goto done;	/* it's not regular file */
+		goto done;	/* it's not a regular file */
 	}
 
 	if (writable) {
@@ -773,7 +795,7 @@ const char *mnt_get_fstab_path(void)
 /**
  * mnt_get_mtab_path:
  *
- * This function returns *default* location of the mtab file. The result does
+ * This function returns the *default* location of the mtab file. The result does
  * not have to be writable. See also mnt_has_regular_mtab().
  *
  * Returns: path to /etc/mtab or $LIBMOUNT_MTAB.
@@ -804,7 +826,7 @@ const char *mnt_get_utab_path(void)
 }
 
 
-/* returns file descriptor or -errno, @name returns uniques filename
+/* returns file descriptor or -errno, @name returns a unique filename
  */
 int mnt_open_uniq_filename(const char *filename, char **name)
 {
@@ -812,8 +834,8 @@ int mnt_open_uniq_filename(const char *filename, char **name)
 	char *n;
 	mode_t oldmode;
 
-	assert(filename);
-
+	if (!filename)
+		return -EINVAL;
 	if (name)
 		*name = NULL;
 
@@ -821,12 +843,14 @@ int mnt_open_uniq_filename(const char *filename, char **name)
 	if (rc <= 0)
 		return -errno;
 
-	/* This is for very old glibc and for compatibility with Posix where is
+	/* This is for very old glibc and for compatibility with Posix, which says
 	 * nothing about mkstemp() mode. All sane glibc use secure mode (0600).
 	 */
 	oldmode = umask(S_IRGRP|S_IWGRP|S_IXGRP|
 			S_IROTH|S_IWOTH|S_IXOTH);
-	fd = mkstemp(n);
+	fd = mkostemp(n, O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC);
+	if (fd < 0)
+		fd = -errno;
 	umask(oldmode);
 
 	if (fd >= 0 && name)
@@ -834,7 +858,7 @@ int mnt_open_uniq_filename(const char *filename, char **name)
 	else
 		free(n);
 
-	return fd < 0 ? -errno : fd;
+	return fd;
 }
 
 /**
@@ -844,14 +868,17 @@ int mnt_open_uniq_filename(const char *filename, char **name)
  * This function finds the mountpoint that a given path resides in. @path
  * should be canonicalized. The returned pointer should be freed by the caller.
  *
- * Returns: target of mounted device or NULL on error
+ * Returns: allocated string with the target of the mounted device or NULL on error
  */
 char *mnt_get_mountpoint(const char *path)
 {
-	char *mnt = strdup(path);
+	char *mnt;
 	struct stat st;
 	dev_t dir, base;
 
+	assert(path);
+
+	mnt = strdup(path);
 	if (!mnt)
 		return NULL;
 	if (*mnt == '/' && *(mnt + 1) == '\0')
@@ -908,6 +935,113 @@ char *mnt_get_fs_root(const char *path, const char *mnt)
 	return res;
 }
 
+/*
+ * Search for @name kernel command parametr.
+ *
+ * Returns newly allocated string with a parameter argument if the @name is
+ * specified as "name=" or returns pointer to @name or returns NULL if not
+ * found.
+ *
+ * For example cmdline: "aaa bbb=BBB ccc"
+ *
+ *	@name is "aaa"	--returns--> "aaa" (pointer to @name)
+ *	@name is "bbb=" --returns--> "BBB" (allocated)
+ *	@name is "foo"  --returns--> NULL
+ */
+char *mnt_get_kernel_cmdline_option(const char *name)
+{
+	FILE *f;
+	size_t len;
+	int val = 0;
+	char *p, *res = NULL;
+	char buf[BUFSIZ];	/* see kernel include/asm-generic/setup.h: COMMAND_LINE_SIZE */
+	const char *path = _PATH_PROC_CMDLINE;
+
+	if (!name)
+		return NULL;
+
+#ifdef TEST_PROGRAM
+	path = getenv("LIBMOUNT_KERNEL_CMDLINE");
+	if (!path)
+		path = _PATH_PROC_CMDLINE;
+#endif
+	f = fopen(path, "r" UL_CLOEXECSTR);
+	if (!f)
+		return NULL;
+
+	p = fgets(buf, sizeof(buf), f);
+	fclose(f);
+
+	if (!p || !*p || *p == '\n')
+		return NULL;
+
+	len = strlen(buf);
+	*(buf + len - 1) = '\0';	/* remove last '\n' */
+
+	len = strlen(name);
+	if (len && *(name + len - 1) == '=')
+		val = 1;
+
+	for ( ; p && *p; p++) {
+		if (!(p = strstr(p, name)))
+			break;			/* not found the option */
+		if (p != buf && !isblank(*(p - 1)))
+			continue;		/* no space before the option */
+		if (!val && *(p + len) != '\0' && !isblank(*(p + len)))
+			continue;		/* no space after the option */
+		if (val) {
+			char *v = p + len;
+
+			while (*p && !isblank(*p))	/* jump to the end of the argument */
+				p++;
+			*p = '\0';
+			res = strdup(v);
+			break;
+		} else
+			res = (char *) name;	/* option without '=' */
+		break;
+	}
+
+	return res;
+}
+
+int mkdir_p(const char *path, mode_t mode)
+{
+	char *p, *dir;
+	int rc = 0;
+
+	if (!path || !*path)
+		return -EINVAL;
+
+	dir = p = strdup(path);
+	if (!dir)
+		return -ENOMEM;
+
+	if (*p == '/')
+		p++;
+
+	while (p && *p) {
+		char *e = strchr(p, '/');
+		if (e)
+			*e = '\0';
+		if (*p) {
+			rc = mkdir(dir, mode);
+			if (rc && errno != EEXIST)
+				break;
+			rc = 0;
+		}
+		if (!e)
+			break;
+		*e = '/';
+		p = e + 1;
+	}
+
+	DBG(UTILS, mnt_debug("%s mkdir %s", path, rc ? "FAILED" : "SUCCESS"));
+
+	free(dir);
+	return rc;
+}
+
 #ifdef TEST_PROGRAM
 int test_match_fstype(struct libmnt_test *ts, int argc, char *argv[])
 {
@@ -942,6 +1076,18 @@ int test_endswith(struct libmnt_test *ts, int argc, char *argv[])
 	char *pattern = argv[2];
 
 	printf("%s\n", endswith(optstr, pattern) ? "YES" : "NOT");
+	return 0;
+}
+
+int test_appendstr(struct libmnt_test *ts, int argc, char *argv[])
+{
+	char *str = strdup(argv[1]);
+	const char *ap = argv[2];
+
+	append_string(&str, ap);
+	printf("new string: '%s'\n", str);
+
+	free(str);
 	return 0;
 }
 
@@ -1001,6 +1147,36 @@ int test_chdir(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
+int test_kernel_cmdline(struct libmnt_test *ts, int argc, char *argv[])
+{
+	char *name = argv[1];
+	char *res;
+
+	res = mnt_get_kernel_cmdline_option(name);
+	if (!res)
+		printf("'%s' not found\n", name);
+	else if (res == name)
+		printf("'%s' found\n", name);
+	else {
+		printf("'%s' found, argument: '%s'\n", name, res);
+		free(res);
+	}
+
+	return 0;
+}
+
+int test_mkdir(struct libmnt_test *ts, int argc, char *argv[])
+{
+	int rc;
+
+	rc = mkdir_p(argv[1], S_IRWXU |
+			 S_IRGRP | S_IXGRP |
+			 S_IROTH | S_IXOTH);
+	if (rc)
+		printf("mkdir %s failed\n", argv[1]);
+	return rc;
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -1010,9 +1186,13 @@ int main(int argc, char *argv[])
 	{ "--filesystems",   test_filesystems,	   "[<pattern>] list /{etc,proc}/filesystems" },
 	{ "--starts-with",   test_startswith,      "<string> <prefix>" },
 	{ "--ends-with",     test_endswith,        "<string> <prefix>" },
+	{ "--append-string", test_appendstr,       "<string> <appendix>" },
 	{ "--mountpoint",    test_mountpoint,      "<path>" },
 	{ "--fs-root",       test_fsroot,          "<path>" },
 	{ "--cd-parent",     test_chdir,           "<path>" },
+	{ "--kernel-cmdline",test_kernel_cmdline,  "<option> | <option>=" },
+	{ "--mkdir",         test_mkdir,           "<path>" },
+
 	{ NULL }
 	};
 

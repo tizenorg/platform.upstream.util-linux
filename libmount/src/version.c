@@ -10,7 +10,7 @@
 /**
  * SECTION: version
  * @title: Version functions
- * @short_description: functions to get library version.
+ * @short_description: functions to get the library version.
  */
 
 #include <ctype.h>
@@ -25,6 +25,9 @@ static const char *lib_features[] = {
 #ifdef CONFIG_LIBMOUNT_DEBUG
 	"debug",
 #endif
+#ifdef CONFIG_LIBMOUNT_ASSERT
+	"assert",
+#endif
 	NULL
 };
 
@@ -38,6 +41,8 @@ int mnt_parse_version_string(const char *ver_string)
 {
 	const char *cp;
 	int version = 0;
+
+	assert(ver_string);
 
 	for (cp = ver_string; *cp; cp++) {
 		if (*cp == '.')
@@ -65,11 +70,11 @@ int mnt_get_library_version(const char **ver_string)
 
 /**
  * mnt_get_library_features:
- * @features: returns pointer to the static array of strings, the array is
+ * @features: returns a pointer to the static array of strings, the array is
  *            terminated by NULL.
  *
  * Returns: number of items in the features array not including the last NULL,
- *          or less then zero in case of error
+ *          or less than zero in case of error
  *
  * Example:
  * <informalexample>

@@ -1,10 +1,12 @@
 /*
- * Simple functions to access files.
+ * Simple functions to access files, paths maybe be globally prefixed by a
+ * global prefix to read data from alternative destination (e.g. /proc dump for
+ * regression tests).
  *
  * Taken from lscpu.c
  *
  * Copyright (C) 2008 Cai Qian <qcai@redhat.com>
- * Copyright (C) 2008 Karel Zak <kzak@redhat.com>
+ * Copyright (C) 2008-2012 Karel Zak <kzak@redhat.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -25,10 +27,10 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <inttypes.h>
 #include <errno.h>
 
 #include "all-io.h"
-#include "cpuset.h"
 #include "path.h"
 #include "nls.h"
 #include "c.h"
@@ -85,17 +87,17 @@ path_fopen(const char *mode, int exit_on_error, const char *path, ...)
 }
 
 void
-path_getstr(char *result, size_t len, const char *path, ...)
+path_read_str(char *result, size_t len, const char *path, ...)
 {
 	FILE *fd;
 	va_list ap;
 
 	va_start(ap, path);
-	fd = path_vfopen("r", 1, path, ap);
+	fd = path_vfopen("r" UL_CLOEXECSTR, 1, path, ap);
 	va_end(ap);
 
 	if (!fgets(result, len, fd))
-		err(EXIT_FAILURE, _("failed to read: %s"), pathbuf);
+		err(EXIT_FAILURE, _("cannot read %s"), pathbuf);
 	fclose(fd);
 
 	len = strlen(result);
@@ -104,19 +106,40 @@ path_getstr(char *result, size_t len, const char *path, ...)
 }
 
 int
-path_getnum(const char *path, ...)
+path_read_s32(const char *path, ...)
 {
 	FILE *fd;
 	va_list ap;
 	int result;
 
 	va_start(ap, path);
-	fd = path_vfopen("r", 1, path, ap);
+	fd = path_vfopen("r" UL_CLOEXECSTR, 1, path, ap);
 	va_end(ap);
 
 	if (fscanf(fd, "%d", &result) != 1) {
 		if (ferror(fd))
-			err(EXIT_FAILURE, _("failed to read: %s"), pathbuf);
+			err(EXIT_FAILURE, _("cannot read %s"), pathbuf);
+		else
+			errx(EXIT_FAILURE, _("parse error: %s"), pathbuf);
+	}
+	fclose(fd);
+	return result;
+}
+
+uint64_t
+path_read_u64(const char *path, ...)
+{
+	FILE *fd;
+	va_list ap;
+	uint64_t result;
+
+	va_start(ap, path);
+	fd = path_vfopen("r", 1, path, ap);
+	va_end(ap);
+
+	if (fscanf(fd, "%"SCNu64, &result) != 1) {
+		if (ferror(fd))
+			err(EXIT_FAILURE, _("cannot read %s"), pathbuf);
 		else
 			errx(EXIT_FAILURE, _("parse error: %s"), pathbuf);
 	}
@@ -125,13 +148,13 @@ path_getnum(const char *path, ...)
 }
 
 int
-path_writestr(const char *str, const char *path, ...)
+path_write_str(const char *str, const char *path, ...)
 {
 	int fd, result;
 	va_list ap;
 
 	va_start(ap, path);
-	fd = path_vopen(O_WRONLY, path, ap);
+	fd = path_vopen(O_WRONLY|O_CLOEXEC, path, ap);
 	va_end(ap);
 	result = write_all(fd, str, strlen(str));
 	close(fd);
@@ -151,6 +174,8 @@ path_exist(const char *path, ...)
 	return access(p, F_OK) == 0;
 }
 
+#ifdef HAVE_CPU_SET_T
+
 static cpu_set_t *
 path_cpuparse(int maxcpus, int islist, const char *path, va_list ap)
 {
@@ -159,10 +184,10 @@ path_cpuparse(int maxcpus, int islist, const char *path, va_list ap)
 	size_t setsize, len = maxcpus * 7;
 	char buf[len];
 
-	fd = path_vfopen("r", 1, path, ap);
+	fd = path_vfopen("r" UL_CLOEXECSTR, 1, path, ap);
 
 	if (!fgets(buf, len, fd))
-		err(EXIT_FAILURE, _("failed to read: %s"), pathbuf);
+		err(EXIT_FAILURE, _("cannot read %s"), pathbuf);
 	fclose(fd);
 
 	len = strlen(buf);
@@ -184,7 +209,7 @@ path_cpuparse(int maxcpus, int islist, const char *path, va_list ap)
 }
 
 cpu_set_t *
-path_cpuset(int maxcpus, const char *path, ...)
+path_read_cpuset(int maxcpus, const char *path, ...)
 {
 	va_list ap;
 	cpu_set_t *set;
@@ -197,7 +222,7 @@ path_cpuset(int maxcpus, const char *path, ...)
 }
 
 cpu_set_t *
-path_cpulist(int maxcpus, const char *path, ...)
+path_read_cpulist(int maxcpus, const char *path, ...)
 {
 	va_list ap;
 	cpu_set_t *set;
@@ -209,8 +234,10 @@ path_cpulist(int maxcpus, const char *path, ...)
 	return set;
 }
 
+#endif /* HAVE_CPU_SET_T */
+
 void
-path_setprefix(const char *prefix)
+path_set_prefix(const char *prefix)
 {
 	prefixlen = strlen(prefix);
 	strncpy(pathbuf, prefix, sizeof(pathbuf));

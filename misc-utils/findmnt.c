@@ -26,13 +26,15 @@
 #include <string.h>
 #include <termios.h>
 #ifdef HAVE_SYS_IOCTL_H
-#include <sys/ioctl.h>
+# include <sys/ioctl.h>
 #endif
 #include <assert.h>
 #include <poll.h>
 #include <sys/statvfs.h>
 #include <sys/types.h>
-
+#ifdef HAVE_LIBUDEV
+# include <libudev.h>
+#endif
 #include <libmount.h>
 
 #include "pathnames.h"
@@ -43,6 +45,7 @@
 #include "strutils.h"
 #include "xalloc.h"
 #include "optutils.h"
+#include "mangle.h"
 
 /* flags */
 enum {
@@ -80,6 +83,11 @@ enum {
 	COL_USEPERC,
 	COL_FSROOT,
 	COL_TID,
+	COL_ID,
+	COL_OPT_FIELDS,
+	COL_PROPAGATION,
+	COL_FREQ,
+	COL_PASSNO,
 
 	FINDMNT_NCOLUMNS
 };
@@ -122,6 +130,11 @@ static struct colinfo infos[FINDMNT_NCOLUMNS] = {
 	[COL_USEPERC]      = { "USE%",            3, TT_FL_RIGHT, N_("filesystem use percentage") },
 	[COL_FSROOT]       = { "FSROOT",       0.25, TT_FL_NOEXTREMES, N_("filesystem root") },
 	[COL_TID]          = { "TID",             4, TT_FL_RIGHT, N_("task ID") },
+	[COL_ID]           = { "ID",              2, TT_FL_RIGHT, N_("mount ID") },
+	[COL_OPT_FIELDS]   = { "OPT-FIELDS",   0.10, TT_FL_TRUNC, N_("optional mount fields") },
+	[COL_PROPAGATION]  = { "PROPAGATION",  0.10, 0, N_("VFS propagation flags") },
+	[COL_FREQ]         = { "FREQ",            1, TT_FL_RIGHT, N_("dump(8) period in days [fstab only]") },
+	[COL_PASSNO]       = { "PASSNO",          1, TT_FL_RIGHT, N_("pass number on parallel fsck(8) [fstab only]") }
 };
 
 /* global flags */
@@ -139,6 +152,13 @@ static int nactions;
 
 /* libmount cache */
 static struct libmnt_cache *cache;
+
+#ifdef HAVE_LIBUDEV
+struct udev *udev;
+#endif
+
+static int match_func(struct libmnt_fs *fs, void *data __attribute__ ((__unused__)));
+
 
 static int get_column_id(int num)
 {
@@ -342,25 +362,93 @@ static int column_name_to_id(const char *name, size_t namesz)
 	return -1;
 }
 
-/* Returns LABEL or UUID */
-static const char *get_tag(struct libmnt_fs *fs, const char *tagname)
+
+#ifdef HAVE_LIBUDEV
+static char *get_tag_from_udev(const char *devname, int col)
 {
-	const char *t, *v, *res;
+	struct udev_device *dev;
+	const char *data = NULL;
+	char *res = NULL, *path;
+
+	if (!udev)
+		udev = udev_new();
+	if (!udev)
+		return NULL;
+
+	/* libudev don't like /dev/mapper/ symlinks */
+	path = realpath(devname, NULL);
+	if (path)
+		devname = path;
+
+	if (strncmp(devname, "/dev/", 5) == 0)
+		devname += 5;
+
+	dev = udev_device_new_from_subsystem_sysname(udev, "block", devname);
+	free(path);
+
+	if (!dev)
+		return NULL;
+
+	switch(col) {
+	case COL_LABEL:
+		data = udev_device_get_property_value(dev, "ID_FS_LABEL_ENC");
+		break;
+	case COL_UUID:
+		data = udev_device_get_property_value(dev, "ID_FS_UUID_ENC");
+		break;
+	case COL_PARTUUID:
+		data = udev_device_get_property_value(dev, "ID_PART_ENTRY_UUID");
+		break;
+	case COL_PARTLABEL:
+		data = udev_device_get_property_value(dev, "ID_PART_ENTRY_NAME");
+		break;
+	default:
+		break;
+	}
+
+	if (data) {
+		res = xstrdup(data);
+		unhexmangle_string(res);
+	}
+
+	udev_device_unref(dev);
+	return res;
+}
+#endif /* HAVE_LIBUDEV */
+
+/* Returns LABEL or UUID */
+static char *get_tag(struct libmnt_fs *fs, const char *tagname, int col
+#ifndef HAVE_LIBUDEV
+		__attribute__((__unused__))
+#endif
+		)
+{
+	const char *t, *v;
+	char *res = NULL;
 
 	if (!mnt_fs_get_tag(fs, &t, &v) && !strcmp(t, tagname))
-		res = v;
+		res = xstrdup(v);
 	else {
-		res = mnt_fs_get_source(fs);
-		if (res)
-			res = mnt_resolve_spec(res, cache);
-		if (res)
-			res = mnt_cache_find_tag_value(cache, res, tagname);
+		const char *dev = mnt_fs_get_source(fs);
+
+		if (dev)
+			dev = mnt_resolve_spec(dev, cache);
+#ifdef HAVE_LIBUDEV
+		if (dev)
+			res = get_tag_from_udev(dev, col);
+#endif
+		if (!res) {
+			res = mnt_cache_find_tag_value(cache, dev, tagname);
+			if (res && cache)
+				/* don't return pointer to cache */
+				res = xstrdup(res);
+		}
 	}
 
 	return res;
 }
 
-static const char *get_vfs_attr(struct libmnt_fs *fs, int sizetype)
+static char *get_vfs_attr(struct libmnt_fs *fs, int sizetype)
 {
 	struct statvfs buf;
 	uint64_t vfs_attr = 0;
@@ -381,7 +469,7 @@ static const char *get_vfs_attr(struct libmnt_fs *fs, int sizetype)
 		break;
 	case COL_USEPERC:
 		if (buf.f_blocks == 0)
-			return "-";
+			return xstrdup("-");
 
 		xasprintf(&sizestr, "%.0f%%",
 				(double)(buf.f_blocks - buf.f_bfree) /
@@ -389,83 +477,78 @@ static const char *get_vfs_attr(struct libmnt_fs *fs, int sizetype)
 		return sizestr;
 	}
 
-	return vfs_attr == 0 ? "0" :
+	return vfs_attr == 0 ? xstrdup("0") :
 		size_to_human_string(SIZE_SUFFIX_1LETTER, vfs_attr);
 }
 
 /* reads FS data from libmount
  */
-static const char *get_data(struct libmnt_fs *fs, int num)
+static char *get_data(struct libmnt_fs *fs, int num)
 {
-	const char *str = NULL;
+	char *str = NULL;
 	int col_id = get_column_id(num);
 
 	switch (col_id) {
 	case COL_SOURCE:
 	{
 		const char *root = mnt_fs_get_root(fs);
+		const char *spec = mnt_fs_get_srcpath(fs);
 
-		str = mnt_fs_get_srcpath(fs);
+		if (spec && (flags & FL_CANONICALIZE))
+			spec = mnt_resolve_path(spec, cache);
+		if (!spec) {
+			spec = mnt_fs_get_source(fs);
 
-		if (str && (flags & FL_CANONICALIZE))
-			str = mnt_resolve_path(str, cache);
-		if (!str) {
-			str = mnt_fs_get_source(fs);
-
-			if (str && (flags & FL_EVALUATE))
-				str = mnt_resolve_spec(str, cache);
+			if (spec && (flags & FL_EVALUATE))
+				spec = mnt_resolve_spec(spec, cache);
 		}
-		if (root && str && !(flags & FL_NOFSROOT) && strcmp(root, "/")) {
-			char *tmp;
-
-			if (xasprintf(&tmp, "%s[%s]", str, root) > 0)
-				str = tmp;
-		}
+		if (root && spec && !(flags & FL_NOFSROOT) && strcmp(root, "/"))
+			xasprintf(&str, "%s[%s]", spec, root);
+		else if (spec)
+			str = xstrdup(spec);
 		break;
 	}
 	case COL_TARGET:
-		str = mnt_fs_get_target(fs);
+		str = xstrdup(mnt_fs_get_target(fs));
 		break;
 	case COL_FSTYPE:
-		str = mnt_fs_get_fstype(fs);
+		str = xstrdup(mnt_fs_get_fstype(fs));
 		break;
 	case COL_OPTIONS:
-		str = mnt_fs_get_options(fs);
+		str = xstrdup(mnt_fs_get_options(fs));
 		break;
 	case COL_VFS_OPTIONS:
-		str = mnt_fs_get_vfs_options(fs);
+		str = xstrdup(mnt_fs_get_vfs_options(fs));
 		break;
 	case COL_FS_OPTIONS:
-		str = mnt_fs_get_fs_options(fs);
+		str = xstrdup(mnt_fs_get_fs_options(fs));
+		break;
+	case COL_OPT_FIELDS:
+		str = xstrdup(mnt_fs_get_optional_fields(fs));
 		break;
 	case COL_UUID:
-		str = get_tag(fs, "UUID");
+		str = get_tag(fs, "UUID", col_id);
 		break;
 	case COL_PARTUUID:
-		str = get_tag(fs, "PARTUUID");
+		str = get_tag(fs, "PARTUUID", col_id);
 		break;
 	case COL_LABEL:
-		str = get_tag(fs, "LABEL");
+		str = get_tag(fs, "LABEL", col_id);
 		break;
 	case COL_PARTLABEL:
-		str = get_tag(fs, "PARTLABEL");
+		str = get_tag(fs, "PARTLABEL", col_id);
 		break;
 
 	case COL_MAJMIN:
 	{
 		dev_t devno = mnt_fs_get_devno(fs);
-		if (devno) {
-			char *tmp;
-			int rc = 0;
-			if ((tt_flags & TT_FL_RAW) || (tt_flags & TT_FL_EXPORT))
-				rc = xasprintf(&tmp, "%u:%u",
-					      major(devno), minor(devno));
-			else
-				rc = xasprintf(&tmp, "%3u:%-3u",
-					      major(devno), minor(devno));
-			if (rc)
-				str = tmp;
-		}
+		if (!devno)
+			break;
+
+		if ((tt_flags & TT_FL_RAW) || (tt_flags & TT_FL_EXPORT))
+			xasprintf(&str, "%u:%u", major(devno), minor(devno));
+		else
+			xasprintf(&str, "%3u:%-3u", major(devno), minor(devno));
 		break;
 	}
 	case COL_SIZE:
@@ -475,14 +558,46 @@ static const char *get_data(struct libmnt_fs *fs, int num)
 		str = get_vfs_attr(fs, col_id);
 		break;
 	case COL_FSROOT:
-		str = mnt_fs_get_root(fs);
+		str = xstrdup(mnt_fs_get_root(fs));
 		break;
 	case COL_TID:
-		if (mnt_fs_get_tid(fs)) {
-			char *tmp;
-			if (xasprintf(&tmp, "%d", mnt_fs_get_tid(fs)) > 0)
-				str = tmp;
+		if (mnt_fs_get_tid(fs))
+			xasprintf(&str, "%d", mnt_fs_get_tid(fs));
+		break;
+	case COL_ID:
+		if (mnt_fs_get_id(fs))
+			xasprintf(&str, "%d", mnt_fs_get_id(fs));
+		break;
+	case COL_PROPAGATION:
+		if (mnt_fs_is_kernel(fs)) {
+			unsigned long fl = 0;
+			char *n = NULL;
+
+			if (mnt_fs_get_propagation(fs, &fl) != 0)
+				break;
+
+			n = xstrdup((fl & MS_SHARED) ? "shared" : "private");
+
+			if (fl & MS_SLAVE) {
+				xasprintf(&str, "%s,slave", n);
+				free(n);
+				n = str;
+			}
+			if (fl & MS_UNBINDABLE) {
+				xasprintf(&str, "%s,unbindable", n);
+				free(n);
+				n = str;
+			}
+			str = n;
 		}
+		break;
+	case COL_FREQ:
+		if (!mnt_fs_is_kernel(fs))
+			xasprintf(&str, "%d", mnt_fs_get_freq(fs));
+		break;
+	case COL_PASSNO:
+		if (!mnt_fs_is_kernel(fs))
+			xasprintf(&str, "%d", mnt_fs_get_passno(fs));
 		break;
 	default:
 		break;
@@ -490,12 +605,12 @@ static const char *get_data(struct libmnt_fs *fs, int num)
 	return str;
 }
 
-static const char *get_tabdiff_data(struct libmnt_fs *old_fs,
+static char *get_tabdiff_data(struct libmnt_fs *old_fs,
 				    struct libmnt_fs *new_fs,
 				    int change,
 				    int num)
 {
-	const char *str = NULL;
+	char *str = NULL;
 
 	switch (get_column_id(num)) {
 	case COL_ACTION:
@@ -516,16 +631,17 @@ static const char *get_tabdiff_data(struct libmnt_fs *old_fs,
 			str = _("unknown");
 			break;
 		}
+		str = xstrdup(str);
 		break;
 	case COL_OLD_OPTIONS:
 		if (old_fs && (change == MNT_TABDIFF_REMOUNT ||
 			       change == MNT_TABDIFF_UMOUNT))
-			str = mnt_fs_get_options(old_fs);
+			str = xstrdup(mnt_fs_get_options(old_fs));
 		break;
 	case COL_OLD_TARGET:
 		if (old_fs && (change == MNT_TABDIFF_MOVE ||
 			       change == MNT_TABDIFF_UMOUNT))
-			str = mnt_fs_get_target(old_fs);
+			str = xstrdup(mnt_fs_get_target(old_fs));
 		break;
 	default:
 		if (new_fs)
@@ -606,9 +722,12 @@ static int create_treenode(struct tt *tt, struct libmnt_table *tb,
 	if (!itr)
 		goto leave;
 
-	line = add_line(tt, fs, parent_line);
-	if (!line)
-		goto leave;
+	if ((flags & FL_SUBMOUNTS) || match_func(fs, NULL)) {
+		line = add_line(tt, fs, parent_line);
+		if (!line)
+			goto leave;
+	} else
+		line = parent_line;
 
 	/*
 	 * add all children to the output table
@@ -682,7 +801,7 @@ static struct libmnt_table *parse_tabfiles(char **files,
 			break;
 		}
 		if (rc) {
-			mnt_free_table(tb);
+			mnt_unref_table(tb);
 			warn(_("can't read %s"), path);
 			return NULL;
 		}
@@ -718,14 +837,6 @@ static int match_func(struct libmnt_fs *fs,
 	const char *m;
 	void *md;
 
-	m = get_match(COL_TARGET);
-	if (m && !mnt_fs_match_target(fs, m, cache))
-		return rc;
-
-	m = get_match(COL_SOURCE);
-	if (m && !mnt_fs_match_source(fs, m, cache))
-		return rc;
-
 	m = get_match(COL_FSTYPE);
 	if (m && !mnt_fs_match_fstype(fs, m))
 		return rc;
@@ -736,6 +847,14 @@ static int match_func(struct libmnt_fs *fs,
 
 	md = get_match_data(COL_MAJMIN);
 	if (md && mnt_fs_get_devno(fs) != *((dev_t *) md))
+		return rc;
+
+	m = get_match(COL_TARGET);
+	if (m && !mnt_fs_match_target(fs, m, cache))
+		return rc;
+
+	m = get_match(COL_SOURCE);
+	if (m && !mnt_fs_match_source(fs, m, cache))
 		return rc;
 
 	if ((flags & FL_DF) && !(flags & FL_ALL)) {
@@ -802,6 +921,10 @@ again:
 	return fs;
 }
 
+/*
+ * Filter out unwanted lines for --list output or top level lines for
+ * --submounts tree output.
+ */
 static int add_matching_lines(struct libmnt_table *tb,
 			      struct tt *tt, int direction)
 {
@@ -959,7 +1082,7 @@ static int poll_table(struct libmnt_table *tb, const char *tabfile,
 
 	rc = 0;
 done:
-	mnt_free_table(tb_new);
+	mnt_unref_table(tb_new);
 	mnt_free_tabdiff(diff);
 	mnt_free_iter(itr);
 	if (f)
@@ -1007,12 +1130,11 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	" -N, --task <tid>       use alternative namespace (/proc/<tid>/mountinfo file)\n"
 	" -n, --noheadings       don't print column headings\n"
 	" -u, --notruncate       don't truncate text in columns\n"));
-	fprintf(out, _(
-	" -O, --options <list>   limit the set of filesystems by mount options\n"
-	" -o, --output <list>    the output columns to be shown\n"
-	" -P, --pairs            use key=\"value\" output format\n"
-	" -r, --raw              use raw output format\n"
-	" -t, --types <list>     limit the set of filesystems by FS types\n"));
+fputs (_(" -O, --options <list>   limit the set of filesystems by mount options\n"), out);
+fputs (_(" -o, --output <list>    the output columns to be shown\n"), out);
+fputs (_(" -P, --pairs            use key=\"value\" output format\n"), out);
+fputs (_(" -r, --raw              use raw output format\n"), out);
+fputs (_(" -t, --types <list>     limit the set of filesystems by FS types\n"), out);
 	fprintf(out, _(
 	" -v, --nofsroot         don't print [/dir] for bind or btrfs mounts\n"
 	" -R, --submounts        print all submounts for the matching filesystems\n"
@@ -1067,7 +1189,7 @@ int main(int argc, char *argv[])
 	    { "pairs",        0, 0, 'P' },
 	    { "raw",          0, 0, 'r' },
 	    { "types",        1, 0, 't' },
-	    { "fsroot",       0, 0, 'v' },
+	    { "nofsroot",     0, 0, 'v' },
 	    { "submounts",    0, 0, 'R' },
 	    { "source",       1, 0, 'S' },
 	    { "tab-file",     1, 0, 'F' },
@@ -1266,8 +1388,10 @@ int main(int argc, char *argv[])
 		/* don't care about submounts if list all mounts */
 		flags &= ~FL_SUBMOUNTS;
 
-	if (!(flags & FL_SUBMOUNTS) &&
-	    (!is_listall_mode() || (flags & FL_FIRSTONLY)))
+	if (!(flags & FL_SUBMOUNTS) && ((flags & FL_FIRSTONLY)
+	    || get_match(COL_TARGET)
+	    || get_match(COL_SOURCE)
+	    || get_match(COL_MAJMIN)))
 		tt_flags &= ~TT_FL_TREE;
 
 	if (!(flags & FL_NOSWAPMATCH) &&
@@ -1302,18 +1426,11 @@ int main(int argc, char *argv[])
 	}
 	mnt_table_set_cache(tb, cache);
 
-	if (tabtype == TABTYPE_KERNEL
-	    && (flags & FL_NOSWAPMATCH)
-	    && get_match(COL_TARGET))
-		/*
-		 * enable extra functionality for target match
-		 */
-		enable_extra_target_match();
 
 	/*
 	 * initialize output formatting (tt.h)
 	 */
-	tt = tt_new_table(tt_flags);
+	tt = tt_new_table(tt_flags | TT_FL_FREEDATA);
 	if (!tt) {
 		warn(_("failed to initialize output table"));
 		goto leave;
@@ -1345,12 +1462,26 @@ int main(int argc, char *argv[])
 		/* poll mode (accept the first tabfile only) */
 		rc = poll_table(tb, tabfiles ? *tabfiles : _PATH_PROC_MOUNTINFO, timeout, tt, direction);
 
-	} else if ((tt_flags & TT_FL_TREE) && is_listall_mode())
+	} else if ((tt_flags & TT_FL_TREE) && !(flags & FL_SUBMOUNTS)) {
 		/* whole tree */
 		rc = create_treenode(tt, tb, NULL, NULL);
-	else
+	} else {
 		/* whole lits of sub-tree */
 		rc = add_matching_lines(tb, tt, direction);
+
+		if (rc != 0
+		    && tabtype == TABTYPE_KERNEL
+		    && (flags & FL_NOSWAPMATCH)
+		    && get_match(COL_TARGET)) {
+			/*
+			 * Found nothing, maybe the --target is regular file,
+			 * try it again with extra functionality for target
+			 * match
+			 */
+			enable_extra_target_match();
+			rc = add_matching_lines(tb, tt, direction);
+		}
+	}
 
 	/*
 	 * Print the output table for non-poll modes
@@ -1360,9 +1491,12 @@ int main(int argc, char *argv[])
 leave:
 	tt_free_table(tt);
 
-	mnt_free_table(tb);
-	mnt_free_cache(cache);
-	free(tabfiles);
+	mnt_unref_table(tb);
+	mnt_unref_cache(cache);
 
+	free(tabfiles);
+#ifdef HAVE_LIBUDEV
+	udev_unref(udev);
+#endif
 	return rc ? EXIT_FAILURE : EXIT_SUCCESS;
 }

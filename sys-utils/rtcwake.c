@@ -38,7 +38,6 @@
 #include "nls.h"
 #include "xalloc.h"
 #include "pathnames.h"
-#include "usleep.h"
 #include "strutils.h"
 #include "c.h"
 #include "closestream.h"
@@ -52,7 +51,6 @@
 
 #define RTC_PATH		"/sys/class/rtc/%s/device/power/wakeup"
 #define SYS_POWER_STATE_PATH	"/sys/power/state"
-#define ADJTIME_PATH		"/etc/adjtime"
 #define DEFAULT_DEVICE		"/dev/rtc0"
 #define DEFAULT_MODE		"standby"
 
@@ -62,24 +60,10 @@ enum ClockMode {
 	CM_LOCAL
 };
 
+static char		*adjfile = _PATH_ADJTIME;
 static unsigned		verbose;
 static unsigned		dryrun;
 enum ClockMode		clock_mode = CM_AUTO;
-
-static struct option long_options[] = {
-	{"auto",	no_argument,		0, 'a'},
-	{"dry-run",	no_argument,		0, 'n'},
-	{"local",	no_argument,		0, 'l'},
-	{"utc",		no_argument,		0, 'u'},
-	{"verbose",	no_argument,		0, 'v'},
-	{"version",	no_argument,		0, 'V'},
-	{"help",	no_argument,		0, 'h'},
-	{"mode",	required_argument,	0, 'm'},
-	{"device",	required_argument,	0, 'd'},
-	{"seconds",	required_argument,	0, 's'},
-	{"time",	required_argument,	0, 't'},
-	{0,		0,			0, 0  }
-};
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
@@ -88,14 +72,18 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	      _(" %s [options]\n"), program_invocation_short_name);
 
 	fputs(USAGE_OPTIONS, out);
-	fputs(_(" -d, --device <device>    select rtc device (rtc0|rtc1|...)\n"
-		" -n, --dry-run            does everything, but suspend\n"
-		" -l, --local              RTC uses local timezone\n"
-		" -m, --mode <mode>        standby|mem|... sleep mode\n"
-		" -s, --seconds <seconds>  seconds to sleep\n"
-		" -t, --time <time_t>      time to wake\n"
-		" -u, --utc                RTC uses UTC\n"
-		" -v, --verbose            verbose messages\n"), out);
+	fputs(_(" -a, --auto               reads the clock mode from adjust file (default)\n"), out);
+	fprintf(out,
+	      _(" -A, --adjfile <file>     specifies the path to the adjust file\n"
+		"                            the default is %s\n"), _PATH_ADJTIME);
+	fputs(_(" -d, --device <device>    select rtc device (rtc0|rtc1|...)\n"), out);
+	fputs(_(" -n, --dry-run            does everything, but suspend\n"), out);
+	fputs(_(" -l, --local              RTC uses local timezone\n"), out);
+	fputs(_(" -m, --mode <mode>        standby|mem|... sleep mode\n"), out);
+	fputs(_(" -s, --seconds <seconds>  seconds to sleep\n"), out);
+	fputs(_(" -t, --time <time_t>      time to wake\n"), out);
+	fputs(_(" -u, --utc                RTC uses UTC\n"), out);
+	fputs(_(" -v, --verbose            verbose messages\n"), out);
 
 	printf(USAGE_SEPARATOR);
 	printf(USAGE_HELP);
@@ -294,7 +282,7 @@ static int read_clock_mode(void)
 	FILE *fp;
 	char linebuf[MAX_LINE];
 
-	fp = fopen(ADJTIME_PATH, "r");
+	fp = fopen(adjfile, "r");
 	if (!fp)
 		return -1;
 
@@ -391,14 +379,34 @@ int main(int argc, char **argv)
 	int		fd;
 	time_t		alarm = 0;
 
+	static const struct option long_options[] = {
+		{"adjfile",     required_argument,      0, 'A'},
+		{"auto",	no_argument,		0, 'a'},
+		{"dry-run",	no_argument,		0, 'n'},
+		{"local",	no_argument,		0, 'l'},
+		{"utc",		no_argument,		0, 'u'},
+		{"verbose",	no_argument,		0, 'v'},
+		{"version",	no_argument,		0, 'V'},
+		{"help",	no_argument,		0, 'h'},
+		{"mode",	required_argument,	0, 'm'},
+		{"device",	required_argument,	0, 'd'},
+		{"seconds",	required_argument,	0, 's'},
+		{"time",	required_argument,	0, 't'},
+		{0,		0,			0, 0  }
+	};
+
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((t = getopt_long(argc, argv, "ahd:lm:ns:t:uVv",
+	while ((t = getopt_long(argc, argv, "A:ahd:lm:ns:t:uVv",
 					long_options, NULL)) != EOF) {
 		switch (t) {
+		case 'A':
+			/* for better compatibility with hwclock */
+			adjfile = optarg;
+			break;
 		case 'a':
 			/* CM_AUTO is default */
 			break;
@@ -426,6 +434,7 @@ int main(int argc, char **argv)
 					|| strcmp(optarg, "on") == 0
 					|| strcmp(optarg, "no") == 0
 					|| strcmp(optarg, "off") == 0
+					|| strcmp(optarg, "freeze") == 0
 					|| strcmp(optarg, "disable") == 0
 					|| strcmp(optarg, "show") == 0
 			   ) {
@@ -462,7 +471,8 @@ int main(int argc, char **argv)
 			break;
 
 		case 'V':
-			printf(UTIL_LINUX_VERSION);
+			printf(_("%s from %s\n"),
+			       program_invocation_short_name, PACKAGE_STRING);
 			exit(EXIT_SUCCESS);
 
 		case 'h':
@@ -559,13 +569,14 @@ int main(int argc, char **argv)
 		dryrun = 1;	/* to skip disabling alarm at the end */
 
 	} else if (strcmp(suspend, "off") == 0) {
-		char *arg[4];
+		char *arg[5];
 		int i = 0;
 
 		if (verbose)
 			printf(_("suspend mode: off; executing %s\n"),
 						_PATH_SHUTDOWN);
 		arg[i++] = _PATH_SHUTDOWN;
+		arg[i++] = "-h";
 		arg[i++] = "-P";
 		arg[i++] = "now";
 		arg[i]   = NULL;
@@ -573,7 +584,7 @@ int main(int argc, char **argv)
 		if (!dryrun) {
 			execv(arg[0], arg);
 
-			warn(_("unable to execute %s"),	_PATH_SHUTDOWN);
+			warn(_("failed to execute %s"), _PATH_SHUTDOWN);
 			rc = EXIT_FAILURE;
 		}
 

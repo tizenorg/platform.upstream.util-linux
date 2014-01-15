@@ -12,7 +12,7 @@
  * gather 128 bits of random information, so the magic cookie generated
  * will be considerably easier to guess than one might expect.
  *
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  * 1999-03-21 aeb: Added some fragments of code from Colin Plumb.
  *
@@ -116,9 +116,7 @@ int main(int argc, char **argv)
 			file = optarg;
 			break;
 		case 'V':
-			printf(_("%s from %s\n"),
-			       program_invocation_short_name,
-			       PACKAGE_STRING);
+			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
 		case 'h':
 			usage(stdout);
@@ -149,8 +147,9 @@ int main(int argc, char **argv)
 			count = hash_file(&ctx, fd);
 			if (verbose)
 				fprintf(stderr,
-					_("Got %d bytes from %s\n"), count,
-					file);
+					P_("Got %d byte from %s\n",
+					   "Got %d bytes from %s\n", count),
+					count, file);
 
 			if (fd != STDIN_FILENO)
 				if (close(fd))
@@ -173,8 +172,9 @@ int main(int argc, char **argv)
 			close(fd);
 			if (verbose)
 				fprintf(stderr,
-					_("Got %d bytes from %s\n"), r,
-					rngs[i].path);
+					P_("Got %d byte from %s\n",
+					   "Got %d bytes from %s\n", r),
+					r, rngs[i].path);
 			if (rngs[i].minlength && r >= rngs[i].minlength)
 				break;
 		} else if (verbose)

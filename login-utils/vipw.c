@@ -38,7 +38,7 @@
  *
  * Martin Schulze's patches adapted to Util-Linux by Nicolai Langfeldt.
  *
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  * Sun Mar 21 1999 - Arnaldo Carvalho de Melo <acme@conectiva.com.br>
  * - fixed strerr(errno) in gettext calls
@@ -78,6 +78,7 @@
 #include "setpwnam.h"
 #include "strutils.h"
 #include "xalloc.h"
+#include "rpmatch.h"
 
 #ifdef HAVE_LIBSELINUX
 # include <selinux/selinux.h>
@@ -192,7 +193,7 @@ static void pw_write(void)
 	free(tmp_file);
 }
 
-static void pw_edit(int notsetuid)
+static void pw_edit(void)
 {
 	int pstat;
 	pid_t pid;
@@ -212,10 +213,6 @@ static void pw_edit(int notsetuid)
 		err(EXIT_FAILURE, _("fork failed"));
 
 	if (!pid) {
-		if (notsetuid) {
-			(void)setgid(getgid());
-			(void)setuid(getuid());
-		}
 		execlp(editor, p, tmp_file, NULL);
 		/* Shouldn't get here */
 		_exit(EXIT_FAILURE);
@@ -271,7 +268,7 @@ static void edit_file(int is_shadow)
 	if (fstat(fileno(tmp_fd), &begin))
 		pw_error(tmp_file, 1, 1);
 
-	pw_edit(0);
+	pw_edit();
 
 	if (fstat(fileno(tmp_fd), &end))
 		pw_error(tmp_file, 1, 1);
@@ -305,6 +302,17 @@ static void edit_file(int is_shadow)
 	ulckpwdf();
 }
 
+static void __attribute__((__noreturn__)) usage(FILE *out)
+{
+	fputs(USAGE_HEADER, out);
+	fprintf(out, " %s\n", program_invocation_short_name);
+	fputs(USAGE_OPTIONS, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
+	fprintf(out, USAGE_MAN_TAIL("vipw(8)"));
+	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[])
 {
 	setlocale(LC_ALL, "");
@@ -320,10 +328,14 @@ int main(int argc, char *argv[])
 		xstrncpy(orig_file, PASSWD_FILE, sizeof(orig_file));
 	}
 
-	if ((argc > 1) &&
-	    (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version"))) {
-		printf(UTIL_LINUX_VERSION);
-		exit(EXIT_SUCCESS);
+	if (1 < argc) {
+		if (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version")) {
+			printf(UTIL_LINUX_VERSION);
+			exit(EXIT_SUCCESS);
+		}
+		if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))
+			usage(stdout);
+		usage(stderr);
 	}
 
 	edit_file(0);

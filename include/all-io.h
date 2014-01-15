@@ -1,9 +1,19 @@
+/*
+ * No copyright is claimed.  This code is in the public domain; do with
+ * it what you wish.
+ *
+ * Written by Karel Zak <kzak@redhat.com>
+ *            Petr Uzel <petr.uzel@suse.cz>
+ */
+
 #ifndef UTIL_LINUX_ALL_IO_H
 #define UTIL_LINUX_ALL_IO_H
 
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+
+#include "c.h"
 
 static inline int write_all(int fd, const void *buf, size_t count)
 {

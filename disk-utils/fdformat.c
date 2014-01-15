@@ -128,8 +128,7 @@ int main(int argc, char **argv)
 			verify = 0;
 			break;
 		case 'V':
-			printf(_("%s from %s\n"), program_invocation_short_name,
-			       PACKAGE_STRING);
+			printf(UTIL_LINUX_VERSION);
 			exit(EXIT_SUCCESS);
 		case 'h':
 			usage(stdout);
@@ -160,7 +159,8 @@ int main(int argc, char **argv)
 	       (param.head == 2) ? _("Double") : _("Single"),
 	       param.track, param.sect, param.size >> 1);
 	format_disk(ctrl);
-	close(ctrl);
+	if (close_fd(ctrl) != 0)
+		err(EXIT_FAILURE, _("write failed"));
 
 	if (verify)
 		verify_disk(argv[0]);

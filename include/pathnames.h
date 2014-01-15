@@ -31,6 +31,8 @@
 #define	_PATH_HUSHLOGIN		".hushlogin"
 #define	_PATH_HUSHLOGINS	"/etc/hushlogins"
 
+#define _PATH_NOLOGIN_TXT	"/etc/nologin.txt"
+
 #ifndef _PATH_MAILDIR
 #define	_PATH_MAILDIR		"/var/spool/mail"
 #endif
@@ -63,6 +65,7 @@
 
 /* used in term-utils/agetty.c */
 #define _PATH_ISSUE		"/etc/issue"
+#define _PATH_OS_RELEASE	"/etc/os-release"
 #define _PATH_NUMLOCK_ON	_PATH_LOCALSTATEDIR "/numlock-on"
 
 #define _PATH_LOGINDEFS		"/etc/login.defs"
@@ -84,8 +87,18 @@
 #define _PATH_PROC_LOCKS        "/proc/locks"
 #define _PATH_PROC_CDROMINFO	"/proc/sys/dev/cdrom/info"
 
+#define _PATH_PROC_ATTR_CURRENT	"/proc/self/attr/current"
+#define _PATH_PROC_ATTR_EXEC	"/proc/self/attr/exec"
+#define _PATH_PROC_CAPLASTCAP	"/proc/sys/kernel/cap_last_cap"
+
+
 #define _PATH_SYS_BLOCK		"/sys/block"
 #define _PATH_SYS_DEVBLOCK	"/sys/dev/block"
+#define _PATH_SYS_CLASS		"/sys/class"
+#define _PATH_SYS_SCSI		"/sys/bus/scsi"
+
+#define _PATH_SYS_SELINUX	"/sys/fs/selinux"
+#define _PATH_SYS_APPARMOR	"/sys/kernel/security/apparmor"
 
 #ifndef _PATH_MOUNTED
 # ifdef MOUNTED					/* deprecated */
@@ -115,6 +128,8 @@
 # define _PATH_DEV		"/dev/"
 #endif
 
+#define _PATH_DEV_MEM		"/dev/mem"
+
 #define _PATH_DEV_LOOP		"/dev/loop"
 #define _PATH_DEV_LOOPCTL	"/dev/loop-control"
 #define _PATH_DEV_TTY		"/dev/tty"
@@ -129,7 +144,8 @@
 #define _PATH_DEV_BYPARTUUID	"/dev/disk/by-partuuid"
 
 /* hwclock paths */
-#define _PATH_ADJPATH		"/etc/adjtime"
+# define _PATH_ADJTIME		"/etc/adjtime"
+
 #define _PATH_LASTDATE		"/var/lib/lastdate"
 #ifdef __ia64__
 # define _PATH_RTC_DEV		"/dev/efirtc"
@@ -149,6 +165,21 @@
 
 /* wdctl path */
 #define _PATH_WATCHDOG_DEV	"/dev/watchdog"
+
+/* ipc paths */
+#define _PATH_PROC_SYSV_MSG	"/proc/sysvipc/msg"
+#define _PATH_PROC_SYSV_SEM	"/proc/sysvipc/sem"
+#define _PATH_PROC_SYSV_SHM	"/proc/sysvipc/shm"
+#define _PATH_PROC_IPC_MSGMAX	"/proc/sys/kernel/msgmax"
+#define _PATH_PROC_IPC_MSGMNB	"/proc/sys/kernel/msgmnb"
+#define _PATH_PROC_IPC_MSGMNI	"/proc/sys/kernel/msgmni"
+#define _PATH_PROC_IPC_SEM	"/proc/sys/kernel/sem"
+#define _PATH_PROC_IPC_SHMALL	"/proc/sys/kernel/shmall"
+#define _PATH_PROC_IPC_SHMMAX	"/proc/sys/kernel/shmmax"
+#define _PATH_PROC_IPC_SHMMNI	"/proc/sys/kernel/shmmni"
+
+/* kernel command line */
+#define _PATH_PROC_CMDLINE	"/proc/cmdline"
 
 #endif /* PATHNAMES_H */
 

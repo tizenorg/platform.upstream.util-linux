@@ -3,6 +3,9 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
+/* Should chfn and chsh require the user to enter the password? */
+#undef CHFN_CHSH_PASSWORD
+
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
 #undef ENABLE_NLS
@@ -12,6 +15,9 @@
 
 /* Define to 1 if you have the <asm/io.h> header file. */
 #undef HAVE_ASM_IO_H
+
+/* Define to 1 if you have the <byteswap.h> header file. */
+#undef HAVE_BYTESWAP_H
 
 /* Define to 1 if the system has the type `cpu_set_t'. */
 #undef HAVE_CPU_SET_T
@@ -23,22 +29,6 @@
    */
 #undef HAVE_DCGETTEXT
 
-/* Define to 1 if you have the declaration of `ADDR_COMPAT_LAYOUT', and to 0
-   if you don't. */
-#undef HAVE_DECL_ADDR_COMPAT_LAYOUT
-
-/* Define to 1 if you have the declaration of `ADDR_LIMIT_32BIT', and to 0 if
-   you don't. */
-#undef HAVE_DECL_ADDR_LIMIT_32BIT
-
-/* Define to 1 if you have the declaration of `ADDR_LIMIT_3GB', and to 0 if
-   you don't. */
-#undef HAVE_DECL_ADDR_LIMIT_3GB
-
-/* Define to 1 if you have the declaration of `ADDR_NO_RANDOMIZE', and to 0 if
-   you don't. */
-#undef HAVE_DECL_ADDR_NO_RANDOMIZE
-
 /* Define to 1 if you have the declaration of `CPU_ALLOC', and to 0 if you
    don't. */
 #undef HAVE_DECL_CPU_ALLOC
@@ -46,30 +36,6 @@
 /* Define to 1 if you have the declaration of `dirfd', and to 0 if you don't.
    */
 #undef HAVE_DECL_DIRFD
-
-/* Define to 1 if you have the declaration of `FDPIC_FUNCPTRS', and to 0 if
-   you don't. */
-#undef HAVE_DECL_FDPIC_FUNCPTRS
-
-/* Define to 1 if you have the declaration of `MMAP_PAGE_ZERO', and to 0 if
-   you don't. */
-#undef HAVE_DECL_MMAP_PAGE_ZERO
-
-/* Define to 1 if you have the declaration of `READ_IMPLIES_EXEC', and to 0 if
-   you don't. */
-#undef HAVE_DECL_READ_IMPLIES_EXEC
-
-/* Define to 1 if you have the declaration of `STICKY_TIMEOUTS', and to 0 if
-   you don't. */
-#undef HAVE_DECL_STICKY_TIMEOUTS
-
-/* Define to 1 if you have the declaration of `UNAME26', and to 0 if you
-   don't. */
-#undef HAVE_DECL_UNAME26
-
-/* Define to 1 if you have the declaration of `WHOLE_SECONDS', and to 0 if you
-   don't. */
-#undef HAVE_DECL_WHOLE_SECONDS
 
 /* Define to 1 if you have the declaration of `_NL_TIME_WEEK_1STDAY', and to 0
    if you don't. */
@@ -83,6 +49,9 @@
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
+
+/* Define to 1 if you have the <endian.h> header file. */
+#undef HAVE_ENDIAN_H
 
 /* Define to 1 if have **environ prototype */
 #undef HAVE_ENVIRON_DECL
@@ -168,6 +137,9 @@
 /* Define to 1 if you have the -lblkid. */
 #undef HAVE_LIBBLKID
 
+/* Define to 1 if you have the `cap-ng' library (-lcap-ng). */
+#undef HAVE_LIBCAP_NG
+
 /* Do we need -lcrypt? */
 #undef HAVE_LIBCRYPT
 
@@ -177,7 +149,7 @@
 /* Define to 1 if you have the `ncursesw' library (-lncursesw). */
 #undef HAVE_LIBNCURSESW
 
-/* Define to 1 if you have the `selinux' library (-lselinux). */
+/* Define if SELinux is available */
 #undef HAVE_LIBSELINUX
 
 /* Define to 1 if you have the `termcap' library (-ltermcap). */
@@ -185,6 +157,9 @@
 
 /* Define to 1 if you have the `udev' library (-ludev). */
 #undef HAVE_LIBUDEV
+
+/* Define if libuser is available */
+#undef HAVE_LIBUSER
 
 /* Define to 1 if you have the `utempter' library (-lutempter). */
 #undef HAVE_LIBUTEMPTER
@@ -216,6 +191,9 @@
 /* Define to 1 if you have the <linux/raw.h> header file. */
 #undef HAVE_LINUX_RAW_H
 
+/* Define to 1 if you have the <linux/securebits.h> header file. */
+#undef HAVE_LINUX_SECUREBITS_H
+
 /* Define to 1 if you have the <linux/tiocl.h> header file. */
 #undef HAVE_LINUX_TIOCL_H
 
@@ -245,6 +223,9 @@
 
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
+
+/* Define to 1 if you have the `mempcpy' function. */
+#undef HAVE_MEMPCPY
 
 /* Define to 1 if you have the <mntent.h> header file. */
 #undef HAVE_MNTENT_H
@@ -309,17 +290,26 @@
 /* scanf %ms modifier */
 #undef HAVE_SCANF_MS_MODIFIER
 
+/* Define to 1 if you have the `secure_getenv' function. */
+#undef HAVE_SECURE_GETENV
+
 /* Define to 1 if you have the `security_get_initial_context' function. */
 #undef HAVE_SECURITY_GET_INITIAL_CONTEXT
 
 /* Define to 1 if you have the <security/pam_misc.h> header file. */
 #undef HAVE_SECURITY_PAM_MISC_H
 
+/* Define to 1 if you have the `setns' function. */
+#undef HAVE_SETNS
+
 /* Define to 1 if you have the `setresgid' function. */
 #undef HAVE_SETRESGID
 
 /* Define to 1 if you have the `setresuid' function. */
 #undef HAVE_SETRESUID
+
+/* Define to 1 if the system has the type `sighandler_t'. */
+#undef HAVE_SIGHANDLER_T
 
 /* Define to 1 if you have the `sigqueue' function. */
 #undef HAVE_SIGQUEUE
@@ -384,6 +374,9 @@
 /* Define to 1 if you have the <sys/disk.h> header file. */
 #undef HAVE_SYS_DISK_H
 
+/* Define to 1 if you have the <sys/endian.h> header file. */
+#undef HAVE_SYS_ENDIAN_H
+
 /* Define to 1 if you have the <sys/file.h> header file. */
 #undef HAVE_SYS_FILE_H
 
@@ -425,6 +418,9 @@
 
 /* Define to 1 if you have the <sys/time.h> header file. */
 #undef HAVE_SYS_TIME_H
+
+/* Define to 1 if you have the <sys/ttydefaults.h> header file. */
+#undef HAVE_SYS_TTYDEFAULTS_H
 
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
@@ -526,9 +522,6 @@
 /* Should pg ring the bell on invalid keys? */
 #undef PG_BELL
 
-/* Should chfn and chsh require the user to enter the password? */
-#undef REQUIRE_PASSWORD
-
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
@@ -553,11 +546,17 @@
 /* Fallback syscall number for sched_getaffinity */
 #undef SYS_sched_getaffinity
 
+/* Fallback syscall number for setns */
+#undef SYS_setns
+
 /* Fallback syscall number for unshare */
 #undef SYS_unshare
 
 /* Should uuidd support socket activation? */
 #undef USE_SOCKET_ACTIVATION
+
+/* Should sulogin use a emergency mount of /dev and /proc? */
+#undef USE_SULOGIN_EMERGENCY_MOUNT
 
 /* Enable extensions on AIX 3, Interix.  */
 #ifndef _ALL_SOURCE
@@ -597,6 +596,11 @@
 # ifndef WORDS_BIGENDIAN
 #  undef WORDS_BIGENDIAN
 # endif
+#endif
+
+/* Enable large inode numbers on Mac OS X 10.5.  */
+#ifndef _DARWIN_USE_64_BIT_INODE
+# define _DARWIN_USE_64_BIT_INODE 1
 #endif
 
 /* Number of bits in a file offset, on hosts where this is settable. */

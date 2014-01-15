@@ -304,7 +304,7 @@ static int is_irrotational_disk(dev_t disk)
 	rc = fscanf(f, "%d", &x);
 	if (rc != 1) {
 		if (ferror(f))
-			warn(_("failed to read: %s"), path);
+			warn(_("cannot read %s"), path);
 		else
 			warnx(_("parse error: %s"), path);
 	}
@@ -370,6 +370,7 @@ static void free_instance(struct fsck_instance *i)
 	if (lockdisk)
 		unlock_disk(i);
 	free(i->prog);
+	mnt_unref_fs(i->fs);
 	free(i);
 	return;
 }
@@ -379,10 +380,12 @@ static struct libmnt_fs *add_dummy_fs(const char *device)
 	struct libmnt_fs *fs = mnt_new_fs();
 
 	if (fs && mnt_fs_set_source(fs, device) == 0 &&
-		  mnt_table_add_fs(fstab, fs) == 0)
+				  mnt_table_add_fs(fstab, fs) == 0) {
+		mnt_unref_fs(fs);
 		return fs;
+	}
 
-	mnt_free_fs(fs);
+	mnt_unref_fs(fs);
 	err(FSCK_EX_ERROR, _("failed to setup description for %s"), device);
 }
 
@@ -437,10 +440,14 @@ static void load_fs_info(void)
 	if (mnt_table_parse_fstab(fstab, path)) {
 		if (!path)
 			path = mnt_get_fstab_path();
-		if (errno)
-			warn(_("%s: failed to parse fstab"), path);
-		else
-			warnx(_("%s: failed to parse fstab"), path);
+
+		/* don't print error when there is no fstab at all */
+		if (access(path, F_OK) == 0) {
+			if (errno)
+				warn(_("%s: failed to parse fstab"), path);
+			else
+				warnx(_("%s: failed to parse fstab"), path);
+		}
 	}
 }
 
@@ -582,7 +589,7 @@ static int execute(const char *type, struct libmnt_fs *fs, int interactive)
 	s = find_fsck(prog);
 	if (s == NULL) {
 		warnx(_("%s: not found"), prog);
-		free(inst);
+		free_instance(inst);
 		return ENOENT;
 	}
 
@@ -597,6 +604,7 @@ static int execute(const char *type, struct libmnt_fs *fs, int interactive)
 		printf("\n");
 	}
 
+	mnt_ref_fs(fs);
 	inst->fs = fs;
 	inst->lock = -1;
 
@@ -608,7 +616,7 @@ static int execute(const char *type, struct libmnt_fs *fs, int interactive)
 		pid = -1;
 	else if ((pid = fork()) < 0) {
 		warn(_("fork failed"));
-		free(inst);
+		free_instance(inst);
 		return errno;
 	} else if (pid == 0) {
 		if (!interactive)
@@ -705,7 +713,7 @@ static struct fsck_instance *wait_one(int flags)
 				warnx(_("wait: no more child process?!?"));
 				return NULL;
 			}
-			warn(_("waidpid failed"));
+			warn(_("waitpid failed"));
 			continue;
 		}
 		for (prev = 0, inst = instance_list;
@@ -1293,30 +1301,33 @@ static int check_all(void)
 	return status;
 }
 
-static void __attribute__((__noreturn__)) usage(void)
+static void __attribute__((__noreturn__)) usage(FILE *out)
 {
-	printf(_("\nUsage:\n"
-		 " %s [fsck-options] [fs-options] [filesys ...]\n"),
-		program_invocation_short_name);
+	fputs(USAGE_HEADER, out);
+	fprintf(out, _(" %s [options] -- [fs-options] [<filesystem> ...]\n"),
+			 program_invocation_short_name);
 
-	puts(_(	"\nOptions:\n"
-		" -A         check all filesystems\n"
-		" -R         skip root filesystem; useful only with `-A'\n"
-		" -M         do not check mounted filesystems\n"
-		" -t <type>  specify filesystem types to be checked;\n"
-		"              type is allowed to be comma-separated list\n"
-		" -P         check filesystems in parallel, including root\n"
-		" -r         report statistics for each device fsck\n"
-		" -s         serialize fsck operations\n"
-		" -l         lock the device using flock()\n"
-		" -N         do not execute, just show what would be done\n"
-		" -T         do not show the title on startup\n"
-		" -C <fd>    display progress bar; file descriptor is for GUIs\n"
-		" -V         explain what is being done\n"
-		" -?         display this help and exit\n\n"
-		"See fsck.* commands for fs-options."));
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -A         check all filesystems\n"), out);
+	fputs(_(" -C [<fd>]  display progress bar; file descriptor is for GUIs\n"), out);
+	fputs(_(" -l         lock the device to guarantee exclusive access\n"), out);
+	fputs(_(" -M         do not check mounted filesystems\n"), out);
+	fputs(_(" -N         do not execute, just show what would be done\n"), out);
+	fputs(_(" -P         check filesystems in parallel, including root\n"), out);
+	fputs(_(" -R         skip root filesystem; useful only with '-A'\n"), out);
+	fputs(_(" -r         report statistics for each device checked\n"), out);
+	fputs(_(" -s         serialize the checking operations\n"), out);
+	fputs(_(" -T         do not show the title on startup\n"), out);
+	fputs(_(" -t <type>  specify filesystem types to be checked;\n"
+		"             <type> is allowed to be a comma-separated list\n"), out);
+	fputs(_(" -V         explain what is being done\n"), out);
+	fputs(_(" -?         display this help and exit\n"), out);
 
-	exit(FSCK_EX_USAGE);
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("See the specific fsck.* commands for available fs-options."), out);
+	fprintf(out, USAGE_MAN_TAIL("fsck(8)"));
+
+	exit(out == stderr ? FSCK_EX_USAGE : FSCK_EX_OK);
 }
 
 static void signal_cancel(int sig __attribute__((__unused__)))
@@ -1445,13 +1456,13 @@ static void parse_argv(int argc, char *argv[])
 			case 't':
 				tmp = 0;
 				if (fstype)
-					usage();
+					usage(stderr);
 				if (arg[j+1])
 					tmp = arg+j+1;
 				else if ((i+1) < argc)
 					tmp = argv[++i];
 				else
-					usage();
+					usage(stderr);
 				fstype = xstrdup(tmp);
 				compile_fs_type(fstype, &fs_type_compiled);
 				goto next_arg;
@@ -1459,7 +1470,7 @@ static void parse_argv(int argc, char *argv[])
 				opts_for_fsck++;
 				break;
 			case '?':
-				usage();
+				usage(stdout);
 				break;
 			default:
 				options[++opt] = arg[j];
@@ -1504,7 +1515,7 @@ int main(int argc, char *argv[])
 	parse_argv(argc, argv);
 
 	if (!notitle)
-		printf(_("%s from %s\n"), program_invocation_short_name, PACKAGE_STRING);
+		printf(UTIL_LINUX_VERSION);
 
 	load_fs_info();
 
@@ -1569,8 +1580,8 @@ int main(int argc, char *argv[])
 	}
 	status |= wait_many(FLAG_WAIT_ALL);
 	free(fsck_path);
-	mnt_free_cache(mntcache);
-	mnt_free_table(fstab);
-	mnt_free_table(mtab);
+	mnt_unref_cache(mntcache);
+	mnt_unref_table(fstab);
+	mnt_unref_table(mtab);
 	return status;
 }

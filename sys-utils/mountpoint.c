@@ -38,12 +38,13 @@
 #include "xalloc.h"
 #include "c.h"
 #include "closestream.h"
+#include "pathnames.h"
 
 static int quiet;
 
 static int dir_to_device(const char *spec, dev_t *dev)
 {
-	struct libmnt_table *tb = mnt_new_table_from_file("/proc/self/mountinfo");
+	struct libmnt_table *tb = mnt_new_table_from_file(_PATH_PROC_MOUNTINFO);
 	struct libmnt_fs *fs;
 	struct libmnt_cache *cache;
 	int rc = -1;
@@ -82,6 +83,7 @@ static int dir_to_device(const char *spec, dev_t *dev)
 	/* to canonicalize all necessary paths */
 	cache = mnt_new_cache();
 	mnt_table_set_cache(tb, cache);
+	mnt_unref_cache(cache);
 
 	fs = mnt_table_find_target(tb, spec, MNT_ITER_BACKWARD);
 	if (fs && mnt_fs_get_target(fs)) {
@@ -89,8 +91,7 @@ static int dir_to_device(const char *spec, dev_t *dev)
 		rc = 0;
 	}
 
-	mnt_free_table(tb);
-	mnt_free_cache(cache);
+	mnt_unref_table(tb);
 	return rc;
 }
 

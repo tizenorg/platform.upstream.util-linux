@@ -43,14 +43,15 @@
 #include "nls.h"
 #include "strutils.h"
 #include "closestream.h"
+#include "timer.h"
 
 static void __attribute__((__noreturn__)) usage(int ex)
 {
 	fprintf(stderr, USAGE_HEADER);
 	fprintf(stderr,
-		_(" %1$s [options] <file descriptor number>\n"
-		  " %1$s [options] <file> -c <command>\n"
-		  " %1$s [options} <directory> -c <command>\n"),
+		_(" %1$s [options] <file|directory> <command> [<arguments>...]\n"
+		  " %1$s [options] <file|directory> -c <command>\n"
+		  " %1$s [options] <file descriptor number>\n"),
 		program_invocation_short_name);
 	fputs(USAGE_OPTIONS, stderr);
 	fputs(_(  " -s  --shared             get a shared lock\n"), stderr);
@@ -73,33 +74,6 @@ static sig_atomic_t timeout_expired = 0;
 static void timeout_handler(int sig __attribute__((__unused__)))
 {
 	timeout_expired = 1;
-}
-
-static void strtotimeval(const char *str, struct timeval *tv)
-{
-	double user_input;
-
-	user_input = strtod_or_err(str, "bad number");
-	tv->tv_sec = (time_t) user_input;
-	tv->tv_usec = (long)((user_input - tv->tv_sec) * 1000000);
-	if ((tv->tv_sec + tv->tv_usec) == 0)
-		errx(EX_USAGE, _("timeout cannot be zero"));
-}
-
-static void setup_timer(struct itimerval *timer, struct itimerval *old_timer,
-			struct sigaction *sa, struct sigaction *old_sa)
-{
-	memset(sa, 0, sizeof *sa);
-	sa->sa_handler = timeout_handler;
-	sa->sa_flags = SA_RESETHAND;
-	sigaction(SIGALRM, sa, old_sa);
-	setitimer(ITIMER_REAL, timer, old_timer);
-}
-
-static void cancel_timer(struct itimerval *old_timer, struct sigaction *old_sa)
-{
-	setitimer(ITIMER_REAL, old_timer, NULL);
-	sigaction(SIGALRM, old_sa, NULL);
 }
 
 static int open_file(const char *filename, int *flags)
@@ -149,7 +123,7 @@ int main(int argc, char *argv[])
 	int conflict_exit_code = 1;
 	char **cmd_argv = NULL, *sh_c_argv[4];
 	const char *filename = NULL;
-	struct sigaction sa, old_sa;
+	struct sigaction old_sa;
 
 	static const struct option long_options[] = {
 		{"shared", no_argument, NULL, 's'},
@@ -199,14 +173,17 @@ int main(int argc, char *argv[])
 			break;
 		case 'w':
 			have_timeout = 1;
-			strtotimeval(optarg, &timeout.it_value);
+			strtotimeval_or_err(optarg, &timeout.it_value,
+				_("invalid timeout value"));
+			if (timeout.it_value.tv_sec + timeout.it_value.tv_usec == 0)
+				errx(EX_USAGE, _("timeout cannot be zero"));
 			break;
 		case 'E':
 			conflict_exit_code = strtos32_or_err(optarg,
 				_("invalid exit code"));
 			break;
 		case 'V':
-			printf("flock (%s)\n", PACKAGE_STRING);
+			printf(UTIL_LINUX_VERSION);
 			exit(EX_OK);
 		default:
 			/* optopt will be set if this was an unrecognized
@@ -257,7 +234,7 @@ int main(int argc, char *argv[])
 			have_timeout = 0;
 			block = LOCK_NB;
 		} else
-			setup_timer(&timeout, &old_timer, &sa, &old_sa);
+			setup_timer(&timeout, &old_timer, &old_sa, timeout_handler);
 	}
 
 	while (flock(fd, type | block)) {
@@ -278,6 +255,7 @@ int main(int argc, char *argv[])
 			 */
 			if (!(open_flags & O_RDWR) &&
 			    type != LOCK_SH &&
+			    filename &&
 			    access(filename, R_OK | W_OK) == 0) {
 
 				close(fd);
@@ -317,7 +295,7 @@ int main(int argc, char *argv[])
 				close(fd);
 			execvp(cmd_argv[0], cmd_argv);
 			/* execvp() failed */
-			warn("%s", cmd_argv[0]);
+			warn(_("failed to execute %s"), cmd_argv[0]);
 			_exit((errno == ENOMEM) ? EX_OSERR : EX_UNAVAILABLE);
 		} else {
 			do {

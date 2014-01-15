@@ -37,7 +37,7 @@
  *                           patches from Andries.Brouwer@cwi.nl
  * Wed Sep 14 22:31:17 1994: patches from Carl Christofferson
  *                           (cchris@connected.com)
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * 	added Native Language Support
  * 1999-09-19 Bruno Haible <haible@clisp.cons.org>
  * 	modified to work correctly in multi-byte locales
@@ -139,9 +139,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
-static void __attribute__((__noreturn__)) wrerr()
+static void __attribute__((__noreturn__)) wrerr(void)
 {
-	errx(EXIT_FAILURE, _("write error."));
+	errx(EXIT_FAILURE, _("write error"));
 }
 
 int main(int argc, char **argv)
@@ -402,8 +402,7 @@ void flush_lines(int nflush)
 			flush_line(l);
 		}
 		nblank_lines++;
-		if (l->l_line)
-			free((void *)l->l_line);
+		free((void *)l->l_line);
 		free_line(l);
 	}
 	if (lines)
@@ -415,7 +414,7 @@ void flush_lines(int nflush)
  * is the number of half line feeds, otherwise it is the number of whole line
  * feeds.
  */
-void flush_blanks()
+void flush_blanks(void)
 {
 	int half, i, nb;
 
@@ -550,7 +549,7 @@ void flush_line(LINE *l)
 static LINE *line_freelist;
 
 LINE *
-alloc_line()
+alloc_line(void)
 {
 	LINE *l;
 	int i;

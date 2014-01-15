@@ -1,4 +1,4 @@
-/* 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+/* 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  * Sun Mar 21 1999 - Arnaldo Carvalho de Melo <acme@conectiva.com.br>
  * - fixed strerr(errno) in gettext calls
@@ -19,8 +19,8 @@
 #include "fsprobe.h"
 #include "pathnames.h"
 #include "nls.h"
-#include "usleep.h"
 #include "strutils.h"
+#include "c.h"
 
 #define streq(s, t)	(strcmp ((s), (t)) == 0)
 

@@ -32,7 +32,7 @@
  */
 
 /*
- * 1999-02-22 Arkadiusz Mi∂kiewicz <misiek@pld.ORG.PL>
+ * 1999-02-22 Arkadiusz Mi≈õkiewicz <misiek@pld.ORG.PL>
  * - added Native Language Support
  *
  * 2000-07-30 Per Andreas Buer <per@linpro.no> - added "q"-option
@@ -291,7 +291,7 @@ main(int argc, char **argv) {
 	return EXIT_SUCCESS;
 }
 
-void __attribute__((__noreturn__))
+void
 doinput(void) {
 	ssize_t cc;
 	char ibuf[BUFSIZ];
@@ -347,7 +347,7 @@ my_strftime(char *buf, size_t len, const char *fmt, const struct tm *tm) {
 	strftime(buf, len, fmt, tm);
 }
 
-void __attribute__((__noreturn__))
+void
 dooutput(FILE *timingfd) {
 	ssize_t cc;
 	time_t tvec;
@@ -414,7 +414,7 @@ dooutput(FILE *timingfd) {
 	done();
 }
 
-void __attribute__((__noreturn__))
+void
 doshell(void) {
 	char *shname;
 
@@ -445,11 +445,17 @@ doshell(void) {
 	 */
 	signal(SIGTERM, SIG_DFL);
 
-	if (cflg)
-		execl(shell, shname, "-c", cflg, NULL);
-	else
-		execl(shell, shname, "-i", NULL);
-
+	if (access(shell, X_OK) == 0) {
+		if (cflg)
+			execl(shell, shname, "-c", cflg, NULL);
+		else
+			execl(shell, shname, "-i", NULL);
+	} else {
+		if (cflg)
+			execlp(shname, "-c", cflg, NULL);
+		else
+			execlp(shname, "-i", NULL);
+	}
 	warn(_("failed to execute %s"), shell);
 	fail();
 }
@@ -464,7 +470,7 @@ fixtty(void) {
 	tcsetattr(STDIN_FILENO, TCSANOW, &rtt);
 }
 
-void __attribute__((__noreturn__))
+void
 fail(void) {
 
 	kill(0, SIGTERM);

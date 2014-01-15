@@ -62,6 +62,14 @@ enum {
 	WP_MODE_PARSABLE
 };
 
+enum {
+	WP_FL_NOACT	= (1 << 1),
+	WP_FL_ALL	= (1 << 2),
+	WP_FL_QUIET	= (1 << 3),
+	WP_FL_BACKUP	= (1 << 4),
+	WP_FL_FORCE	= (1 << 5)
+};
+
 static const char *type_pattern;
 
 static void
@@ -216,7 +224,7 @@ get_desc_for_probe(struct wipe_desc *wp, blkid_probe pr)
 static blkid_probe
 new_probe(const char *devname, int mode)
 {
-	blkid_probe pr;
+	blkid_probe pr = NULL;
 
 	if (!devname)
 		return NULL;
@@ -227,8 +235,10 @@ new_probe(const char *devname, int mode)
 			goto error;
 
 		pr = blkid_new_probe();
-		if (pr && blkid_probe_set_device(pr, fd, 0, 0))
+		if (pr && blkid_probe_set_device(pr, fd, 0, 0)) {
+			close(fd);
 			goto error;
+		}
 	} else
 		pr = blkid_new_probe_from_filename(devname);
 
@@ -238,13 +248,15 @@ new_probe(const char *devname, int mode)
 	blkid_probe_enable_superblocks(pr, 1);
 	blkid_probe_set_superblocks_flags(pr, BLKID_SUBLKS_MAGIC |
 			BLKID_SUBLKS_TYPE | BLKID_SUBLKS_USAGE |
-			BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID);
+			BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
+			BLKID_SUBLKS_BADCSUM);
 
 	blkid_probe_enable_partitions(pr, 1);
 	blkid_probe_set_partitions_flags(pr, BLKID_PARTS_MAGIC);
 
 	return pr;
 error:
+	blkid_free_probe(pr);
 	err(EXIT_FAILURE, _("error: %s: probing initialization failed"), devname);
 	return NULL;
 }
@@ -284,19 +296,22 @@ free_wipe(struct wipe_desc *wp)
 	}
 }
 
-static void do_wipe_real(blkid_probe pr, const char *devname, struct wipe_desc *w, int noact, int quiet)
+static void do_wipe_real(blkid_probe pr, const char *devname,
+			struct wipe_desc *w, int flags)
 {
 	size_t i;
 
-	if (blkid_do_wipe(pr, noact))
+	if (blkid_do_wipe(pr, (flags & WP_FL_NOACT) != 0))
 		warn(_("%s: failed to erase %s magic string at offset 0x%08jx"),
 		     devname, w->type, w->offset);
 
-	if (quiet)
+	if (flags & WP_FL_QUIET)
 		return;
 
-	printf(_("%s: %zd bytes were erased at offset 0x%08jx (%s): "),
-		devname, w->len, w->offset, w->type);
+	printf(P_("%s: %zd byte was erased at offset 0x%08jx (%s): ",
+		  "%s: %zd bytes were erased at offset 0x%08jx (%s): ",
+		  w->len),
+	       devname, w->len, w->offset, w->type);
 
 	for (i = 0; i < w->len; i++) {
 		printf("%02x", w->magic[i]);
@@ -306,20 +321,48 @@ static void do_wipe_real(blkid_probe pr, const char *devname, struct wipe_desc *
 	putchar('\n');
 }
 
-static struct wipe_desc *
-do_wipe(struct wipe_desc *wp, const char *devname, int noact, int all, int quiet, int force)
+static void do_backup(struct wipe_desc *wp, const char *base)
 {
-	int flags;
-	blkid_probe pr;
-	struct wipe_desc *w, *wp0 = clone_offset(wp);
-	int zap = all ? 1 : wp->zap;
+	char *fname = NULL;
+	int fd;
 
-	flags = O_RDWR;
-	if (!force)
-		flags |= O_EXCL;
-	pr = new_probe(devname, flags);
+	xasprintf(&fname, "%s0x%08jx.bak", base, wp->offset);
+
+	fd = open(fname, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+	if (fd < 0)
+		goto err;
+	if (write_all(fd, wp->magic, wp->len) != 0)
+		goto err;
+	close(fd);
+	free(fname);
+	return;
+err:
+	err(EXIT_FAILURE, _("%s: failed to create a signature backup"), fname);
+}
+
+static struct wipe_desc *
+do_wipe(struct wipe_desc *wp, const char *devname, int flags)
+{
+	int mode = O_RDWR;
+	blkid_probe pr;
+	struct wipe_desc *w, *wp0;
+	int zap = (flags & WP_FL_ALL) ? 1 : wp->zap;
+	char *backup = NULL;
+
+	if (!(flags & WP_FL_FORCE))
+		mode |= O_EXCL;
+	pr = new_probe(devname, mode);
 	if (!pr)
 		return NULL;
+
+	if (zap && (flags & WP_FL_BACKUP)) {
+		const char *home = getenv ("HOME");
+		if (!home)
+			errx(EXIT_FAILURE, _("failed to create a signature backup, $HOME undefined"));
+		xasprintf (&backup, "%s/wipefs-%s-", home, basename(devname));
+	}
+
+	wp0 = clone_offset(wp);
 
 	while (blkid_do_probe(pr) == 0) {
 		wp = get_desc_for_probe(wp, pr);
@@ -340,12 +383,15 @@ do_wipe(struct wipe_desc *wp, const char *devname, int noact, int all, int quiet
 		if (!wp->on_disk)
 			continue;
 
-		if (zap)
-			do_wipe_real(pr, devname, wp, noact, quiet);
+		if (zap) {
+			if (backup)
+				do_backup(wp, backup);
+			do_wipe_real(pr, devname, wp, flags);
+		}
 	}
 
 	for (w = wp0; w != NULL; w = w->next) {
-		if (!w->on_disk && !quiet)
+		if (!w->on_disk && !(flags & WP_FL_QUIET))
 			warnx(_("%s: offset 0x%jx not found"), devname, w->offset);
 	}
 
@@ -353,6 +399,7 @@ do_wipe(struct wipe_desc *wp, const char *devname, int noact, int all, int quiet
 	close(blkid_probe_get_fd(pr));
 	blkid_free_probe(pr);
 	free_wipe(wp0);
+	free(backup);
 
 	return wp;
 }
@@ -367,6 +414,7 @@ usage(FILE *out)
 
 	fputs(_("\nOptions:\n"), out);
 	fputs(_(" -a, --all           wipe all magic strings (BE CAREFUL!)\n"
+		" -b, --backup        create a signature backup in $HOME\n"
 		" -f, --force         force erasure\n"
 		" -h, --help          show this help text\n"
 		" -n, --no-act        do everything except the actual write() call\n"
@@ -386,11 +434,12 @@ int
 main(int argc, char **argv)
 {
 	struct wipe_desc *wp0 = NULL, *wp;
-	int c, all = 0, force = 0, has_offset = 0, noact = 0, quiet = 0;
+	int c, has_offset = 0, flags = 0;
 	int mode = WP_MODE_PRETTY;
 
 	static const struct option longopts[] = {
 	    { "all",       0, 0, 'a' },
+	    { "backup",    0, 0, 'b' },
 	    { "force",     0, 0, 'f' },
 	    { "help",      0, 0, 'h' },
 	    { "no-act",    0, 0, 'n' },
@@ -413,22 +462,25 @@ main(int argc, char **argv)
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "ahno:pqt:V", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "afhno:pqt:V", longopts, NULL)) != -1) {
 
 		err_exclusive_options(c, longopts, excl, excl_st);
 
 		switch(c) {
 		case 'a':
-			all++;
+			flags |= WP_FL_ALL;
+			break;
+		case 'b':
+			flags |= WP_FL_BACKUP;
 			break;
 		case 'f':
-			force++;
+			flags |= WP_FL_FORCE;
 			break;
 		case 'h':
 			usage(stdout);
 			break;
 		case 'n':
-			noact++;
+			flags |= WP_FL_NOACT;
 			break;
 		case 'o':
 			wp0 = add_offset(wp0, strtosize_or_err(optarg,
@@ -439,14 +491,13 @@ main(int argc, char **argv)
 			mode = WP_MODE_PARSABLE;
 			break;
 		case 'q':
-			quiet++;
+			flags |= WP_FL_QUIET;
 			break;
 		case 't':
 			type_pattern = optarg;
 			break;
 		case 'V':
-			printf(_("%s from %s\n"), program_invocation_short_name,
-				PACKAGE_STRING);
+			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
 		default:
 			usage(stderr);
@@ -457,7 +508,10 @@ main(int argc, char **argv)
 	if (optind == argc)
 		usage(stderr);
 
-	if (!all && !has_offset) {
+	if ((flags & WP_FL_BACKUP) && !((flags & WP_FL_ALL) || has_offset))
+		warnx(_("The --backup option is meaningless in this context"));
+
+	if (!(flags & WP_FL_ALL) && !has_offset) {
 		/*
 		 * Print only
 		 */
@@ -473,8 +527,7 @@ main(int argc, char **argv)
 		 */
 		while (optind < argc) {
 			wp = clone_offset(wp0);
-			wp = do_wipe(wp, argv[optind++], noact, all, quiet,
-				     force);
+			wp = do_wipe(wp, argv[optind++], flags);
 			free_wipe(wp);
 		}
 	}

@@ -1,4 +1,9 @@
-
+/*
+ * No copyright is claimed.  This code is in the public domain; do with
+ * it what you wish.
+ *
+ * Written by Karel Zak <kzak@redhat.com>
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>
@@ -32,7 +37,7 @@ int is_whole_disk(const char *name)
 {
 	int fd = -1, res = 0;
 #ifdef HDIO_GETGEO
-	fd = open(name, O_RDONLY);
+	fd = open(name, O_RDONLY|O_CLOEXEC);
 	if (fd != -1)
 #endif
 		res = is_whole_disk_fd(fd, name);

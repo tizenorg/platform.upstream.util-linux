@@ -85,9 +85,6 @@ static int mounttype = 0;
 /* True if (ruid != euid) or (0 != ruid), i.e. only "user" mounts permitted.  */
 static int restricted = 1;
 
-/* Contains the fd to read the passphrase from, if any. */
-static int pfd = -1;
-
 /* mount(2) options */
 struct mountargs {
        const char *spec;
@@ -1253,7 +1250,7 @@ loop_check(const char **spec, const char **type, int *flags,
       *type = opt_vfstype;
   }
 
-  *loop = ((*flags & MS_LOOP) || *loopdev || opt_offset || opt_sizelimit || opt_encryption);
+  *loop = ((*flags & MS_LOOP) || *loopdev || opt_offset || opt_sizelimit);
   *loopfile = *spec;
 
   /* Automatically create a loop device from a regular file if a filesystem
@@ -1309,20 +1306,19 @@ loop_check(const char **spec, const char **type, int *flags,
       }
 
       if (opt_encryption) {
-#ifdef MCL_FUTURE
-        if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
-	  error(_("mount: couldn't lock into memory"));
-          return EX_FAIL;
-	}
-#endif
-	pwd = xgetpass(pfd, _("Password: "));
+        error("mount: %s", _("encryption not supported, use cryptsetup(8) instead"));
+        return EX_FAIL;
       }
 
-      loopcxt_init(&lc, 0);
-      /*loopcxt_enable_debug(&lc, 1);*/
+      if (loopcxt_init(&lc, 0) < 0) {
+	error(_("mount: failed to initialize loopdev context"));
+	return EX_FAIL;
+      }
 
-      if (*loopdev && **loopdev)
-	loopcxt_set_device(&lc, *loopdev);	/* use loop=<devname> */
+      if (*loopdev && **loopdev && loopcxt_set_device(&lc, *loopdev) < 0) {
+	error(_("mount: failed to use %s device"), *loopdev);
+	return EX_FAIL;
+      }
 
       do {
 	int rc;
@@ -1344,8 +1340,6 @@ loop_check(const char **spec, const char **type, int *flags,
 	  rc = loopcxt_set_offset(&lc, offset);
 	if (!rc && sizelimit)
 	  rc = loopcxt_set_sizelimit(&lc, sizelimit);
-	if (!rc && opt_encryption && pwd)
-	  loopcxt_set_encryption(&lc, opt_encryption, pwd);
 	if (!rc)
 	  loopcxt_set_flags(&lc, loop_opts);
 
@@ -1448,14 +1442,6 @@ update_mtab_entry(const char *spec, const char *node, const char *type,
 	}
 	my_free(mnt.mnt_fsname);
 	my_free(mnt.mnt_dir);
-}
-
-static void
-set_pfd(char *s) {
-	if (!isdigit(*s))
-		die(EX_USAGE,
-		    _("mount: argument to -p or --pass-fd must be a number"));
-	pfd = atoi(optarg);
 }
 
 static void
@@ -1686,7 +1672,7 @@ try_mount_one (const char *spec0, const char *node0, const char *types0,
 
   /* Mount failed, complain, but don't die.  */
 
-  if (types == 0) {
+  if (types == NULL) {
     if (restricted)
       error (_("mount: I could not determine the filesystem type, "
 	       "and none was specified"));
@@ -2226,7 +2212,6 @@ static struct option longopts[] = {
 	{ "types", 1, 0, 't' },
 	{ "bind", 0, 0, 'B' },
 	{ "move", 0, 0, 'M' },
-	{ "guess-fstype", 1, 0, 134 },
 	{ "rbind", 0, 0, 'R' },
 	{ "make-shared", 0, 0, 136 },
 	{ "make-slave", 0, 0, 137 },
@@ -2457,7 +2442,7 @@ main(int argc, char *argv[]) {
 			test_opts = append_opt(test_opts, optarg, NULL);
 			break;
 		case 'p':		/* fd on which to read passwd */
-			set_pfd(optarg);
+                        error("mount: %s", _("--pass-fd is no longer supported"));
 			break;
 		case 'r':		/* mount readonly */
 			readonly = 1;
@@ -2487,18 +2472,6 @@ main(int argc, char *argv[]) {
 			break;
 		case 0:
 			break;
-
-		case 134:
-			/* undocumented, may go away again:
-			   call: mount --guess-fstype device
-			   use only for testing purposes -
-			   the guessing is not reliable at all */
-		    {
-			const char *fstype;
-			fstype = fsprobe_get_fstype_by_devname(optarg);
-			printf("%s\n", fstype ? fstype : "unknown");
-			exit(fstype ? 0 : EX_FAIL);
-		    }
 
 		case 136:
 			mounttype = MS_SHARED;

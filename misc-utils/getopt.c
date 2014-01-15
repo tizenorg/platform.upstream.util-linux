@@ -33,7 +33,7 @@
  * Version 1.0.6: Tue Jun 27 2000
  *   No important changes
  * Version 1.1.0: Tue Jun 30 2000
- *   Added NLS support (partly written by Arkadiusz Mi<B6>kiewicz
+ *   Added NLS support (partly written by Arkadiusz Miśkiewicz
  *     <misiek@pld.org.pl>)
  * Version 1.1.4: Mon Nov 7 2005
  *   Fixed a few type's in the manpage
@@ -190,7 +190,7 @@ static int generate_output(char *argv[], int argc, const char *optstr,
 				if (longopts[longindex].has_arg)
 					printf(" %s", normalize(optarg ? optarg : ""));
 			} else if (opt == NON_OPT)
-				printf(" %s", normalize(optarg));
+				printf(" %s", normalize(optarg ? optarg : ""));
 			else {
 				printf(" -%c", opt);
 				charptr = strchr(optstr, opt);
@@ -251,7 +251,7 @@ static void add_longopt(const char *name, int has_arg)
 	long_options[long_options_nr].flag = NULL;
 	long_options[long_options_nr].val = 0;
 
-	if (long_options_nr) {
+	if (long_options_nr && name) {
 		/* Not for init! */
 		long_options[long_options_nr - 1].has_arg = has_arg;
 		long_options[long_options_nr - 1].flag = NULL;
@@ -329,7 +329,7 @@ static void __attribute__ ((__noreturn__)) print_help(void)
 	fputs(_(" -Q, --quiet-output           No normal output\n"), stderr);
 	fputs(_(" -s, --shell <shell>          Set shell quoting conventions\n"), stderr);
 	fputs(_(" -T, --test                   Test for getopt(1) version\n"), stderr);
-	fputs(_(" -u, --unquote                Do not quote the output\n"), stderr);
+	fputs(_(" -u, --unquoted               Do not quote the output\n"), stderr);
 	fputs(_(" -V, --version                Output version information\n"), stderr);
 	fputc('\n', stderr);
 
@@ -428,9 +428,7 @@ int main(int argc, char *argv[])
 			quote = 0;
 			break;
 		case 'V':
-			printf(_("%s from %s\n"),
-			       program_invocation_short_name,
-			       PACKAGE_STRING);
+			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
 		case '?':
 		case ':':

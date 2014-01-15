@@ -50,7 +50,7 @@ static const struct tt_symbols utf8_tt_symbols = {
 #endif /* !HAVE_WIDECHAR */
 
 #define is_last_column(_tb, _cl) \
-		list_last_entry(&(_cl)->cl_columns, &(_tb)->tb_columns)
+		list_entry_is_last(&(_cl)->cl_columns, &(_tb)->tb_columns)
 
 /*
  * Counts number of cells in multibyte string. For all control and
@@ -221,9 +221,17 @@ void tt_remove_lines(struct tt *tb)
 		return;
 
 	while (!list_empty(&tb->tb_lines)) {
+		struct list_head *p;
 		struct tt_line *ln = list_entry(tb->tb_lines.next,
 						struct tt_line, ln_lines);
 		list_del(&ln->ln_lines);
+
+		list_for_each(p, &tb->tb_columns) {
+			struct tt_column *cl =
+				list_entry(p, struct tt_column, cl_columns);
+			if ((cl->flags & TT_FL_FREEDATA) || (tb->flags & TT_FL_FREEDATA))
+				free(ln->data[cl->seqnum]);
+		}
 		free(ln->data);
 		free(ln);
 	}
@@ -360,7 +368,7 @@ struct tt_column *tt_get_column(struct tt *tb, size_t colnum)
  *
  * Stores data that will be printed to the table cell.
  */
-int tt_line_set_data(struct tt_line *ln, int colnum, const char *data)
+int tt_line_set_data(struct tt_line *ln, int colnum, char *data)
 {
 	struct tt_column *cl;
 
@@ -401,7 +409,7 @@ static char *line_get_ascii_art(struct tt_line *ln, char *buf, size_t *bufsz)
 	if (!buf)
 		return NULL;
 
-	if (list_last_entry(&ln->ln_children, &ln->parent->ln_branch))
+	if (list_entry_is_last(&ln->ln_children, &ln->parent->ln_branch))
 		art = "  ";
 	else
 		art = ln->table->symbols->vert;
@@ -445,7 +453,7 @@ static char *line_get_data(struct tt_line *ln, struct tt_column *cl,
 
 	if (!ln->parent)
 		snprintf(p, bufsz, "%s", data);			/* root node */
-	else if (list_last_entry(&ln->ln_children, &ln->parent->ln_branch))
+	else if (list_entry_is_last(&ln->ln_children, &ln->parent->ln_branch))
 		snprintf(p, bufsz, "%s%s", sym->right, data);	/* last chaild */
 	else
 		snprintf(p, bufsz, "%s%s", sym->branch, data);	/* any child */
@@ -535,6 +543,9 @@ static void recount_widths(struct tt *tb, char *buf, size_t bufsz)
 		extremes += cl->is_extreme;
 	}
 
+	if (!tb->is_term)
+		return;
+
 	/* reduce columns with extreme fields
 	 */
 	if (width > tb->termwidth && extremes) {
@@ -568,10 +579,11 @@ static void recount_widths(struct tt *tb, char *buf, size_t bufsz)
 				if (!cl->is_extreme)
 					continue;
 
+				/* this column is tooo large, ignore?
 				if (cl->width_max - cl->width >
 						(tb->termwidth - width))
-					/* this column is tooo large, ignore */
 					continue;
+				*/
 
 				add = tb->termwidth - width;
 				if (add && cl->width + add > cl->width_max)
@@ -873,8 +885,11 @@ int tt_print_table(struct tt *tb)
 	if (!tb)
 		return -1;
 
-	if (tb->first_run && !tb->termwidth) {
-		tb->termwidth = get_terminal_width();
+	if (tb->first_run) {
+		tb->is_term = isatty(STDOUT_FILENO);
+
+		if (tb->is_term && !tb->termwidth)
+			tb->termwidth = get_terminal_width();
 		if (tb->termwidth <= 0)
 			tb->termwidth = 80;
 	}

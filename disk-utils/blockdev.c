@@ -127,7 +127,7 @@ static const struct bdc bdcms[] =
 		.argname = "<bytes>",
 		.argtype = ARG_INT,
 		.flags = FL_NORESULT,
-	        .help = N_("set blocksize")
+	        .help = N_("set blocksize on file descriptor opening the block device")
 	},{
 		IOCTL_ENTRY(BLKGETSIZE),
 		.name = "--getsize",
@@ -229,8 +229,7 @@ int main(int argc, char **argv)
 
 	/* -V not together with commands */
 	if (!strcmp(argv[1], "-V") || !strcmp(argv[1], "--version")) {
-		printf(_("%s (%s)\n"), program_invocation_short_name,
-		       PACKAGE_STRING);
+		printf(UTIL_LINUX_VERSION);
 		return EXIT_SUCCESS;
 	}
 	if (!strcmp(argv[1], "-h") || !strcmp(argv[1], "--help"))

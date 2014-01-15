@@ -1,6 +1,7 @@
 #ifndef UTIL_LINUX_STRUTILS
 #define UTIL_LINUX_STRUTILS
 
+#include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>
 #include <sys/types.h>
@@ -11,6 +12,7 @@
 #endif
 
 
+extern int parse_size(const char *str, uintmax_t *res, int *power);
 extern int strtosize(const char *str, uintmax_t *res);
 extern uintmax_t strtosize_or_err(const char *str, const char *errmesg);
 
@@ -28,6 +30,14 @@ extern double strtod_or_err(const char *str, const char *errmesg);
 extern long strtol_or_err(const char *str, const char *errmesg);
 extern unsigned long strtoul_or_err(const char *str, const char *errmesg);
 
+extern void strtotimeval_or_err(const char *str, struct timeval *tv,
+		const char *errmesg);
+
+extern int isdigit_string(const char *str);
+
+#ifndef HAVE_MEMPCPY
+extern void *mempcpy(void *restrict dest, const void *restrict src, size_t n);
+#endif
 #ifndef HAVE_STRNLEN
 extern size_t strnlen(const char *s, size_t maxlen);
 #endif
@@ -44,6 +54,25 @@ static inline void xstrncpy(char *dest, const char *src, size_t n)
 	strncpy(dest, src, n-1);
 	dest[n-1] = 0;
 }
+
+static inline char *strdup_to_offset(void *stru, size_t offset, const char *str)
+{
+	char *n = NULL;
+	char **o = (char **) ((char *) stru + offset);
+
+	if (str) {
+		n = strdup(str);
+		if (!n)
+			return NULL;
+	}
+
+	free(*o);
+	*o = n;
+	return n;
+}
+
+#define strdup_to_struct_member(_s, _m, _str) \
+		strdup_to_offset((void *) _s, offsetof(__typeof__(*(_s)), _m), _str)
 
 extern void strmode(mode_t mode, char *str);
 
@@ -72,5 +101,46 @@ extern int string_to_bitmask(const char *list,
 extern int parse_range(const char *str, int *lower, int *upper, int def);
 
 extern int streq_except_trailing_slash(const char *s1, const char *s2);
+
+/*
+ * Match string beginning.
+ */
+static inline const char *startswith(const char *s, const char *prefix)
+{
+	size_t sz = prefix ? strlen(prefix) : 0;
+
+        if (s && sz && strncmp(s, prefix, sz) == 0)
+                return s + sz;
+	return NULL;
+}
+
+/*
+ * Case insensitive match string beginning.
+ */
+static inline const char *startswith_no_case(const char *s, const char *prefix)
+{
+	size_t sz = prefix ? strlen(prefix) : 0;
+
+        if (s && sz && strncasecmp(s, prefix, sz) == 0)
+                return s + sz;
+	return NULL;
+}
+
+/*
+ * Match string ending.
+ */
+static inline const char *endswith(const char *s, const char *postfix)
+{
+	size_t sl = s ? strlen(s) : 0;
+	size_t pl = postfix ? strlen(postfix) : 0;
+
+	if (pl == 0)
+		return (char *)s + sl;
+	if (sl < pl)
+		return NULL;
+	if (memcmp(s + sl - pl, postfix, pl) != 0)
+		return NULL;
+	return (char *)s + sl - pl;
+}
 
 #endif

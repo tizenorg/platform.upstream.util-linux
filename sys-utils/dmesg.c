@@ -23,6 +23,7 @@
 #include <fcntl.h>
 
 #include "c.h"
+#include "colors.h"
 #include "nls.h"
 #include "strutils.h"
 #include "xalloc.h"
@@ -32,6 +33,7 @@
 #include "closestream.h"
 #include "optutils.h"
 #include "mangle.h"
+#include "pager.h"
 
 /* Close the log.  Currently a NOP. */
 #define SYSLOG_ACTION_CLOSE          0
@@ -55,6 +57,18 @@
 #define SYSLOG_ACTION_SIZE_UNREAD    9
 /* Return size of the log buffer */
 #define SYSLOG_ACTION_SIZE_BUFFER   10
+
+/*
+ * Colors
+ */
+#define DMESG_COLOR_SUBSYS	UL_COLOR_BROWN
+#define DMESG_COLOR_TIME	UL_COLOR_GREEN
+#define DMESG_COLOR_RELTIME	UL_COLOR_BOLD_GREEN
+#define DMESG_COLOR_ALERT	UL_COLOR_REVERSE UL_COLOR_RED
+#define DMESG_COLOR_CRIT	UL_COLOR_BOLD_RED
+#define DMESG_COLOR_ERR		UL_COLOR_RED
+#define DMESG_COLOR_WARN	UL_COLOR_BOLD
+#define DMESG_COLOR_SEGFAULT	UL_COLOR_HALFBRIGHT UL_COLOR_RED
 
 /*
  * Priority and facility names
@@ -101,7 +115,7 @@ static const struct dmesg_name facility_names[] =
 	[FAC_BASE(LOG_UUCP)]     = { "uucp",     N_("UUCP subsystem") },
 	[FAC_BASE(LOG_CRON)]     = { "cron",     N_("clock daemon") },
 	[FAC_BASE(LOG_AUTHPRIV)] = { "authpriv", N_("security/authorization messages (private)") },
-	[FAC_BASE(LOG_FTP)]      = { "ftp",      N_("ftp daemon") },
+	[FAC_BASE(LOG_FTP)]      = { "ftp",      N_("FTP daemon") },
 };
 
 /* supported methods to read message buffer
@@ -112,6 +126,18 @@ enum {
 	DMESG_METHOD_MMAP	/* mmap file with records (see --file) */
 };
 
+enum {
+	DMESG_TIMEFTM_NONE = 0,
+	DMESG_TIMEFTM_CTIME,		/* [ctime] */
+	DMESG_TIMEFTM_CTIME_DELTA,	/* [ctime <delta>] */
+	DMESG_TIMEFTM_DELTA,		/* [<delta>] */
+	DMESG_TIMEFTM_RELTIME,		/* [relative] */
+	DMESG_TIMEFTM_TIME,		/* [time] */
+	DMESG_TIMEFTM_TIME_DELTA,	/* [time <delta>] */
+	DMESG_TIMEFTM_ISO8601		/* 2013-06-13T22:11:00,123456+0100 */
+};
+#define is_timefmt(c, f) ((c)->time_fmt == (DMESG_TIMEFTM_ ##f))
+
 struct dmesg_control {
 	/* bit arrays -- see include/bitops.h */
 	char levels[ARRAY_SIZE(level_names) / NBBY + 1];
@@ -119,7 +145,7 @@ struct dmesg_control {
 
 	struct timeval	lasttime;	/* last printed timestamp */
 	struct tm	lasttm;		/* last localtime */
-	time_t		boot_time;	/* system boot time */
+	struct timeval	boot_time;	/* system boot time */
 
 	int		action;		/* SYSLOG_ACTION_* */
 	int		method;		/* DMESG_METHOD_* */
@@ -138,16 +164,15 @@ struct dmesg_control {
 	char		*filename;
 	char		*mmap_buff;
 	size_t		pagesize;
+	unsigned int	time_fmt;	/* time format */
 
 	unsigned int	follow:1,	/* wait for new messages */
 			raw:1,		/* raw mode */
 			fltr_lev:1,	/* filter out by levels[] */
 			fltr_fac:1,	/* filter out by facilities[] */
 			decode:1,	/* use "facility: level: " prefix */
-			notime:1,	/* don't print timestamp */
-			delta:1,	/* show time deltas */
-			reltime:1,	/* show human readable relative times */
-			ctime:1;	/* show human readable time */
+			pager:1,	/* pipe output into a pager */
+			color:1;	/* colorize messages */
 };
 
 struct dmesg_record {
@@ -173,55 +198,84 @@ struct dmesg_record {
 
 static int read_kmsg(struct dmesg_control *ctl);
 
+static int set_level_color(int log_level, const char *mesg, size_t mesgsz)
+{
+	switch (log_level) {
+	case LOG_ALERT:
+		color_enable(DMESG_COLOR_ALERT);
+		return 0;
+	case LOG_CRIT:
+		color_enable(DMESG_COLOR_CRIT);
+		return 0;
+	case LOG_ERR:
+		color_enable(DMESG_COLOR_ERR);
+		return 0;
+	case LOG_WARNING:
+		color_enable(DMESG_COLOR_WARN);
+		return 0;
+	default:
+		break;
+	}
+
+	/* well, sometimes the messges contains important keywords, but in
+	 * non-warning/error messages
+	 */
+	if (memmem(mesg, mesgsz, "segfault at", 11)) {
+		color_enable(DMESG_COLOR_SEGFAULT);
+		return 0;
+	}
+
+	return 1;
+}
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
 	size_t i;
 
-	fputs(_("\nUsage:\n"), out);
-	fprintf(out,
-	      _(" %s [options]\n"), program_invocation_short_name);
-
-	fputs(_("\nOptions:\n"), out);
-	fputs(_(" -C, --clear                 clear the kernel ring buffer\n"
-		" -c, --read-clear            read and clear all messages\n"
-		" -D, --console-off           disable printing messages to console\n"
-		" -d, --show-delta            show time delta between printed messages\n"
-		" -e, --reltime               show local time and time delta in readable format\n"
-		" -E, --console-on            enable printing messages to console\n"
-		" -F, --file <file>           use the file instead of the kernel log buffer\n"
-		" -f, --facility <list>       restrict output to defined facilities\n"
-		" -h, --help                  display this help and exit\n"
-		" -k, --kernel                display kernel messages\n"
-		" -l, --level <list>          restrict output to defined levels\n"
-		" -n, --console-level <level> set level of messages printed to console\n"
-		" -r, --raw                   print the raw message buffer\n"
-		" -S, --syslog                force to use syslog(2) rather than /dev/kmsg\n"
-		" -s, --buffer-size <size>    buffer size to query the kernel ring buffer\n"
-		" -T, --ctime                 show human readable timestamp (could be \n"
-		"                             inaccurate if you have used SUSPEND/RESUME)\n"
-		" -t, --notime                don't print messages timestamp\n"
-		" -u, --userspace             display userspace messages\n"
-		" -V, --version               output version information and exit\n"
-		" -w, --follow                wait for new messages\n"
-		" -x, --decode                decode facility and level to readable string\n"), out);
-
+	fputs(USAGE_HEADER, out);
+	fprintf(out, _(" %s [options]\n"), program_invocation_short_name);
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -C, --clear                 clear the kernel ring buffer\n"), out);
+	fputs(_(" -c, --read-clear            read and clear all messages\n"), out);
+	fputs(_(" -D, --console-off           disable printing messages to console\n"), out);
+	fputs(_(" -E, --console-on            enable printing messages to console\n"), out);
+	fputs(_(" -F, --file <file>           use the file instead of the kernel log buffer\n"), out);
+	fputs(_(" -f, --facility <list>       restrict output to defined facilities\n"), out);
+	fputs(_(" -H, --human                 human readable output\n"), out);
+	fputs(_(" -k, --kernel                display kernel messages\n"), out);
+	fputs(_(" -L, --color[=<when>]        colorize messages (auto, always or never)\n"), out);
+	fputs(_(" -l, --level <list>          restrict output to defined levels\n"), out);
+	fputs(_(" -n, --console-level <level> set level of messages printed to console\n"), out);
+	fputs(_(" -P, --nopager               do not pipe output into a pager\n"), out);
+	fputs(_(" -r, --raw                   print the raw message buffer\n"), out);
+	fputs(_(" -S, --syslog                force to use syslog(2) rather than /dev/kmsg\n"), out);
+	fputs(_(" -s, --buffer-size <size>    buffer size to query the kernel ring buffer\n"), out);
+	fputs(_(" -u, --userspace             display userspace messages\n"), out);
+	fputs(_(" -w, --follow                wait for new messages\n"), out);
+	fputs(_(" -x, --decode                decode facility and level to readable string\n"), out);
+	fputs(_(" -d, --show-delta            show time delta between printed messages\n"), out);
+	fputs(_(" -e, --reltime               show local time and time delta in readable format\n"), out);
+	fputs(_(" -T, --ctime                 show human readable timestamp\n"), out);
+	fputs(_(" -t, --notime                don't print messages timestamp\n"), out);
+	fputs(_("     --time-format <format>  show time stamp using format:\n"
+		"                               [delta|reltime|ctime|notime|iso]\n"
+		"Suspending/resume will make ctime and iso timestamps inaccurate.\n"), out);
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
 	fputs(_("\nSupported log facilities:\n"), out);
-	for (i = 0; i < ARRAY_SIZE(level_names); i++) {
-		fprintf(stderr, " %7s - %s\n",
-				facility_names[i].name,
-				_(facility_names[i].help));
-	}
+	for (i = 0; i < ARRAY_SIZE(level_names); i++)
+		fprintf(out, " %7s - %s\n",
+			facility_names[i].name,
+			_(facility_names[i].help));
 
 	fputs(_("\nSupported log levels (priorities):\n"), out);
-	for (i = 0; i < ARRAY_SIZE(level_names); i++) {
-		fprintf(stderr, " %7s - %s\n",
-				level_names[i].name,
-				_(level_names[i].help));
-	}
-
-	fputc('\n', out);
-
+	for (i = 0; i < ARRAY_SIZE(level_names); i++)
+		fprintf(out, " %7s - %s\n",
+			level_names[i].name,
+			_(level_names[i].help));
+	fputs(USAGE_SEPARATOR, out);
+	fprintf(out, USAGE_MAN_TAIL("dmesg(1)"));
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -418,17 +472,30 @@ static int get_syslog_buffer_size(void)
 	return n > 0 ? n : 0;
 }
 
-static time_t get_boot_time(void)
+static int get_boot_time(struct timeval *boot_time)
 {
+	struct timespec hires_uptime;
+	struct timeval lores_uptime, now;
 	struct sysinfo info;
-	struct timeval tv;
 
+	if (gettimeofday(&now, NULL) != 0) {
+		warn(_("gettimeofday failed"));
+		return -errno;
+	}
+
+#ifdef CLOCK_BOOTTIME
+	if (clock_gettime(CLOCK_BOOTTIME, &hires_uptime) == 0) {
+		TIMESPEC_TO_TIMEVAL(&lores_uptime, &hires_uptime);
+		timersub(&now, &lores_uptime, boot_time);
+		return 0;
+	}
+#endif
+	/* fallback */
 	if (sysinfo(&info) != 0)
 		warn(_("sysinfo failed"));
-	else if (gettimeofday(&tv, NULL) != 0)
-		warn(_("gettimeofday failed"));
-	else
-		return tv.tv_sec -= info.uptime;
+
+	boot_time->tv_sec = now.tv_sec - info.uptime;
+	boot_time->tv_usec = 0;
 	return 0;
 }
 
@@ -637,7 +704,7 @@ static int get_next_syslog_record(struct dmesg_control *ctl,
 			continue;	/* error or empty line? */
 
 		if (*begin == '<') {
-			if (ctl->fltr_lev || ctl->fltr_fac || ctl->decode)
+			if (ctl->fltr_lev || ctl->fltr_fac || ctl->decode || ctl->color)
 				begin = parse_faclev(begin + 1, &rec->facility,
 						     &rec->level);
 			else
@@ -646,9 +713,10 @@ static int get_next_syslog_record(struct dmesg_control *ctl,
 
 		if (*begin == '[' && (*(begin + 1) == ' ' ||
 				      isdigit(*(begin + 1)))) {
-			if (ctl->delta || ctl->ctime || ctl->reltime)
+
+			if (!is_timefmt(ctl, NONE))
 				begin = parse_syslog_timestamp(begin + 1, &rec->tv);
-			else if (ctl->notime)
+			else
 				begin = skip_item(begin, end, "]");
 
 			if (begin < end && *begin == ' ')
@@ -716,7 +784,7 @@ static struct tm *record_localtime(struct dmesg_control *ctl,
 				   struct dmesg_record *rec,
 				   struct tm *tm)
 {
-	time_t t = ctl->boot_time + rec->tv.tv_sec;
+	time_t t = ctl->boot_time.tv_sec + rec->tv.tv_sec;
 	return localtime_r(&t, tm);
 }
 
@@ -740,6 +808,23 @@ static char *short_ctime(struct tm *tm, char *buf, size_t bufsiz)
 	return buf;
 }
 
+static char *iso_8601_time(struct dmesg_control *ctl, struct dmesg_record *rec,
+			   char *buf, size_t bufsiz)
+{
+	struct tm tm;
+	size_t len;
+	record_localtime(ctl, rec, &tm);
+	if (strftime(buf, bufsiz, "%Y-%m-%dT%H:%M:%S", &tm) == 0) {
+		*buf = '\0';
+		return buf;
+	}
+	len = strlen(buf);
+	snprintf(buf + len, bufsiz - len, ",%06d", (int)rec->tv.tv_usec);
+	len = strlen(buf);
+	strftime(buf + len, bufsiz - len, "%z", &tm);
+	return buf;
+}
+
 static double record_count_delta(struct dmesg_control *ctl,
 				 struct dmesg_record *rec)
 {
@@ -752,10 +837,32 @@ static double record_count_delta(struct dmesg_control *ctl,
 	return delta;
 }
 
+static const char *get_subsys_delimiter(const char *mesg, size_t mesg_size)
+{
+	const char *p = mesg;
+	size_t sz = mesg_size;
+
+	while (sz > 0) {
+		const char *d = strnchr(p, sz, ':');
+		if (!d)
+			return NULL;
+		sz -= d - p;
+		if (sz) {
+			if (isblank(*(d + 1)))
+				return d;
+			p = d + 1;
+		}
+	}
+	return NULL;
+}
+
 static void print_record(struct dmesg_control *ctl,
 			 struct dmesg_record *rec)
 {
 	char buf[256];
+	int has_color = 0;
+	const char *mesg;
+	size_t mesg_size;
 
 	if (!accept_record(ctl, rec))
 		return;
@@ -781,67 +888,88 @@ static void print_record(struct dmesg_control *ctl,
 	/*
 	 * facility : priority :
 	 */
-	if (ctl->decode && rec->level >= 0 && rec->facility >= 0)
+	if (ctl->decode &&
+	    -1 < rec->level    && rec->level     < (int) ARRAY_SIZE(level_names) &&
+	    -1 < rec->facility && rec->facility  < (int) ARRAY_SIZE(facility_names))
 		printf("%-6s:%-6s: ", facility_names[rec->facility].name,
 				      level_names[rec->level].name);
 
-	/*
-	 * [sec.usec <delta>] or [ctime <delta>]
-	 */
-	if (ctl->delta) {
-		if (ctl->ctime)
-			printf("[%s ", record_ctime(ctl, rec, buf, sizeof(buf)));
-		else if (ctl->notime)
-			putchar('[');
-		else
-			printf("[%5d.%06d ", (int) rec->tv.tv_sec,
-					     (int) rec->tv.tv_usec);
-		printf("<%12.06f>] ", record_count_delta(ctl, rec));
+	if (ctl->color)
+		color_enable(DMESG_COLOR_TIME);
 
-	/*
-	 * [ctime]
-	 */
-	} else if (ctl->ctime)
-		printf("[%s] ", record_ctime(ctl, rec, buf, sizeof(buf)));
-
-	/*
-	 * [reltime]
-	 */
-	else if (ctl->reltime) {
+	switch (ctl->time_fmt) {
 		double delta;
 		struct tm cur;
-
+	case DMESG_TIMEFTM_NONE:
+		break;
+	case DMESG_TIMEFTM_CTIME:
+		printf("[%s] ", record_ctime(ctl, rec, buf, sizeof(buf)));
+		break;
+	case DMESG_TIMEFTM_CTIME_DELTA:
+		printf("[%s <%12.06f>] ",
+		       record_ctime(ctl, rec, buf, sizeof(buf)),
+		       record_count_delta(ctl, rec));
+		break;
+	case DMESG_TIMEFTM_DELTA:
+		printf("[<%12.06f>] ", record_count_delta(ctl, rec));
+		break;
+	case DMESG_TIMEFTM_RELTIME:
 		record_localtime(ctl, rec, &cur);
 		delta = record_count_delta(ctl, rec);
-
-		if (cur.tm_min  != ctl->lasttm.tm_min ||
+		if (cur.tm_min != ctl->lasttm.tm_min ||
 		    cur.tm_hour != ctl->lasttm.tm_hour ||
-		    cur.tm_yday != ctl->lasttm.tm_yday)
+		    cur.tm_yday != ctl->lasttm.tm_yday) {
 			printf("[%s] ", short_ctime(&cur, buf, sizeof(buf)));
-		else if (delta < 10)
-			printf("[  %+8.06f] ", delta);
-		else
-			printf("[ %+9.06f] ", delta);
-
+		} else {
+			if (delta < 10)
+				printf("[  %+8.06f] ", delta);
+			else
+				printf("[ %+9.06f] ", delta);
+		}
 		ctl->lasttm = cur;
+		break;
+	case DMESG_TIMEFTM_TIME:
+		printf("[%5d.%06d] ", (int)rec->tv.tv_sec, (int)rec->tv.tv_usec);
+		break;
+	case DMESG_TIMEFTM_TIME_DELTA:
+		printf("[%5d.%06d <%12.06f>] ", (int)rec->tv.tv_sec,
+		       (int)rec->tv.tv_usec, record_count_delta(ctl, rec));
+		break;
+	case DMESG_TIMEFTM_ISO8601:
+		printf("%s ", iso_8601_time(ctl, rec, buf, sizeof(buf)));
+		break;
+	default:
+		abort();
 	}
 
-	/*
-	 * In syslog output the timestamp is part of the message and we don't
-	 * parse the timestamp by default. We parse the timestamp only if
-	 * --show-delta or --ctime is specified.
-	 *
-	 * In kmsg output we always parse the timesptamp, so we have to compose
-	 * the [sec.usec] string.
-	 */
-	if (ctl->method == DMESG_METHOD_KMSG &&
-	    !ctl->notime && !ctl->delta && !ctl->ctime && !ctl->reltime)
-		printf("[%5d.%06d] ", (int) rec->tv.tv_sec, (int) rec->tv.tv_usec);
+	if (ctl->color)
+		color_disable();
 
 mesg:
-	safe_fwrite(rec->mesg, rec->mesg_size, stdout);
+	mesg = rec->mesg;
+	mesg_size = rec->mesg_size;
 
-	if (*(rec->mesg + rec->mesg_size - 1) != '\n')
+	/* Colorize output */
+	if (ctl->color) {
+		/* subsystem prefix */
+		const char *subsys = get_subsys_delimiter(mesg, mesg_size);
+		if (subsys) {
+			color_enable(DMESG_COLOR_SUBSYS);
+			safe_fwrite(mesg, subsys - mesg, stdout);
+			color_disable();
+
+			mesg_size -= subsys - mesg;
+			mesg = subsys;
+		}
+		/* error, alert .. etc. colors */
+		has_color = set_level_color(rec->level, mesg, mesg_size) == 0;
+		safe_fwrite(mesg, mesg_size, stdout);
+		if (has_color)
+			color_disable();
+	} else
+		safe_fwrite(mesg, mesg_size, stdout);
+
+	if (*(mesg + mesg_size - 1) != '\n')
 		putchar('\n');
 }
 
@@ -942,7 +1070,8 @@ static int parse_kmsg_record(struct dmesg_control *ctl,
 		p++;
 
 	/* A) priority and facility */
-	if (ctl->fltr_lev || ctl->fltr_fac || ctl->decode || ctl->raw)
+	if (ctl->fltr_lev || ctl->fltr_fac || ctl->decode ||
+	    ctl->raw || ctl->color)
 		p = parse_faclev(p, &rec->facility, &rec->level);
 	else
 		p = skip_item(p, end, ",");
@@ -955,7 +1084,7 @@ static int parse_kmsg_record(struct dmesg_control *ctl,
 		goto mesg;
 
 	/* C) timestamp */
-	if (ctl->notime)
+	if (is_timefmt(ctl, NONE))
 		p = skip_item(p, end, ",;");
 	else
 		p = parse_kmsg_timestamp(p, &rec->tv);
@@ -1026,26 +1155,45 @@ static int read_kmsg(struct dmesg_control *ctl)
 	return 0;
 }
 
-#define EXCL_ACT_ERR "--{clear,read-clear,console-level,console-on,console-off}"
-#define EXCL_SYS_ERR "--{syslog,follow}"
+static int which_time_format(const char *optarg)
+{
+	if (!strcmp(optarg, "notime"))
+		return DMESG_TIMEFTM_NONE;
+	if (!strcmp(optarg, "ctime"))
+		return DMESG_TIMEFTM_CTIME;
+	if (!strcmp(optarg, "delta"))
+		return DMESG_TIMEFTM_DELTA;
+	if (!strcmp(optarg, "reltime"))
+		return DMESG_TIMEFTM_RELTIME;
+	if (!strcmp(optarg, "iso"))
+		return DMESG_TIMEFTM_ISO8601;
+	errx(EXIT_FAILURE, _("unknown time format: %s"), optarg);
+}
 
 int main(int argc, char *argv[])
 {
 	char *buf = NULL;
-	int  c;
+	int  c, nopager = 0;
 	int  console_level = 0;
 	int  klog_rc = 0;
+	int  delta = 0;
 	ssize_t n;
 	static struct dmesg_control ctl = {
 		.filename = NULL,
 		.action = SYSLOG_ACTION_READ_ALL,
 		.method = DMESG_METHOD_KMSG,
 		.kmsg = -1,
+		.time_fmt = DMESG_TIMEFTM_TIME,
+	};
+	int colormode = UL_COLORMODE_NEVER;
+	enum {
+		OPT_TIME_FORMAT = CHAR_MAX + 1,
 	};
 
 	static const struct option longopts[] = {
 		{ "buffer-size",   required_argument, NULL, 's' },
 		{ "clear",         no_argument,	      NULL, 'C' },
+		{ "color",         optional_argument, NULL, 'L' },
 		{ "console-level", required_argument, NULL, 'n' },
 		{ "console-off",   no_argument,       NULL, 'D' },
 		{ "console-on",    no_argument,       NULL, 'E' },
@@ -1053,6 +1201,7 @@ int main(int argc, char *argv[])
 		{ "file",          required_argument, NULL, 'F' },
 		{ "facility",      required_argument, NULL, 'f' },
 		{ "follow",        no_argument,       NULL, 'w' },
+		{ "human",         no_argument,       NULL, 'H' },
 		{ "help",          no_argument,	      NULL, 'h' },
 		{ "kernel",        no_argument,       NULL, 'k' },
 		{ "level",         required_argument, NULL, 'l' },
@@ -1063,13 +1212,17 @@ int main(int argc, char *argv[])
 		{ "show-delta",    no_argument,	      NULL, 'd' },
 		{ "ctime",         no_argument,       NULL, 'T' },
 		{ "notime",        no_argument,       NULL, 't' },
+		{ "nopager",       no_argument,       NULL, 'P' },
 		{ "userspace",     no_argument,       NULL, 'u' },
 		{ "version",       no_argument,	      NULL, 'V' },
+		{ "time-format",   required_argument, NULL, OPT_TIME_FORMAT },
 		{ NULL,	           0, NULL, 0 }
 	};
 
 	static const ul_excl_t excl[] = {	/* rows and cols in in ASCII order */
 		{ 'C','D','E','c','n' },	/* clear,off,on,read-clear,level*/
+		{ 'H','r' },			/* human, raw */
+		{ 'L','r' },			/* color, raw */
 		{ 'S','w' },			/* syslog,follow */
 		{ 0 }
 	};
@@ -1080,7 +1233,7 @@ int main(int argc, char *argv[])
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "CcDdEeF:f:hkl:n:rSs:TtuVwx",
+	while ((c = getopt_long(argc, argv, "CcDdEeF:f:HhkL::l:n:iPrSs:TtuVwx",
 				longopts, NULL)) != -1) {
 
 		err_exclusive_options(c, longopts, excl, excl_st);
@@ -1096,15 +1249,13 @@ int main(int argc, char *argv[])
 			ctl.action = SYSLOG_ACTION_CONSOLE_OFF;
 			break;
 		case 'd':
-			ctl.delta = 1;
+			delta = 1;
 			break;
 		case 'E':
 			ctl.action = SYSLOG_ACTION_CONSOLE_ON;
 			break;
 		case 'e':
-			ctl.boot_time = get_boot_time();
-			if (ctl.boot_time)
-				ctl.reltime = 1;
+			ctl.time_fmt = DMESG_TIMEFTM_RELTIME;
 			break;
 		case 'F':
 			ctl.filename = optarg;
@@ -1116,12 +1267,23 @@ int main(int argc, char *argv[])
 					     ctl.facilities, parse_facility) < 0)
 				return EXIT_FAILURE;
 			break;
+		case 'H':
+			ctl.time_fmt = DMESG_TIMEFTM_RELTIME;
+			colormode = UL_COLORMODE_AUTO;
+			ctl.pager = 1;
+			break;
 		case 'h':
 			usage(stdout);
 			break;
 		case 'k':
 			ctl.fltr_fac = 1;
 			setbit(ctl.facilities, FAC_BASE(LOG_KERN));
+			break;
+		case 'L':
+			colormode = UL_COLORMODE_AUTO;
+			if (optarg)
+				colormode = colormode_or_err(optarg,
+						_("unsupported color mode"));
 			break;
 		case 'l':
 			ctl.fltr_lev= 1;
@@ -1133,8 +1295,13 @@ int main(int argc, char *argv[])
 			ctl.action = SYSLOG_ACTION_CONSOLE_LEVEL;
 			console_level = parse_level(optarg, 0);
 			break;
+		case 'P':
+			nopager = 1;
+			break;
 		case 'r':
 			ctl.raw = 1;
+			ctl.time_fmt = DMESG_TIMEFTM_NONE;
+			delta = 0;
 			break;
 		case 'S':
 			ctl.method = DMESG_METHOD_SYSLOG;
@@ -1146,12 +1313,11 @@ int main(int argc, char *argv[])
 				ctl.bufsize = 4096;
 			break;
 		case 'T':
-			ctl.boot_time = get_boot_time();
-			if (ctl.boot_time)
-				ctl.ctime = 1;
+			ctl.time_fmt = DMESG_TIMEFTM_CTIME;
 			break;
 		case 't':
-			ctl.notime = 1;
+			ctl.time_fmt = DMESG_TIMEFTM_NONE;
+			delta = 0;
 			break;
 		case 'u':
 			ctl.fltr_fac = 1;
@@ -1168,6 +1334,9 @@ int main(int argc, char *argv[])
 		case 'x':
 			ctl.decode = 1;
 			break;
+		case OPT_TIME_FORMAT:
+			ctl.time_fmt = which_time_format(optarg);
+			break;
 		case '?':
 		default:
 			usage(stderr);
@@ -1179,22 +1348,49 @@ int main(int argc, char *argv[])
 	if (argc > 1)
 		usage(stderr);
 
-	if (ctl.raw && (ctl.fltr_lev || ctl.fltr_fac || ctl.delta ||
-			ctl.notime || ctl.ctime || ctl.decode))
-		errx(EXIT_FAILURE, _("--raw can't be used together with level, "
-		     "facility, decode, delta, ctime or notime options"));
+	if (is_timefmt(&ctl, RELTIME) ||
+	    is_timefmt(&ctl, CTIME) ||
+	    is_timefmt(&ctl, ISO8601)) {
 
-	if (ctl.notime && (ctl.ctime || ctl.reltime))
-		errx(EXIT_FAILURE, _("--notime can't be used together with --ctime or --reltime"));
-	if (ctl.reltime && ctl.ctime)
-		errx(EXIT_FAILURE, _("--reltime can't be used together with --ctime "));
+		if (get_boot_time(&ctl.boot_time) != 0)
+			ctl.time_fmt = DMESG_TIMEFTM_NONE;
+	}
+
+	if (delta)
+		switch (ctl.time_fmt) {
+		case DMESG_TIMEFTM_CTIME:
+			ctl.time_fmt = DMESG_TIMEFTM_CTIME_DELTA;
+			break;
+		case DMESG_TIMEFTM_TIME:
+			ctl.time_fmt = DMESG_TIMEFTM_TIME_DELTA;
+			break;
+		case DMESG_TIMEFTM_ISO8601:
+			warnx(_("--show-delta is ignored when used together with iso8601 time format"));
+			break;
+		default:
+			ctl.time_fmt = DMESG_TIMEFTM_DELTA;
+		}
+
+	if (ctl.raw
+	    && (ctl.fltr_lev || ctl.fltr_fac || ctl.decode
+			     || !is_timefmt(&ctl, NONE)))
+	    errx(EXIT_FAILURE, _("--raw can't be used together with level, "
+				 "facility, decode, delta, ctime or notime options"));
+
+	ctl.color = colors_init(colormode) ? 1 : 0;
+	if (ctl.follow)
+		nopager = 1;
+	ctl.pager = nopager ? 0 : ctl.pager;
+	if (ctl.pager)
+		setup_pager();
 
 	switch (ctl.action) {
 	case SYSLOG_ACTION_READ_ALL:
 	case SYSLOG_ACTION_READ_CLEAR:
 		if (ctl.method == DMESG_METHOD_KMSG && init_kmsg(&ctl) != 0)
 			ctl.method = DMESG_METHOD_SYSLOG;
-
+		if (ctl.pager)
+			setup_pager();
 		n = read_buffer(&ctl, &buf);
 		if (n > 0)
 			print_buffer(&ctl, buf, n);

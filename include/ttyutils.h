@@ -1,3 +1,9 @@
+/*
+ * No copyright is claimed.  This code is in the public domain; do with
+ * it what you wish.
+ *
+ * Written by Karel Zak <kzak@redhat.com>
+ */
 #ifndef UTIL_LINUX_TTYUTILS_H
 #define UTIL_LINUX_TTYUTILS_H
 
@@ -7,6 +13,46 @@
 #ifdef HAVE_SYS_IOCTL_H
 #include <sys/ioctl.h>
 #endif
+#ifdef HAVE_SYS_TTYDEFAULTS_H
+#include <sys/ttydefaults.h>
+#endif
+
+/* Some shorthands for control characters. */
+#define CTL(x)		((x) ^ 0100)	/* Assumes ASCII dialect */
+#define CR		CTL('M')	/* carriage return */
+#define NL		CTL('J')	/* line feed */
+#define BS		CTL('H')	/* back space */
+#define DEL		CTL('?')	/* delete */
+
+/* Defaults for line-editing etc. characters; you may want to change these. */
+#define DEF_ERASE	DEL		/* default erase character */
+#define DEF_INTR	CTL('C')	/* default interrupt character */
+#define DEF_QUIT	CTL('\\')	/* default quit char */
+#define DEF_KILL	CTL('U')	/* default kill char */
+#define DEF_EOF		CTL('D')	/* default EOF char */
+#define DEF_EOL		0
+#define DEF_SWITCH	0		/* default switch char */
+
+/* Storage for things detected while the login name was read. */
+struct chardata {
+	int erase;		/* erase character */
+	int kill;		/* kill character */
+	int eol;		/* end-of-line character */
+	int parity;		/* what parity did we see */
+	int capslock;		/* upper case without lower case */
+};
+
+#define INIT_CHARDATA(ptr) do {              \
+		(ptr)->erase    = DEF_ERASE; \
+		(ptr)->kill     = DEF_KILL;  \
+		(ptr)->eol      = CTRL('r'); \
+	        (ptr)->parity   = 0;         \
+	        (ptr)->capslock = 0;         \
+	} while (0)
+
+extern int get_terminal_width(void);
+extern int get_terminal_name(int fd, const char **path, const char **name,
+			     const char **number);
 
 #define UL_TTY_KEEPCFLAGS	(1 << 1)
 #define UL_TTY_UTF8		(1 << 2)
@@ -33,8 +79,8 @@ static inline void reset_virtual_console(struct termios *tp, int flags)
 	tp->c_oflag |=  (OPOST | ONLCR | NL0 | CR0 | TAB0 | BS0 | VT0 | FF0);
 	tp->c_oflag &= ~(OLCUC | OCRNL | ONOCR | ONLRET | OFILL | \
 			    NLDLY|CRDLY|TABDLY|BSDLY|VTDLY|FFDLY);
-	tp->c_lflag |=  (ISIG | ICANON | IEXTEN | ECHO|ECHOE|ECHOK|ECHOKE);
-	tp->c_lflag &= ~(ECHONL|ECHOCTL|ECHOPRT | NOFLSH | TOSTOP);
+	tp->c_lflag |=  (ISIG | ICANON | IEXTEN | ECHO|ECHOE|ECHOK|ECHOKE|ECHOCTL);
+	tp->c_lflag &= ~(ECHONL|ECHOPRT | NOFLSH | TOSTOP);
 
 	if ((flags & UL_TTY_KEEPCFLAGS) == 0) {
 		tp->c_cflag |=  (CREAD | CS8 | HUPCL);
@@ -78,39 +124,5 @@ static inline void reset_virtual_console(struct termios *tp, int flags)
 	tp->c_cc[VLNEXT]   = CLNEXT;
 	tp->c_cc[VEOL2]    = _POSIX_VDISABLE;
 }
-
-static inline int get_terminal_width(void)
-{
-#ifdef TIOCGSIZE
-	struct ttysize	t_win;
-#endif
-#ifdef TIOCGWINSZ
-	struct winsize	w_win;
-#endif
-        const char	*cp;
-
-#ifdef TIOCGSIZE
-	if (ioctl (0, TIOCGSIZE, &t_win) == 0)
-		return t_win.ts_cols;
-#endif
-#ifdef TIOCGWINSZ
-	if (ioctl (0, TIOCGWINSZ, &w_win) == 0)
-		return w_win.ws_col;
-#endif
-        cp = getenv("COLUMNS");
-	if (cp) {
-		char *end = NULL;
-		long c;
-
-		errno = 0;
-		c = strtol(cp, &end, 10);
-
-		if (errno == 0 && end && *end == '\0' && end > cp &&
-		    c > 0 && c <= INT_MAX)
-			return c;
-	}
-	return 0;
-}
-
 
 #endif /* UTIL_LINUX_TTYUTILS_H */

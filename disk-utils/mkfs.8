@@ -3,11 +3,10 @@
 .SH NAME
 mkfs \- build a Linux filesystem
 .SH SYNOPSIS
-.SH SYNOPSIS
 .B mkfs
 .RI [ options ]
 .RB [ \-t
-.IR "type fs-options" ] " device " [ size ]
+.IR type "] [" fs-options ] " device " [ size ]
 .SH DESCRIPTION
 .B mkfs
 is used to build a Linux filesystem on a device, usually
@@ -70,7 +69,7 @@ version information only when it is the only parameter, otherwise it
 will work as \fB\-\-verbose\fR.)
 .TP
 .BR \-h , " \-\-help"
-Display help and exit.
+Display help text and exit.
 .SH BUGS
 All generic options must precede and not be combined with
 filesystem-specific options.

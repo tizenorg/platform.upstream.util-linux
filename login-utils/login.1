@@ -132,7 +132,7 @@ to tell
 that printing the hostname should be suppressed in the login: prompt.
 .TP
 .B \-V
-Print version and exit.
+Display version information and exit.
 .SH CONFIG FILE ITEMS
 .B login
 reads the
@@ -184,7 +184,10 @@ login failure.  The default value is
 (string)
 .RS 4
 The terminal permissions.  The default value is
-.IR 0600 .
+.IR 0600
+or
+.IR 0620
+if tty group is used.
 .RE
 .PP
 .B TTYGROUP
@@ -325,9 +328,7 @@ Rewritten to PAM-only version by
 Karel Zak
 .ME
 .SH AVAILABILITY
-The
-.B login
-command is part of the util-linux package and is
+The login command is part of the util-linux package and is
 available from
 .UR ftp:\://ftp.kernel.org\:/pub\:/linux\:/utils\:/util-linux/
 Linux Kernel Archive

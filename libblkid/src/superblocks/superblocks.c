@@ -49,6 +49,8 @@
  *
  * @UUID_SUB: subvolume uuid (e.g. btrfs)
  *
+ * @LOGUUID: external log UUID (e.g. xfs)
+ *
  * @UUID_RAW: raw UUID from FS superblock
  *
  * @EXT_JOURNAL: external journal UUID
@@ -64,6 +66,14 @@
  * @SBMAGIC_OFFSET: offset of SBMAGIC
  *
  * @FSSIZE: size of filessystem [not-implemented yet]
+ *
+ * @SYSTEM_ID: ISO9660 system identifier
+ *
+ * @PUBLISHER_ID: ISO9660 publisher identifier
+ *
+ * @APPLICATION_ID: ISO9660 application identifier
+ *
+ * @BOOT_SYSTEM_ID: ISO9660 boot system identifier
  */
 
 static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn);
@@ -91,6 +101,7 @@ static const struct blkid_idinfo *idinfos[] =
 	&adraid_idinfo,
 	&jmraid_idinfo,
 
+	&bcache_idinfo,
 	&drbd_idinfo,
 	&drbdproxy_datalog_idinfo,
 	&lvm2_idinfo,
@@ -105,6 +116,7 @@ static const struct blkid_idinfo *idinfos[] =
 	&swsuspend_idinfo,
 	&swap_idinfo,
 	&xfs_idinfo,
+	&xfs_log_idinfo,
 	&ext4dev_idinfo,
 	&ext4_idinfo,
 	&ext3_idinfo,
@@ -123,6 +135,7 @@ static const struct blkid_idinfo *idinfos[] =
 	&sysv_idinfo,
         &xenix_idinfo,
 	&ntfs_idinfo,
+	&refs_idinfo,
 	&cramfs_idinfo,
 	&romfs_idinfo,
 	&minix_idinfo,
@@ -140,7 +153,8 @@ static const struct blkid_idinfo *idinfos[] =
 	&vmfs_fs_idinfo,
 	&befs_idinfo,
 	&nilfs2_idinfo,
-	&exfat_idinfo
+	&exfat_idinfo,
+	&f2fs_idinfo
 };
 
 /*
@@ -255,9 +269,6 @@ int blkid_probe_filter_superblocks_usage(blkid_probe pr, int flag, int usage)
 	struct blkid_chain *chn;
 	size_t i;
 
-	if (!pr)
-		return -1;
-
 	fltr = blkid_probe_get_filter(pr, BLKID_CHAIN_SUBLKS, TRUE);
 	if (!fltr)
 		return -1;
@@ -273,7 +284,7 @@ int blkid_probe_filter_superblocks_usage(blkid_probe pr, int flag, int usage)
 		} else if (flag & BLKID_FLTR_ONLYIN)
 			blkid_bmp_set_item(chn->fltr, i);
 	}
-	DBG(DEBUG_LOWPROBE, printf("a new probing usage-filter initialized\n"));
+	DBG(LOWPROBE, blkid_debug("a new probing usage-filter initialized"));
 	return 0;
 }
 
@@ -329,8 +340,7 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 		return -1;
 	blkid_probe_chain_reset_vals(pr, chn);
 
-	DBG(DEBUG_LOWPROBE,
-		printf("--> starting probing loop [SUBLKS idx=%d]\n",
+	DBG(LOWPROBE, blkid_debug("--> starting probing loop [SUBLKS idx=%d]",
 		chn->idx));
 
 	if (pr->size <= 0 || (pr->size <= 1024 && !S_ISCHR(pr->mode)))
@@ -351,7 +361,7 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 		id = idinfos[i];
 
 		if (chn->fltr && blkid_bmp_get_item(chn->fltr, i)) {
-			DBG(DEBUG_LOWPROBE, printf("filter out: %s\n", id->name));
+			DBG(LOWPROBE, blkid_debug("filter out: %s", id->name));
 			continue;
 		}
 
@@ -367,14 +377,14 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 		if ((id->usage & BLKID_USAGE_RAID) && blkid_probe_is_tiny(pr))
 			continue;
 
-		DBG(DEBUG_LOWPROBE, printf("[%zd] %s:\n", i, id->name));
+		DBG(LOWPROBE, blkid_debug("[%zd] %s:", i, id->name));
 
 		if (blkid_probe_get_idmag(pr, id, &off, &mag))
 			continue;
 
 		/* final check by probing function */
 		if (id->probefunc) {
-			DBG(DEBUG_LOWPROBE, printf("\tcall probefunc()\n"));
+			DBG(LOWPROBE, blkid_debug("\tcall probefunc()"));
 			if (id->probefunc(pr, mag) != 0) {
 				blkid_probe_chain_reset_vals(pr, chn);
 				continue;
@@ -395,19 +405,17 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 					(unsigned char *) mag->magic);
 		if (rc) {
 			blkid_probe_chain_reset_vals(pr, chn);
-			DBG(DEBUG_LOWPROBE, printf("failed to set result -- ingnore\n"));
+			DBG(LOWPROBE, blkid_debug("failed to set result -- ingnore"));
 			continue;
 		}
 
-		DBG(DEBUG_LOWPROBE,
-			printf("<-- leaving probing loop (type=%s) [SUBLKS idx=%d]\n",
+		DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (type=%s) [SUBLKS idx=%d]",
 			id->name, chn->idx));
 		return 0;
 	}
 
 nothing:
-	DBG(DEBUG_LOWPROBE,
-		printf("<-- leaving probing loop (failed) [SUBLKS idx=%d]\n",
+	DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (failed) [SUBLKS idx=%d]",
 		chn->idx));
 	return 1;
 }
@@ -460,9 +468,8 @@ static int superblocks_safeprobe(blkid_probe pr, struct blkid_chain *chn)
 		return rc;		/* error */
 
 	if (count > 1 && intol) {
-		DBG(DEBUG_LOWPROBE,
-			printf("ERROR: superblocks chain: "
-			       "ambivalent result detected (%d filesystems)!\n",
+		DBG(LOWPROBE, blkid_debug("ERROR: superblocks chain: "
+			       "ambivalent result detected (%d filesystems)!",
 			       count));
 		return -2;		/* error, ambivalent result (more FS) */
 	}
@@ -496,6 +503,7 @@ int blkid_probe_set_version(blkid_probe pr, const char *version)
 			   (unsigned char *) version, strlen(version) + 1);
 	return 0;
 }
+
 
 int blkid_probe_sprintf_version(blkid_probe pr, const char *fmt, ...)
 {
@@ -532,6 +540,35 @@ static int blkid_probe_set_usage(blkid_probe pr, int usage)
 		u = "unknown";
 
 	return blkid_probe_set_value(pr, "USAGE", (unsigned char *) u, strlen(u) + 1);
+}
+
+int blkid_probe_set_id_label(blkid_probe pr, const char *name,
+			     unsigned char *data, size_t len)
+{
+	struct blkid_chain *chn = blkid_probe_get_chain(pr);
+	struct blkid_prval *v;
+
+	if (!(chn->flags & BLKID_SUBLKS_LABEL))
+		return 0;
+
+	v = blkid_probe_assign_value(pr, name);
+	if (!v)
+		return -1;
+
+	if (len >= BLKID_PROBVAL_BUFSIZ)
+		len = BLKID_PROBVAL_BUFSIZ - 1;			/* make a space for \0 */
+
+	memcpy(v->data, data, len);
+	v->data[len] = '\0';
+
+	/* remove white spaces */
+	v->len = blkid_rtrim_whitespace(v->data) + 1;
+	if (v->len > 1)
+		v->len = blkid_ltrim_whitespace(v->data) + 1;
+
+	if (v->len <= 1)
+		blkid_probe_reset_last_value(pr);		/* ignore empty */
+	return 0;
 }
 
 int blkid_probe_set_label(blkid_probe pr, unsigned char *label, size_t len)
@@ -584,17 +621,6 @@ int blkid_probe_set_utf8label(blkid_probe pr, unsigned char *label,
 	return 0;
 }
 
-/* like uuid_is_null() from libuuid, but works with arbitrary size of UUID */
-static int uuid_is_empty(const unsigned char *buf, size_t len)
-{
-	size_t i;
-
-	for (i = 0; i < len; i++)
-		if (buf[i])
-			return 0;
-	return 1;
-}
-
 int blkid_probe_sprintf_uuid(blkid_probe pr, unsigned char *uuid,
 				size_t len, const char *fmt, ...)
 {
@@ -605,7 +631,7 @@ int blkid_probe_sprintf_uuid(blkid_probe pr, unsigned char *uuid,
 	if (len > BLKID_PROBVAL_BUFSIZ)
 		len = BLKID_PROBVAL_BUFSIZ;
 
-	if (uuid_is_empty(uuid, len))
+	if (blkid_uuid_is_empty(uuid, len))
 		return 0;
 
 	if ((chn->flags & BLKID_SUBLKS_UUIDRAW) &&
@@ -670,7 +696,7 @@ int blkid_probe_set_uuid_as(blkid_probe pr, unsigned char *uuid, const char *nam
 	struct blkid_chain *chn = blkid_probe_get_chain(pr);
 	struct blkid_prval *v;
 
-	if (uuid_is_empty(uuid, 16))
+	if (blkid_uuid_is_empty(uuid, 16))
 		return 0;
 
 	if (!name) {

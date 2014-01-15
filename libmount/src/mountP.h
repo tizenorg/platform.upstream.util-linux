@@ -1,7 +1,7 @@
 /*
  * mountP.h - private library header file
  *
- * Copyright (C) 2008-2009 Karel Zak <kzak@redhat.com>
+ * Copyright (C) 2008-2012 Karel Zak <kzak@redhat.com>
  *
  * This file may be redistributed under the terms of the
  * GNU Lesser General Public License.
@@ -26,7 +26,9 @@
 #define CONFIG_LIBMOUNT_DEBUG
 
 #ifdef CONFIG_LIBMOUNT_ASSERT
-#include <assert.h>
+# include <assert.h>
+#else
+# define assert(x)
 #endif
 
 /*
@@ -52,6 +54,13 @@
 #ifdef CONFIG_LIBMOUNT_DEBUG
 # include <stdio.h>
 # include <stdarg.h>
+
+# define WARN_REFCOUNT(m, o, r) \
+			do { \
+				if ((MNT_DEBUG_ ## m) & libmount_debug_mask && r != 0) \
+					fprintf(stderr, "%d: libmount: %8s: [%p]: *** deallocates with refcount=%d\n", \
+							getpid(), # m, o, r); \
+			} while (0)
 
 # define ON_DBG(m, x)	do { \
 				if ((MNT_DEBUG_ ## m) & libmount_debug_mask) { \
@@ -98,6 +107,7 @@ mnt_debug_h(void *handler, const char *mesg, ...)
 }
 
 #else /* !CONFIG_LIBMOUNT_DEBUG */
+# define WARN_REFCOUNT(m,o,r)  do { ; } while (0)
 # define ON_DBG(m,x) do { ; } while (0)
 # define DBG(m,x) do { ; } while (0)
 # define DBG_FLUSH do { ; } while(0)
@@ -127,14 +137,22 @@ extern int mnt_run_test(struct libmnt_test *tests, int argc, char *argv[]);
 #endif
 
 /* utils.c */
-extern int endswith(const char *s, const char *sx);
-extern int startswith(const char *s, const char *sx);
+extern char *stripoff_last_component(char *path);
 
-extern int mnt_is_readonly(const char *path);
+extern int mnt_valid_tagname(const char *tagname);
+extern int append_string(char **a, const char *b);
+
+extern int is_file_empty(const char *name);
+
+extern int mkdir_p(const char *path, mode_t mode);
+
+extern int mnt_is_readonly(const char *path)
+			__attribute__((nonnull));
 
 extern int mnt_parse_offset(const char *str, size_t len, uintmax_t *res);
 
 extern int mnt_chdir_to_parent(const char *target, char **filename);
+
 extern char *mnt_get_username(const uid_t uid);
 extern int mnt_get_uid(const char *username, uid_t *uid);
 extern int mnt_get_gid(const char *groupname, gid_t *gid);
@@ -142,11 +160,14 @@ extern int mnt_in_group(gid_t gid);
 
 extern char *mnt_get_fs_root(const char *path, const char *mountpoint);
 extern int mnt_open_uniq_filename(const char *filename, char **name);
+
 extern int mnt_has_regular_utab(const char **utab, int *writable);
 extern const char *mnt_get_utab_path(void);
 
 extern int mnt_get_filesystems(char ***filesystems, const char *pattern);
 extern void mnt_free_filesystems(char **filesystems);
+
+extern char *mnt_get_kernel_cmdline_option(const char *name);
 
 /* tab.c */
 extern int mnt_table_set_parser_fltrcb(	struct libmnt_table *tb,
@@ -157,7 +178,6 @@ extern struct libmnt_fs *mnt_table_get_fs_root(struct libmnt_table *tb,
                                         struct libmnt_fs *fs,
                                         unsigned long mountflags,
                                         char **fsroot);
-
 /*
  * Generic iterator
  */
@@ -186,12 +206,13 @@ struct libmnt_iter {
 
 
 /*
- * This struct represents one entry in mtab/fstab/mountinfo file.
+ * This struct represents one entry in a mtab/fstab/mountinfo file.
  * (note that fstab[1] means the first column from fstab, and so on...)
  */
 struct libmnt_fs {
 	struct list_head ents;
 
+	int		refcount;	/* reference counter */
 	int		id;		/* mountinfo[1]: ID */
 	int		parent;		/* mountinfo[2]: parent */
 	dev_t		devno;		/* mountinfo[3]: st_dev */
@@ -209,6 +230,7 @@ struct libmnt_fs {
 
 	char		*optstr;	/* fstab[4], merged options */
 	char		*vfs_optstr;	/* mountinfo[6]: fs-independent (VFS) options */
+	char		*opt_fields;	/* mountinfo[7]: optional fields */
 	char		*fs_optstr;	/* mountinfo[11]: fs-dependent options */
 	char		*user_optstr;	/* userspace mount options */
 	char		*attrs;		/* mount attributes */
@@ -224,6 +246,8 @@ struct libmnt_fs {
 
 	int		flags;		/* MNT_FS_* flags */
 	pid_t		tid;		/* /proc/<tid>/mountinfo otherwise zero */
+
+	char		*comment;	/* fstab comment */
 
 	void		*userdata;	/* library independent data */
 };
@@ -246,7 +270,11 @@ struct libmnt_fs {
  */
 struct libmnt_table {
 	int		fmt;		/* MNT_FMT_* file format */
-	int		nents;		/* number of valid entries */
+	int		nents;		/* number of entries */
+	int		refcount;	/* reference counter */
+	int		comms;		/* enable/disable comment parsing */
+	char		*comm_intro;	/* First comment in file */
+	char		*comm_tail;	/* Last comment in file */
 
 	struct libmnt_cache *cache;		/* canonicalized paths/tags cache */
 
@@ -258,6 +286,7 @@ struct libmnt_table {
 
 
 	struct list_head	ents;	/* list of entries (libmnt_fs) */
+	void		*userdata;
 };
 
 extern struct libmnt_table *__mnt_new_table_from_file(const char *filename, int fmt);
@@ -274,6 +303,14 @@ enum {
 	MNT_FMT_SWAPS			/* /proc/swaps */
 };
 
+/*
+ * Additional mounts
+ */
+struct libmnt_addmount {
+	unsigned long mountflags;
+
+	struct list_head	mounts;
+};
 
 /*
  * Mount context -- high-level API
@@ -308,6 +345,8 @@ struct libmnt_context
 
 	unsigned long	user_mountflags;	/* MNT_MS_* (loop=, user=, ...) */
 
+	struct list_head	addmounts;	/* additional mounts */
+
 	struct libmnt_cache	*cache;	/* paths cache */
 	struct libmnt_lock	*lock;	/* mtab lock */
 	struct libmnt_update	*update;/* mtab/utab update */
@@ -319,7 +358,6 @@ struct libmnt_context
 	int		utab_writable; /* is utab writable */
 
 	int	flags;		/* private context flags */
-	int	ambi;		/* libblkid returns ambivalent result */
 
 	char	*helper;	/* name of the used /sbin/[u]mount.<type> helper */
 	int	helper_status;	/* helper wait(2) status */
@@ -349,17 +387,13 @@ struct libmnt_context
 #define MNT_FL_FORK		(1 << 12)
 #define MNT_FL_NOSWAPMATCH	(1 << 13)
 
-#define MNT_FL_EXTERN_FS	(1 << 15)	/* cxt->fs is not private */
-#define MNT_FL_EXTERN_FSTAB	(1 << 16)	/* cxt->fstab is not private */
-#define MNT_FL_EXTERN_CACHE	(1 << 17)	/* cxt->cache is not private */
-
 #define MNT_FL_MOUNTDATA	(1 << 20)
 #define MNT_FL_TAB_APPLIED	(1 << 21)	/* mtab/fstab merged to cxt->fs */
 #define MNT_FL_MOUNTFLAGS_MERGED (1 << 22)	/* MS_* flags was read from optstr */
 #define MNT_FL_SAVED_USER	(1 << 23)
 #define MNT_FL_PREPARED		(1 << 24)
 #define MNT_FL_HELPER		(1 << 25)	/* [u]mount.<type> */
-#define MNT_FL_LOOPDEV_READY	(1 << 26)	/* /dev/loop<N> initialized by library */
+#define MNT_FL_LOOPDEV_READY	(1 << 26)	/* /dev/loop<N> initialized by the library */
 #define MNT_FL_MOUNTOPTS_FIXED  (1 << 27)
 
 /* default flags */
@@ -371,7 +405,8 @@ extern int mnt_lock_use_simplelock(struct libmnt_lock *ml, int enable);
 /* optmap.c */
 extern const struct libmnt_optmap *mnt_optmap_get_entry(
 			     struct libmnt_optmap const **maps,
-                             int nmaps, const char *name,
+                             int nmaps,
+			     const char *name,
                              size_t namelen,
 			     const struct libmnt_optmap **mapent);
 
@@ -383,9 +418,12 @@ extern int mnt_optstr_fix_secontext(char **optstr, char *value, size_t valsz, ch
 extern int mnt_optstr_fix_user(char **optstr);
 
 /* fs.c */
-extern struct libmnt_fs *mnt_copy_mtab_fs(const struct libmnt_fs *fs);
-extern int __mnt_fs_set_source_ptr(struct libmnt_fs *fs, char *source);
-extern int __mnt_fs_set_fstype_ptr(struct libmnt_fs *fs, char *fstype);
+extern struct libmnt_fs *mnt_copy_mtab_fs(const struct libmnt_fs *fs)
+			__attribute__((nonnull));
+extern int __mnt_fs_set_source_ptr(struct libmnt_fs *fs, char *source)
+			__attribute__((nonnull(1)));
+extern int __mnt_fs_set_fstype_ptr(struct libmnt_fs *fs, char *fstype)
+			__attribute__((nonnull(1)));
 
 /* context.c */
 extern int mnt_context_prepare_srcpath(struct libmnt_context *cxt);
@@ -400,7 +438,15 @@ extern int mnt_context_update_tabs(struct libmnt_context *cxt);
 extern int mnt_context_umount_setopt(struct libmnt_context *cxt, int c, char *arg);
 extern int mnt_context_mount_setopt(struct libmnt_context *cxt, int c, char *arg);
 
-extern int mnt_context_is_loopdev(struct libmnt_context *cxt);
+extern int mnt_context_is_loopdev(struct libmnt_context *cxt)
+			__attribute__((nonnull));
+
+extern int mnt_context_propagation_only(struct libmnt_context *cxt)
+			__attribute__((nonnull));
+
+extern struct libmnt_addmount *mnt_new_addmount(void);
+extern void mnt_free_addmount(struct libmnt_addmount *ad);
+
 extern int mnt_context_setup_loopdev(struct libmnt_context *cxt);
 extern int mnt_context_delete_loopdev(struct libmnt_context *cxt);
 extern int mnt_context_clear_loopdev(struct libmnt_context *cxt);
@@ -408,8 +454,8 @@ extern int mnt_context_clear_loopdev(struct libmnt_context *cxt);
 extern int mnt_fork_context(struct libmnt_context *cxt);
 
 extern int mnt_context_set_tabfilter(struct libmnt_context *cxt,
-			int (*fltr)(struct libmnt_fs *, void *),
-			void *data);
+				     int (*fltr)(struct libmnt_fs *, void *),
+				     void *data);
 
 /* tab_update.c */
 extern int mnt_update_set_filename(struct libmnt_update *upd,
