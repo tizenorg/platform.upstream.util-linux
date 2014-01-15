@@ -1,5 +1,5 @@
 Name:           util-linux
-Version:        2.22.2
+Version:        2.24
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
 BuildRequires:  gettext-devel
@@ -20,7 +20,7 @@ Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
 Group:          Base/Utilities
-Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.xz
+Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.gz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
 Source2:        nologin.c
@@ -126,7 +126,6 @@ export SUID_LDFLAGS="-pie"
   --enable-write \
   --enable-line \
   --enable-new-mount \
-  --enable-ddate \
   --enable-login-utils \
   --enable-mountpoint \
   --disable-use-tty-group \
@@ -159,10 +158,11 @@ install -m 644 nologin.8 %{buildroot}%{_mandir}/man8
 echo -e "#! /bin/sh\n/sbin/blockdev --flushbufs \$1" > %{buildroot}%{_sbindir}/flushb
 chmod 755 %{buildroot}%{_sbindir}/flushb
 # Stupid hack so we don't have a tcsh dependency
-chmod 644 %{buildroot}%{_datadir}/getopt/getopt*.tcsh
+chmod 644 %{buildroot}%{_datadir}/doc/%{name}/getopt/getopt*.tcsh
 # Following files we don't want to package, so remove them
 rm -f %{buildroot}%{_bindir}/pg
 rm -f %{buildroot}%{_mandir}/man1/pg.1*
+rm -rf %{buildroot}%{_datadir}/bash-completion
 # Do not package these files to get rid of the perl dependency
 rm -f %{buildroot}%{_bindir}/chkdupexe
 rm -f %{buildroot}%{_mandir}/man1/chkdupexe.1
@@ -204,9 +204,9 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %lang_package
 
 %docs_package
-%dir %{_datadir}/getopt
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.bash
-%attr (755,root,root) %{_datadir}/getopt/getopt-parse.tcsh
+%dir %{_datadir}/doc/%{name}/getopt
+%attr (755,root,root) %{_datadir}/doc/%{name}/getopt/getopt-parse.bash
+%attr (755,root,root) %{_datadir}/doc/%{name}/getopt/getopt-parse.tcsh
 
 
 %files -f %{name}.files
@@ -224,7 +224,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/su
 %{_bindir}/cal
 %{_bindir}/eject
-#%{_bindir}/kill
 %{_bindir}/lslocks
 %{_bindir}/utmpdump
 %{_bindir}/wdctl
@@ -236,7 +235,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/colcrt
 %{_bindir}/colrm
 %{_bindir}/column
-%{_bindir}/ddate
 %{_bindir}/dmesg
 %{_bindir}/fallocate
 %{_bindir}/findmnt
@@ -317,7 +315,11 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_sbindir}/fdformat
 %{_sbindir}/hwclock
 %{_bindir}/setterm
-%{_sbindir}/tunelp
+%{_sbindir}/blkdiscard
+%{_sbindir}/runuser
+%{_bindir}/last
+%{_bindir}/lastb
+%{_bindir}/nsenter
 
 %files -n libblkid
 %manifest %{name}.manifest
