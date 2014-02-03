@@ -1,0 +1,7 @@
+Code-Review+2: Patrick McCarty <patrick.mccarty@linux.intel.com>
+Verified+1: Maciej Wereski <m.wereski@partner.samsung.com>
+Submitted-by: Lukasz Stelmach <l.stelmach@samsung.com>
+Submitted-at: Mon, 03 Feb 2014 05:19:15 -0800
+Reviewed-on: https://review.tizen.org/gerrit/15922
+Project: platform/upstream/util-linux
+Branch: refs/heads/tizen
