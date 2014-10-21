@@ -4,8 +4,8 @@
 ALWAYS_SET_PATH=no
 
 # Default path. 
-PATH=/usr/local/bin:/bin:/usr/bin
+ENV_PATH=/usr/local/bin:/bin:/usr/bin
 
 # Default path for a user invoking su to root.
-SUPATH=/usr/sbin:/bin:/usr/bin:/sbin
+ENV_SUPATH=/usr/sbin:/bin:/usr/bin:/sbin
 
