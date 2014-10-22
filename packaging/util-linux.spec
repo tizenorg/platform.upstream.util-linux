@@ -1,5 +1,5 @@
 Name:           util-linux
-Version:        2.24
+Version:        2.25.2
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
 BuildRequires:  gettext-devel
@@ -20,7 +20,7 @@ Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
 License:        GPL-2.0+
 Group:          Base/Utilities
-Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.22/%{name}-%{version}.tar.gz
+Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.25/%{name}-%{version}.tar.gz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
 Source2:        nologin.c
@@ -35,7 +35,6 @@ Source51:       blkid.conf
 Source1001: 	util-linux.manifest
 
 Requires(pre):         /usr/bin/sed
-#
 Provides:       eject
 Provides:       base = %{version}-%{release}
 Provides:       login = 4.0-33.7
@@ -107,6 +106,22 @@ Requires:       libmount = %{version}
 
 %description -n libmount-devel
 Files to develop applications using the libmount library.
+
+%package -n libsmartcols
+Summary:        Library for printing data in various formats
+Group:          Base/File Systems
+
+%description -n libsmartcols
+This library allows to print data in tables, trees or
+parsable formats, support colors, sorting etc.
+
+%package -n libsmartcols-devel
+Summary:        Development files for libsmartcols
+Group:          Development/Libraries
+Requires:       libsmartcols = %{version}
+
+%description -n libsmartcols-devel
+Files to develop applications using the libsmartcols library.
 
 %prep
 %setup -q -n %{name}-%{version} 
@@ -201,6 +216,10 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 %postun -n libuuid -p /sbin/ldconfig
 
+%post -n libsmartcols -p /sbin/ldconfig
+
+%postun -n libsmartcols -p /sbin/ldconfig
+
 %lang_package
 
 %docs_package
@@ -230,6 +249,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_sbindir}/resizepart
 %{_sbindir}/sulogin
 %{_bindir}/login
+%{_bindir}/lslogins
 %{_bindir}/chrt
 %{_bindir}/col
 %{_bindir}/colcrt
@@ -264,6 +284,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/script
 %{_bindir}/scriptreplay
 %{_bindir}/setarch
+%{_bindir}/uname26
 %{_bindir}/setsid
 %{_bindir}/tailf
 %{_bindir}/taskset
@@ -311,7 +332,6 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_sbindir}/fdisk
 %{_sbindir}/cfdisk
 %{_sbindir}/sfdisk
-%{_bindir}/cytune
 %{_sbindir}/fdformat
 %{_sbindir}/hwclock
 %{_bindir}/setterm
@@ -371,3 +391,16 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_includedir}/uuid/uuid.h
 %{_libdir}/pkgconfig/uuid.pc
 
+%files -n libsmartcols
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libsmartcols.so.1
+%{_libdir}/libsmartcols.so.1.*
+
+%files -n libsmartcols-devel
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libsmartcols.so
+%dir %{_includedir}/libsmartcols
+%{_includedir}/libsmartcols/libsmartcols.h
+%{_libdir}/pkgconfig/smartcols.pc

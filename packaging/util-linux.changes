@@ -1,3 +1,6 @@
+* Mon Oct 27 2014 Maciej Wereski <m.wereski@partner.samsung.com> upstream/2.25.2
+- Update to 2.25.2
+
 * Tue Jun 17 2014 John L. Whiteman <john.l.whiteman@intel.com> accepted/tizen/ivi/panda/20140312.123353-1-g390b4ea
 - Bug-Tizen: TC-294 Bug: https://bugs.tizen.org/jira/browse/TC-294?filter=-1 Setting default user to 'User' for tty sessions. This change provides default user consistency for tty, ssh and wayland console sessions.
 
