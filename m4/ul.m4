@@ -13,7 +13,7 @@ AC_DEFUN([UL_PKG_STATIC], [
 
 dnl UL_CHECK_LIB(LIBRARY, FUNCTION, [VARSUFFIX = $1]))
 dnl
-dnl The VARSUFFIX is optional and overrides the default behaviour. For example:
+dnl The VARSUFFIX is optional and overrides the default behavior. For example:
 dnl     UL_CHECK_LIB(yyy, func, xxx) generates have_xxx and HAVE_LIBXXX
 dnl     UL_CHECK_LIB(yyy, func)      generates have_yyy and HAVE_LIBYYY
 dnl
@@ -148,8 +148,37 @@ AC_DEFUN([UL_REQUIRES_LINUX], [
     check:yes)
       [build_]suffix=yes ;;
     check:*)
-      AC_MSG_WARN([non-linux system; do not build $1])
+      AC_MSG_WARN([non-linux system; not building $1])
       [build_]suffix=no ;;
+    esac
+  fi
+])
+
+
+dnl UL_EXCLUDE_ARCH(NAME, ARCH, VARSUFFIX = $1])
+dnl
+dnl Modifies $build_<name>  variable according to $enable_<name> and $host. The
+dnl $enable_<name> could be "yes", "no" and "check". If build_<name> is "no" then
+dnl all checks are skiped.
+dnl
+dnl The default <name> for $build_ and $enable_ could be overwrited by option $3.
+dnl
+AC_DEFUN([UL_EXCLUDE_ARCH], [
+  m4_define([suffix], m4_default([$3],$1))
+  if test "x$[build_]suffix" != xno; then
+    AC_REQUIRE([AC_CANONICAL_HOST])
+    case $[enable_]suffix:"$host" in #(
+    no:*)
+      [build_]suffix=no ;;
+    yes:$2)
+      AC_MSG_ERROR([$1 selected for unsupported architecture]);;
+    yes:*)
+      [build_]suffix=yes ;;
+    check:$2)
+      AC_MSG_WARN([excluded for $host architecture; not building $1])
+      [build_]suffix=no ;;
+    check:*)
+      [build_]suffix=yes ;;
     esac
   fi
 ])
@@ -188,7 +217,7 @@ AC_DEFUN([UL_REQUIRES_HAVE], [
     check:yes)
       [build_]suffix=yes ;;
     check:*)
-      AC_MSG_WARN([$3 not found; do not build $1])
+      AC_MSG_WARN([$3 not found; not building $1])
       [build_]suffix=no ;;
     esac
   fi
@@ -246,7 +275,7 @@ AC_DEFUN([UL_REQUIRES_BUILD], [
     check:yes)
       [build_]suffix=yes ;;
     check:*)
-      AC_MSG_WARN([$2 disabled; do not build $1])
+      AC_MSG_WARN([$2 disabled; not building $1])
       [build_]suffix=no ;;
     esac
   fi
@@ -286,7 +315,7 @@ AC_DEFUN([UL_REQUIRES_SYSCALL_CHECK], [
       yes:no)
         AC_MSG_ERROR([$1 selected but callname syscall not found]) ;;
       check:no)
-        AC_MSG_WARN([callname syscall not found; do not build $1])
+        AC_MSG_WARN([callname syscall not found; not building $1])
         [build_]suffix=no ;;
       *)
         dnl default $ul_cv_syscall_ is SYS_ value
@@ -296,7 +325,7 @@ AC_DEFUN([UL_REQUIRES_SYSCALL_CHECK], [
   fi
 ])
 
-dnl UL_INIT_BUILD(NAME, [ENABLE_STATE], [VARSUFFIX = $1])
+dnl UL_BUILD_INIT(NAME, [ENABLE_STATE], [VARSUFFIX = $1])
 dnl
 dnl Initializes $build_<name>  variable according to $enable_<name>. If
 dnl $enable_<name> is undefined then ENABLE_STATE is used and $enable_<name> is
@@ -306,10 +335,42 @@ dnl The default <name> for $build_ and $enable_ could be overwrited by option $2
 dnl
 AC_DEFUN([UL_BUILD_INIT], [
   m4_define([suffix], m4_default([$3],$1))
-  m4_define([estate], m4_default([$2],$enable_[]suffix))
+  m4_ifblank([$2],
+[if test "x$enable_[]suffix" = xno; then
+   build_[]suffix=no
+else
+   build_[]suffix=yes
+fi],
+[if test "x$ul_default_estate" != x; then
+  enable_[]suffix=$ul_default_estate
+  build_[]suffix=yes
+  if test "x$ul_default_estate" = xno; then
+    build_[]suffix=no
+  fi
+else[]
+  ifelse(
+      [$2], [check],[
+  build_[]suffix=yes
+  enable_[]suffix=check],
+      [$2], [yes],[
+  build_[]suffix=yes
+  enable_[]suffix=yes],
+      [$2], [no], [
+  build_[]suffix=no
+  enable_[]suffix=no])
+fi])
+])
 
-ifelse(estate, [check], [build_[]suffix='yes' enable_[]suffix='check'],
-       estate, [yes],   [build_[]suffix='yes' enable_[]suffix='yes'],
-       estate, [no],    [build_[]suffix='no'  enable_[]suffix='no'],
-       [build_[]suffix=$enable_[]suffix])
+dnl UL_DEFAULT_ENABLE(NAME, ENABLE_STATE)
+dnl
+dnl Initializes $enable_<name>  variable according to ENABLE_STATE. The default
+dnl setting is possible to override by global $ul_default_estate.
+dnl
+AC_DEFUN([UL_DEFAULT_ENABLE], [
+  m4_define([suffix], $1)
+  if test "x$ul_default_estate" != x; then
+    enable_[]suffix=$ul_default_estate
+  else
+    enable_[]suffix=$2
+  fi
 ])

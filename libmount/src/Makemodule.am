@@ -8,10 +8,6 @@ libmount_la_SOURCES = \
 	include/list.h \
 	\
 	libmount/src/cache.c \
-	libmount/src/context.c \
-	libmount/src/context_loopdev.c \
-	libmount/src/context_mount.c \
-	libmount/src/context_umount.c \
 	libmount/src/fs.c \
 	libmount/src/init.c \
 	libmount/src/iter.c \
@@ -26,7 +22,15 @@ libmount_la_SOURCES = \
 	libmount/src/test.c \
 	libmount/src/utils.c \
 	libmount/src/version.c \
-	$(mountinc_HEADERS)
+	$(nodist_mountinc_HEADERS)
+
+if LINUX
+libmount_la_SOURCES += \
+	libmount/src/context.c \
+	libmount/src/context_loopdev.c \
+	libmount/src/context_mount.c \
+	libmount/src/context_umount.c
+endif
 
 nodist_libmount_la_SOURCES = libmount/src/mountP.h
 
@@ -39,7 +43,8 @@ libmount_la_CFLAGS = \
 	-I$(top_srcdir)/libmount/src
 
 libmount_la_DEPENDENCIES = \
-	$(libmount_la_LIBADD) \
+	libcommon.la \
+	libblkid.la \
 	libmount/src/libmount.sym \
 	libmount/src/libmount.h.in
 
@@ -122,7 +127,7 @@ endif # BUILD_LIBMOUNT_TESTS
 
 # move lib from $(usrlib_execdir) to $(libdir) if needed
 install-exec-hook-libmount:
-	if test "$(usrlib_execdir)" != "$(libdir)"; then \
+	if test "$(usrlib_execdir)" != "$(libdir)" -a -f "$(DESTDIR)$(usrlib_execdir)/libmount.so"; then \
 		mkdir -p $(DESTDIR)$(libdir); \
 		mv $(DESTDIR)$(usrlib_execdir)/libmount.so.* $(DESTDIR)$(libdir); \
 		so_img_name=$$(readlink $(DESTDIR)$(usrlib_execdir)/libmount.so); \

@@ -242,6 +242,11 @@ char* scandev(DIR *dir, dev_t comparedev)
 	while ((dent = readdir(dir))) {
 		char path[PATH_MAX];
 		struct stat st;
+
+#ifdef _DIRENT_HAVE_D_TYPE
+		if (dent->d_type != DT_UNKNOWN && dent->d_type != DT_CHR)
+			continue;
+#endif
 		if (fstatat(fd, dent->d_name, &st, 0) < 0)
 			continue;
 		if (!S_ISCHR(st.st_mode))
@@ -319,7 +324,7 @@ static int detect_consoles_from_proc(struct list_head *consoles)
 	char fbuf[16 + 1];
 	DIR *dir = NULL;
 	FILE *fc = NULL;
-	int maj, min, rc = 1;
+	int maj, min, rc = 1, matches;
 
 	DBG(dbgprint("trying /proc"));
 
@@ -332,10 +337,12 @@ static int detect_consoles_from_proc(struct list_head *consoles)
 	if (!dir)
 		goto done;
 
-	while (fscanf(fc, "%*s %*s (%16[^)]) %d:%d", fbuf, &maj, &min) == 3) {
+	while ((matches = fscanf(fc, "%*s %*s (%16[^)]) %d:%d", fbuf, &maj, &min)) >= 1) {
 		char *name;
 		dev_t comparedev;
 
+		if (matches != 3)
+			continue;
 		if (!strchr(fbuf, 'E'))
 			continue;
 		comparedev = makedev(maj, min);

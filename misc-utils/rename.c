@@ -49,8 +49,10 @@ static int do_rename(char *from, char *to, char *s, int verbose, int symtarget)
 	} else
 		where = strstr(s, from);
 
-	if (where == NULL)
+	if (where == NULL) {
+		free(target);
 		return 0;
+	}
 
 	flen = strlen(from);
 	tlen = strlen(to);
@@ -97,11 +99,11 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 {
 	fputs(USAGE_HEADER, out);
 	fprintf(out,
-	      _(" %s [options] expression replacement file...\n"),
+	      _(" %s [options] <expression> <replacement> <file>...\n"),
 		program_invocation_short_name);
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -v, --verbose    explain what is being done\n"), out);
-	fputs(_(" -s, --symlink    act on symlink target\n"), out);
+	fputs(_(" -s, --symlink    act on the target of symlinks\n"), out);
 	fputs(USAGE_SEPARATOR, out);
 	fputs(USAGE_HELP, out);
 	fputs(USAGE_VERSION, out);

@@ -1,5 +1,5 @@
 /*
- * version.c - Return the version of the blkid library
+ * version.c - Return the version of the libmount library
  *
  * Copyright (C) 2008 Karel Zak <kzak@redhat.com>
  * [Based on libblkid/version.c by Theodore Ts'o]
@@ -8,7 +8,7 @@
  */
 
 /**
- * SECTION: version
+ * SECTION: version-utils
  * @title: Version functions
  * @short_description: functions to get the library version.
  */
@@ -22,12 +22,13 @@ static const char *lib_features[] = {
 #ifdef HAVE_LIBSELINUX
 	"selinux",
 #endif
-#ifdef CONFIG_LIBMOUNT_DEBUG
-	"debug",
+#ifdef HAVE_SMACK
+	"smack",
 #endif
 #ifdef CONFIG_LIBMOUNT_ASSERT
 	"assert",
 #endif
+	"debug",	/* always enabled */
 	NULL
 };
 

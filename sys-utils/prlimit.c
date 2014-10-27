@@ -27,9 +27,10 @@
 #include <unistd.h>
 #include <sys/resource.h>
 
+#include <libsmartcols.h>
+
 #include "c.h"
 #include "nls.h"
-#include "tt.h"
 #include "xalloc.h"
 #include "strutils.h"
 #include "list.h"
@@ -58,6 +59,10 @@ enum {
 	STACK
 };
 
+/* basic output flags */
+static int no_headings;
+static int raw;
+
 struct prlimit_desc {
 	const char *name;
 	const char *help;
@@ -85,6 +90,8 @@ static struct prlimit_desc prlimit_desc[] =
 	[STACK]      = { "STACK",      N_("max stack size"),                     N_("bytes"),     RLIMIT_STACK }
 };
 
+#define MAX_RESOURCES ARRAY_SIZE(prlimit_desc)
+
 struct prlimit {
 	struct list_head lims;
 
@@ -107,21 +114,23 @@ enum {
 struct colinfo {
 	const char	*name;	/* header */
 	double		whint;	/* width hint (N < 1 is in percent of termwidth) */
-	int		flags;	/* TT_FL_* */
+	int		flags;	/* SCOLS_FL_* */
 	const char      *help;
 };
 
 /* columns descriptions */
 struct colinfo infos[] = {
-	[COL_RES]     = { "RESOURCE",    0.25, TT_FL_TRUNC, N_("resource name") },
-	[COL_HELP]    = { "DESCRIPTION", 0.1,  TT_FL_TRUNC, N_("resource description")},
-	[COL_SOFT]    = { "SOFT",        0.1,  TT_FL_RIGHT, N_("soft limit")},
-	[COL_HARD]    = { "HARD",        1,    TT_FL_RIGHT, N_("hard limit (ceiling)")},
-	[COL_UNITS]   = { "UNITS",       0.1,  TT_FL_TRUNC, N_("units")},
+	[COL_RES]     = { "RESOURCE",    0.25, SCOLS_FL_TRUNC, N_("resource name") },
+	[COL_HELP]    = { "DESCRIPTION", 0.1,  SCOLS_FL_TRUNC, N_("resource description")},
+	[COL_SOFT]    = { "SOFT",        0.1,  SCOLS_FL_RIGHT, N_("soft limit")},
+	[COL_HARD]    = { "HARD",        1,    SCOLS_FL_RIGHT, N_("hard limit (ceiling)")},
+	[COL_UNITS]   = { "UNITS",       0.1,  SCOLS_FL_TRUNC, N_("units")},
 };
 
-#define NCOLS ARRAY_SIZE(infos)
-#define MAX_RESOURCES ARRAY_SIZE(prlimit_desc)
+static int columns[ARRAY_SIZE(infos) * 2];
+static int ncolumns;
+
+
 
 #define INFINITY_STR	"unlimited"
 #define INFINITY_STRLEN	(sizeof(INFINITY_STR) - 1)
@@ -129,8 +138,6 @@ struct colinfo infos[] = {
 #define PRLIMIT_SOFT	(1 << 1)
 #define PRLIMIT_HARD	(1 << 2)
 
-/* array with IDs of enabled columns */
-static int columns[NCOLS], ncolumns;
 static pid_t pid; /* calling process (default) */
 static int verbose;
 
@@ -185,7 +192,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 
 	fputs(_("\nAvailable columns (for --output):\n"), out);
 
-	for (i = 0; i < NCOLS; i++)
+	for (i = 0; i < ARRAY_SIZE(infos); i++)
 		fprintf(out, " %11s  %s\n", infos[i].name, _(infos[i].help));
 
 	fprintf(out, USAGE_MAN_TAIL("prlimit(1)"));
@@ -195,9 +202,8 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 
 static inline int get_column_id(int num)
 {
-	assert(ARRAY_SIZE(columns) == NCOLS);
 	assert(num < ncolumns);
-	assert(columns[num] < (int) NCOLS);
+	assert(columns[num] < (int) ARRAY_SIZE(infos));
 
 	return columns[num];
 }
@@ -207,19 +213,17 @@ static inline struct colinfo *get_column_info(unsigned num)
 	return &infos[ get_column_id(num) ];
 }
 
-static void add_tt_line(struct tt *tt, struct prlimit *l)
+static void add_scols_line(struct libscols_table *table, struct prlimit *l)
 {
 	int i;
-	struct tt_line *line;
+	struct libscols_line *line;
 
-	assert(tt);
+	assert(table);
 	assert(l);
 
-	line = tt_add_line(tt, NULL);
-	if (!line) {
-		warn(_("failed to add line to output"));
-		return;
-	}
+	line = scols_table_new_line(table, NULL);
+	if (!line)
+		err(EXIT_FAILURE, _("failed to initialize output line"));
 
 	for (i = 0; i < ncolumns; i++) {
 		char *str = NULL;
@@ -251,7 +255,7 @@ static void add_tt_line(struct tt *tt, struct prlimit *l)
 		}
 
 		if (str)
-			tt_line_set_data(line, i, str);
+			scols_line_refer_data(line, i, str);
 	}
 }
 
@@ -261,7 +265,7 @@ static int column_name_to_id(const char *name, size_t namesz)
 
 	assert(name);
 
-	for (i = 0; i < NCOLS; i++) {
+	for (i = 0; i < ARRAY_SIZE(infos); i++) {
 		const char *cn = infos[i].name;
 
 		if (!strncasecmp(name, cn, namesz) && !*(cn + namesz))
@@ -279,38 +283,36 @@ static void rem_prlim(struct prlimit *lim)
 	free(lim);
 }
 
-static int show_limits(struct list_head *lims, int tt_flags)
+static int show_limits(struct list_head *lims)
 {
 	int i;
 	struct list_head *p, *pnext;
-	struct tt *tt;
+	struct libscols_table *table;
 
-	tt = tt_new_table(tt_flags | TT_FL_FREEDATA);
-	if (!tt) {
-		warn(_("failed to initialize output table"));
-		return -1;
-	}
+	table = scols_new_table();
+	if (!table)
+		err(EXIT_FAILURE, _("failed to initialize output table"));
+
+	scols_table_enable_raw(table, raw);
+	scols_table_enable_noheadings(table, no_headings);
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *col = get_column_info(i);
 
-		if (!tt_define_column(tt, col->name, col->whint, col->flags)) {
-			warnx(_("failed to initialize output column"));
-			goto done;
-		}
+		if (!scols_table_new_column(table, col->name, col->whint, col->flags))
+			err(EXIT_FAILURE, _("failed to initialize output column"));
 	}
 
 
 	list_for_each_safe(p, pnext, lims) {
 		struct prlimit *lim = list_entry(p, struct prlimit, lims);
 
-		add_tt_line(tt, lim);
+		add_scols_line(table, lim);
 		rem_prlim(lim);
 	}
 
-	tt_print_table(tt);
-done:
-	tt_free_table(tt);
+	scols_print_table(table);
+	scols_unref_table(table);
 	return 0;
 }
 
@@ -472,7 +474,7 @@ static int add_prlim(char *ops, struct list_head *lims, size_t id)
 
 int main(int argc, char **argv)
 {
-	int opt, tt_flags = 0;
+	int opt;
 	struct list_head lims;
 
 	enum {
@@ -593,13 +595,13 @@ int main(int argc, char **argv)
 			return EXIT_SUCCESS;
 
 		case NOHEADINGS_OPTION:
-			tt_flags |= TT_FL_NOHEADINGS;
+			no_headings = 1;
 			break;
 		case VERBOSE_OPTION:
 			verbose++;
 			break;
 		case RAW_OPTION:
-			tt_flags |= TT_FL_RAW;
+			raw = 1;
 			break;
 
 		default:
@@ -617,6 +619,8 @@ int main(int argc, char **argv)
 		columns[ncolumns++] = COL_UNITS;
 	}
 
+	scols_init_debug(0);
+
 	if (list_empty(&lims)) {
 		/* default is to print all resources */
 		size_t n;
@@ -628,7 +632,7 @@ int main(int argc, char **argv)
 	do_prlimit(&lims);
 
 	if (!list_empty(&lims))
-		show_limits(&lims, tt_flags);
+		show_limits(&lims);
 
 	if (argc > optind) {
 		/* prlimit [options] COMMAND */

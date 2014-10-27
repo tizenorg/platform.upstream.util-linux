@@ -104,8 +104,10 @@ static void usage(int error)
 /*
  * This function does "safe" printing.  It will convert non-printable
  * ASCII characters using '^' and M- notation.
+ *
+ * If 'esc' is defined then escape all chars from esc by \.
  */
-static void safe_print(const char *cp, int len)
+static void safe_print(const char *cp, int len, const char *esc)
 {
 	unsigned char	ch;
 
@@ -122,7 +124,9 @@ static void safe_print(const char *cp, int len)
 			if ((ch < 32) || (ch == 0x7f)) {
 				fputc('^', stdout);
 				ch ^= 0x40; /* ^@, ^A, ^B; ^? for DEL */
-			}
+
+			} else if (esc && strchr(esc, ch))
+				fputc('\\', stdout);
 		}
 		fputc(ch, stdout);
 	}
@@ -302,16 +306,17 @@ static void print_value(int output, int num, const char *devname,
 			printf("DEVNAME=%s\n", devname);
 		fputs(name, stdout);
 		fputs("=", stdout);
-		safe_print(value, valsz);
+		safe_print(value, valsz, NULL);
 		fputs("\n", stdout);
 
 	} else {
 		if (num == 1 && devname)
-			printf("%s: ", devname);
+			printf("%s:", devname);
+		fputs(" ", stdout);
 		fputs(name, stdout);
 		fputs("=\"", stdout);
-		safe_print(value, valsz);
-		fputs("\" ", stdout);
+		safe_print(value, valsz, "\"");
+		fputs("\"", stdout);
 	}
 }
 
@@ -595,7 +600,7 @@ static int list_to_usage(const char *list, int *flag)
 	return mask;
 err:
 	*flag = 0;
-	fprintf(stderr, "unknown kerword in -u <list> argument: '%s'\n",
+	fprintf(stderr, "unknown keyword in -u <list> argument: '%s'\n",
 			word ? word : list);
 	exit(BLKID_EXIT_OTHER);
 }

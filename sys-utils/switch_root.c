@@ -23,6 +23,7 @@
 #include <sys/mount.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 #include <sys/param.h>
 #include <fcntl.h>
 #include <stdio.h>
@@ -36,6 +37,7 @@
 #include "c.h"
 #include "nls.h"
 #include "closestream.h"
+#include "statfs_magic.h"
 
 #ifndef MS_MOVE
 #define MS_MOVE 8192
@@ -68,6 +70,7 @@ static int recursiveRemove(int fd)
 
 	while(1) {
 		struct dirent *d;
+		int isdir = 0;
 
 		errno = 0;
 		if (!(d = readdir(dir))) {
@@ -80,8 +83,10 @@ static int recursiveRemove(int fd)
 
 		if (!strcmp(d->d_name, ".") || !strcmp(d->d_name, ".."))
 			continue;
-
-		if (d->d_type == DT_DIR) {
+#ifdef _DIRENT_HAVE_D_TYPE
+		if (d->d_type == DT_DIR || d->d_type == DT_UNKNOWN)
+#endif
+		{
 			struct stat sb;
 
 			if (fstatat(dfd, d->d_name, &sb, AT_SYMLINK_NOFOLLOW)) {
@@ -90,7 +95,7 @@ static int recursiveRemove(int fd)
 			}
 
 			/* remove subdirectories if device is same as dir */
-			if (sb.st_dev == rb.st_dev) {
+			if (S_ISDIR(sb.st_mode) && sb.st_dev == rb.st_dev) {
 				int cfd;
 
 				cfd = openat(dfd, d->d_name, O_RDONLY);
@@ -98,12 +103,12 @@ static int recursiveRemove(int fd)
 					recursiveRemove(cfd);
 					close(cfd);
 				}
+				isdir = 1;
 			} else
 				continue;
 		}
 
-		if (unlinkat(dfd, d->d_name,
-			     d->d_type == DT_DIR ? AT_REMOVEDIR : 0))
+		if (unlinkat(dfd, d->d_name, isdir ? AT_REMOVEDIR : 0))
 			warn(_("failed to unlink %s"), d->d_name);
 	}
 
@@ -174,12 +179,13 @@ static int switchroot(const char *newroot)
 	if (cfd >= 0) {
 		pid = fork();
 		if (pid <= 0) {
-			if (fstat(cfd, &sb) == 0) {
-				if (sb.st_dev == makedev(0, 1))
-					recursiveRemove(cfd);
-				else
-					warn(_("old root filesystem is not an initramfs"));
-			}
+			struct statfs stfs;
+			if (fstatfs(cfd, &stfs) == 0 &&
+			    (stfs.f_type == (__SWORD_TYPE)STATFS_RAMFS_MAGIC ||
+			     stfs.f_type == (__SWORD_TYPE)STATFS_TMPFS_MAGIC))
+				recursiveRemove(cfd);
+			else
+				warn(_("old root filesystem is not an initramfs"));
 
 			if (pid == 0)
 				exit(EXIT_SUCCESS);

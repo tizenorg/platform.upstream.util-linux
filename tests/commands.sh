@@ -1,5 +1,5 @@
 # Misc settings
-TS_TESTUSER=${TS_TESTUSER:-"test"}
+TS_TESTUSER=${TS_TESTUSER:-"nobody"}
 
 # helpers
 TS_HELPER_BYTESWAP="$top_builddir/test_byteswap"
@@ -13,14 +13,15 @@ TS_HELPER_LIBMOUNT_TABDIFF="$top_builddir/test_mount_tab_diff"
 TS_HELPER_LIBMOUNT_TAB="$top_builddir/test_mount_tab"
 TS_HELPER_LIBMOUNT_UPDATE="$top_builddir/test_mount_tab_update"
 TS_HELPER_LIBMOUNT_UTILS="$top_builddir/test_mount_utils"
-TS_HELPER_PYLIBMOUNT_CONTEXT="$top_builddir/libmount/python/test_mount_context.py"
-TS_HELPER_PYLIBMOUNT_TAB="$top_builddir/libmount/python/test_mount_tab.py"
-TS_HELPER_PYLIBMOUNT_UPDATE="$top_builddir/libmount/python/test_mount_tab_update.py"
+TS_HELPER_PYLIBMOUNT_CONTEXT="$top_srcdir/libmount/python/test_mount_context.py"
+TS_HELPER_PYLIBMOUNT_TAB="$top_srcdir/libmount/python/test_mount_tab.py"
+TS_HELPER_PYLIBMOUNT_UPDATE="$top_srcdir/libmount/python/test_mount_tab_update.py"
 TS_HELPER_LOGINDEFS="$top_builddir/test_logindefs"
 TS_HELPER_MD5="$top_builddir/test_md5"
 TS_HELPER_MORE=${TS_HELPER_MORE-"$top_builddir/test_more"}
 TS_HELPER_PARTITIONS="$top_builddir/sample-partitions"
 TS_HELPER_PATHS="$top_builddir/test_pathnames"
+TS_HELPER_SIGRECEIVE="$top_builddir/test_sigreceive"
 TS_HELPER_STRUTILS="$top_builddir/test_strutils"
 TS_HELPER_SYSINFO="$top_builddir/test_sysinfo"
 
@@ -37,7 +38,7 @@ TS_CMD_EJECT=${TS_CMD_EJECT-"$top_builddir/eject"}
 TS_CMD_FALLOCATE=${TS_CMD_FALLOCATE-"$top_builddir/fallocate"}
 TS_CMD_FDISK=${TS_CMD_FDISK-"$top_builddir/fdisk"}
 TS_CMD_FINDMNT=${TS_CMD_FINDMNT-"$top_builddir/findmnt"}
-TS_CMD_FSCKCRAMFS=${TS_CMD_FSCKCRAMFS:-"$top_builddir/test_fsck.cramfs"}
+TS_CMD_FSCKCRAMFS=${TS_CMD_FSCKCRAMFS:-"$top_builddir/fsck.cramfs"}
 TS_CMD_FSCKMINIX=${TS_CMD_FSCKMINIX:-"$top_builddir/fsck.minix"}
 TS_CMD_GETOPT=${TS_CMD_GETOPT-"$top_builddir/getopt"}
 TS_CMD_HEXDUMP=${TS_CMD_HEXDUMP-"$top_builddir/hexdump"}
@@ -47,6 +48,7 @@ TS_CMD_IPCMK=${TS_CMD_IPCMK-"$top_builddir/ipcmk"}
 TS_CMD_IPCRM=${TS_CMD_IPCRM-"$top_builddir/ipcrm"}
 TS_CMD_IPCS=${TS_CMD_IPCS:-"$top_builddir/ipcs"}
 TS_CMD_ISOSIZE=${TS_CMD_ISOSIZE-"$top_builddir/isosize"}
+TS_CMD_KILL=${TS_CMD_KILL-"$top_builddir/kill"}
 TS_CMD_LAST=${TS_CMD_LAST-"$top_builddir/last"}
 TS_CMD_LINE=${TS_CMD_LINE-"$top_builddir/line"}
 TS_CMD_LOOK=${TS_CMD_LOOK-"$top_builddir/look"}
@@ -64,11 +66,13 @@ TS_CMD_REV=${TS_CMD_REV:-"$top_builddir/rev"}
 TS_CMD_SCRIPT=${TS_CMD_SCRIPT-"$top_builddir/script"}
 TS_CMD_SETARCH=${TS_CMD_SETARCH-"$top_builddir/setarch"}
 TS_CMD_SETSID=${TS_CMD_SETSID-"$top_builddir/setsid"}
+TS_CMD_SWAPLABEL=${TS_CMD_SWAPLABEL:-"$top_builddir/swaplabel"}
 TS_CMD_SWAPOFF=${TS_CMD_SWAPOFF:-"$top_builddir/swapoff"}
 TS_CMD_SWAPON=${TS_CMD_SWAPON:-"$top_builddir/swapon"}
 TS_CMD_TAILF=${TS_CMD_TAILF-"$top_builddir/tailf"}
 TS_CMD_UL=${TS_CMD_UL-"$top_builddir/ul"}
 TS_CMD_UMOUNT=${TS_CMD_UMOUNT:-"$top_builddir/umount"}
 TS_CMD_UTMPDUMP=${TS_CMD_UTMPDUMP-"$top_builddir/utmpdump"}
+TS_CMD_UUIDGEN=${TS_CMD_UUIDGEN-"$top_builddir/uuidgen"}
 TS_CMD_WHEREIS=${TS_CMD_WHEREIS-"$top_builddir/whereis"}
 TS_CMD_WIPEFS=${TS_CMD_WIPEFS-"$top_builddir/wipefs"}

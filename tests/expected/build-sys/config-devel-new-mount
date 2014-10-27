@@ -28,7 +28,6 @@ test_mangle:
 test_procutils:  
 test_strutils:  
 test_sysfs:  
-test_tt:  
 test_wholedisk:  
 mkfs:  libblkid libuuid 
 partitions:  libblkid libuuid 
@@ -76,7 +75,6 @@ umount:  libblkid libmount libselinux libsepol libuuid
 arch:  
 chcpu:  
 ctrlaltdel:  
-cytune:  
 dmesg:  
 fallocate:  
 flock:  

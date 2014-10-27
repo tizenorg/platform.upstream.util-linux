@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2012 Ondrej Oprala <ooprala@redhat.com>
+ * Copyright (C) 2012-2014 Karel Zak <kzak@redhat.com>
  *
  * This file may be distributed under the terms of the
  * GNU Lesser General Public License.
@@ -43,6 +44,7 @@ enum colortmode {
 	UL_COLORMODE_AUTO = 0,
 	UL_COLORMODE_NEVER,
 	UL_COLORMODE_ALWAYS,
+	UL_COLORMODE_UNDEF,
 
 	__UL_NCOLORMODES	/* last */
 };
@@ -50,18 +52,29 @@ enum colortmode {
 extern int colormode_from_string(const char *str);
 extern int colormode_or_err(const char *str, const char *errmsg);
 
-/* Initialize the global variable OUT_IS_TERM */
-extern int colors_init(int mode);
+/* Initialize the global variable UL_COLOR_TERM_OK */
+extern int colors_init(int mode, const char *util_name);
 
 /* Returns 1 or 0 */
 extern int colors_wanted(void);
 
-/* Set the color to CLR_SCHEME */
-extern void color_fenable(const char *clr_scheme, FILE *f);
+/* temporary enable/disable colors */
+extern void colors_off(void);
+extern void colors_on(void);
 
-static inline void color_enable(const char *clr_scheme)
+
+/* Set the color */
+extern void color_fenable(const char *seq, FILE *f);
+extern void color_scheme_fenable(const char *name, const char *dflt, FILE *f);
+
+static inline void color_enable(const char *seq)
 {
-	color_fenable(clr_scheme, stdout);
+	color_fenable(seq, stdout);
+}
+
+static inline void color_scheme_enable(const char *name, const char *dflt)
+{
+	color_scheme_fenable(name, dflt, stdout);
 }
 
 /* Reset colors to default */
@@ -72,6 +85,8 @@ static inline void color_disable(void)
 	color_fdisable(stdout);
 }
 
+/* converts "red" to UL_COLOR_RED, etc. */
+extern const char *color_sequence_from_colorname(const char *str);
 
 
 #endif /* UTIL_LINUX_COLORS_H */

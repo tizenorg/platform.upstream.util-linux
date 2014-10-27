@@ -13,9 +13,6 @@
 #ifndef _BLKID_BLKIDP_H
 #define _BLKID_BLKIDP_H
 
-/* support debug output if LIBBLKID_DEBUG env. variable is set */
-#define CONFIG_BLKID_DEBUG 1
-
 /* Always confirm that /dev/disk-by symlinks match with LABEL/UUID on device */
 /* #define CONFIG_BLKID_VERIFY_UDEV 1 */
 
@@ -30,6 +27,7 @@
 #include "bitops.h"	/* $(top_srcdir)/include/ */
 #include "blkdev.h"
 
+#include "debug.h"
 #include "blkid.h"
 #include "list.h"
 
@@ -221,12 +219,10 @@ struct blkid_struct_probe
 #define BLKID_FL_PRIVATE_FD	(1 << 1)	/* see blkid_new_probe_from_filename() */
 #define BLKID_FL_TINY_DEV	(1 << 2)	/* <= 1.47MiB (floppy or so) */
 #define BLKID_FL_CDROM_DEV	(1 << 3)	/* is a CD/DVD drive */
+#define BLKID_FL_NOSCAN_DEV	(1 << 4)	/* do not scan this device */
 
 /* private per-probing flags */
 #define BLKID_PROBE_FL_IGNORE_PT (1 << 1)	/* ignore partition table */
-#define BLKID_PROBE_FL_IGNORE_BACKUP (1 << 2)	/* ignore backup superblocks or PT */
-
-extern int blkid_probe_ignore_backup(blkid_probe pr);
 
 extern blkid_probe blkid_clone_probe(blkid_probe parent);
 extern blkid_probe blkid_probe_get_wholedisk_probe(blkid_probe pr);
@@ -300,6 +296,9 @@ struct blkid_struct_cache
 /* old systems */
 #define BLKID_CACHE_FILE_OLD	"/etc/blkid.tab"
 
+#define BLKID_PROBE_OK	 0
+#define BLKID_PROBE_NONE 1
+
 #define BLKID_ERR_IO	 5
 #define BLKID_ERR_PROC	 9
 #define BLKID_ERR_MEM	12
@@ -317,10 +316,6 @@ struct blkid_struct_cache
 #define BLKID_PRI_LVM	20
 #define BLKID_PRI_MD	10
 
-#if defined(TEST_PROGRAM) && !defined(CONFIG_BLKID_DEBUG)
-#define CONFIG_BLKID_DEBUG
-#endif
-
 #define BLKID_DEBUG_CACHE	0x0001
 #define BLKID_DEBUG_DUMP	0x0002
 #define BLKID_DEBUG_DEV		0x0004
@@ -337,31 +332,12 @@ struct blkid_struct_cache
 #define BLKID_DEBUG_INIT	0x8000
 #define BLKID_DEBUG_ALL		0xFFFF
 
-#ifdef CONFIG_BLKID_DEBUG
-extern int libblkid_debug_mask;
+UL_DEBUG_DECLARE_MASK(libblkid);
+#define DBG(m, x) __UL_DBG(libblkid, BLKID_DEBUG_, m, x)
+
 extern void blkid_debug_dump_dev(blkid_dev dev);
 extern void blkid_debug_dump_tag(blkid_tag tag);
 
-# define DBG(m,x)	do { \
-				if ((BLKID_DEBUG_ ## m) & libblkid_debug_mask) { \
-					fprintf(stderr, "%d: libblkid: %8s: ", getpid(), # m); \
-					x; \
-				} \
-			} while (0)
-
-static inline void __attribute__ ((__format__ (__printf__, 1, 2)))
-blkid_debug(const char *mesg, ...)
-{
-	va_list ap;
-	va_start(ap, mesg);
-	vfprintf(stderr, mesg, ap);
-	va_end(ap);
-	fputc('\n', stderr);
-}
-
-#else /* !CONFIG_BLKID_DEBUG */
-# define DBG(m,x) do { ; } while (0)
-#endif /* CONFIG_BLKID_DEBUG */
 
 /* devno.c */
 struct dir_list {

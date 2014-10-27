@@ -65,7 +65,10 @@ Display Julian dates (days one-based, numbered from January 1).
 \fB\-y\fR, \fB\-\-year\fR
 Display a calendar for the whole year.
 .TP
-\fB\-\-color\fR [\fIwhen\fR]
+\fB\-w\fR, \fB\-\-week\fR[\fI=number\fR]
+Display week numbers in the calendar (US or ISO-8601).
+.TP
+\fB\-\-color\fR[\fI=when\fR]
 Colorize output.  The
 .I when
 can be
@@ -99,11 +102,35 @@ specified, the current month's calendar is displayed.
 A year starts on Jan 1. The first day of the week is determined by the
 locale.
 .PP
-The Gregorian Reformation is assumed to have occurred in 1752 on the 3rd of
-September. By this time, most countries had recognized the reformation
-(although a few did not recognize it until the early 1900's). Ten days
-following that date were eliminated by the reformation, so the calendar for
-that month is a bit unusual.
+The week numbering depends on the choice of the first day of the week.  If Sunday
+(the default) is used for the first day of the week, then the customary North
+American numbering will be used, i.e. the first Sunday of the year starts the
+first week.  If Monday is selected, then the ISO-8601 standard week numbering
+is used, where the first Thursday of the year is in week number 1.
+.SH COLORS
+Implicit coloring can be disabled as follows:
+.RS
+
+.br
+.BI "touch /etc/terminal-colors.d/cal.disable"
+.br
+
+.RE
+For more details see
+.BR terminal-colors.d (5).
+.SH BUGS
+.PP
+The
+.B cal
+program uses the 3rd of September 1752 as the date of the Gregorian calendar
+reformation -- that is when it happened in Great Britain and its colonies
+(including what is now the USA).  Ten days following that date were eliminated
+by this reformation, so the calendar for that month is rather unusual.
+The actual historical dates at which the calendar reform happened in all the
+different countries (locales) are ignored.
+.PP
+Alternative calendars, such as the Umm al-Qura, the Solar Hijri, the Ge'ez,
+or the lunisolar Hindu, are not supported.
 .SH HISTORY
 A cal command appeared in Version 6 AT&T UNIX.
 .SH AVAILABILITY

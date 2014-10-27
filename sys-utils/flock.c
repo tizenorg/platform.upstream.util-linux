@@ -175,8 +175,6 @@ int main(int argc, char *argv[])
 			have_timeout = 1;
 			strtotimeval_or_err(optarg, &timeout.it_value,
 				_("invalid timeout value"));
-			if (timeout.it_value.tv_sec + timeout.it_value.tv_usec == 0)
-				errx(EX_USAGE, _("timeout cannot be zero"));
 			break;
 		case 'E':
 			conflict_exit_code = strtos32_or_err(optarg,
@@ -250,6 +248,7 @@ int main(int argc, char *argv[])
 			/* otherwise try again */
 			continue;
 		case EIO:
+		case EBADF:		/* since Linux 3.4 (commit 55725513) */
 			/* Probably NFSv4 where flock() is emulated by fcntl().
 			 * Let's try to reopen in read-write mode.
 			 */

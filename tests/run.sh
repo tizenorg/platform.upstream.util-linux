@@ -16,12 +16,22 @@
 # GNU General Public License for more details.
 #
 
-TS_TOPDIR=$(cd $(dirname $0) && pwd)
+TS_TOPDIR=$(cd ${0%/*} && pwd)
 SUBTESTS=
 OPTS=
 
 top_srcdir=
 top_builddir=
+paraller_jobs=1
+
+function num_cpus()
+{
+	if lscpu -p &>/dev/null; then
+		lscpu -p | grep -cv '^#'
+	else
+		echo 1
+	fi
+}
 
 while [ -n "$1" ]; do
 	case "$1" in
@@ -49,6 +59,14 @@ while [ -n "$1" ]; do
 	--builddir=*)
 		top_builddir="${1##--builddir=}"
 		;;
+	--parallel=*)
+		paraller_jobs="${1##--parallel=}"
+		OPTS="$OPTS --parallel"
+		;;
+	--parallel)
+		paraller_jobs=$(num_cpus)
+		OPTS="$OPTS --parallel"
+		;;
 	--*)
 		echo "Unknown option $1"
 		echo "Usage: "
@@ -61,6 +79,7 @@ while [ -n "$1" ]; do
 		echo "  --nonroot         ignore test suite if user is root"
 		echo "  --srcdir=<path>   autotools top source directory"
 		echo "  --builddir=<path> autotools top build directory"
+		echo "  --parallel=<num>  number of parallel test jobs, default: num cpus"
 		echo
 		exit 1
 		;;
@@ -87,24 +106,24 @@ fi
 
 OPTS="$OPTS --srcdir=$top_srcdir --builddir=$top_builddir"
 
+declare -a comps
 if [ -n "$SUBTESTS" ]; then
 	# selected tests only
 	for s in $SUBTESTS; do
 		if [ -d "$top_srcdir/tests/ts/$s" ]; then
-			co=$(find $top_srcdir/tests/ts/$s -type f -perm /a+x -regex ".*/[^\.~]*" |  sort)
-			comps="$comps $co"
+			comps+=( $(find $top_srcdir/tests/ts/$s -type f -perm /a+x -regex ".*/[^\.~]*") )
 		else
 			echo "Unknown test component '$s'"
 			exit 1
 		fi
 	done
 else
-	if [ ! -f "$top_builddir/test_tt" ]; then
+	if [ ! -f "$top_builddir/test_ttyutils" ]; then
 		echo "Tests not compiled! Run 'make check' to fix the problem."
 		exit 1
 	fi
 
-	comps=$(find $top_srcdir/tests/ts/ -type f -perm /a+x -regex ".*/[^\.~]*" |  sort)
+	comps=( $(find $top_srcdir/tests/ts/ -type f -perm /a+x -regex ".*/[^\.~]*") )
 fi
 
 
@@ -119,21 +138,27 @@ echo "                    For development purpose only.                    "
 echo "                 Don't execute on production system!                 "
 echo
 
-res=0
-count=0
-for ts in $comps; do
-	$ts "$OPTS"
-	res=$(( $res + $? ))
-	count=$(( $count + 1 ))
-done
+if [ $paraller_jobs -gt 1 ]; then
+	echo "              Executing the tests in parallel ($paraller_jobs jobs)    "
+	echo
+fi
 
+count=0
+>| $top_builddir/tests/failures
+printf "%s\n" ${comps[*]} |
+	sort |
+	xargs -I '{}' -P $paraller_jobs -n 1 bash -c "'{}' \"$OPTS\" ||
+		echo 1 >> $top_builddir/tests/failures"
+declare -a fail_file
+fail_file=( $( < $top_builddir/tests/failures ) ) || exit 1
+rm -f $top_builddir/tests/failures
 echo
 echo "---------------------------------------------------------------------"
-if [ $res -eq 0 ]; then
-	echo "  All $count tests PASSED"
+if [ ${#fail_file[@]} -eq 0 ]; then
+	echo "  All ${#comps[@]} tests PASSED"
 	res=0
 else
-	echo "  $res tests of $count FAILED"
+	echo "  ${#fail_file[@]} tests of ${#comps[@]} FAILED"
 	res=1
 fi
 echo "---------------------------------------------------------------------"

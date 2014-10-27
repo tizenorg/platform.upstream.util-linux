@@ -70,8 +70,8 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 int main(int argc, char **argv)
 {
 	char *path;
-	int c, fd, verbose = 0, secure = 0;
-	uint64_t end, blksize, secsize, range[2];
+	int c, fd, verbose = 0, secure = 0, secsize;
+	uint64_t end, blksize, range[2];
 	struct stat sb;
 
 	static const struct option longopts[] = {
@@ -149,6 +149,8 @@ int main(int argc, char **argv)
 	range[1] &= ~(secsize - 1);
 
 	/* is the range end behind the end of the device ?*/
+	if (range[0] > blksize)
+		errx(EXIT_FAILURE, _("%s: offset is greater than device size"), path);
 	end = range[0] + range[1];
 	if (end < range[0] || end > blksize)
 		range[1] = blksize - range[0];

@@ -106,8 +106,8 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(_(" --keep-groups            keep supplementary groups\n"), out);
 	fputs(_(" --groups <group,...>     set supplementary groups\n"), out);
 	fputs(_(" --securebits <bits>      set securebits\n"), out);
-	fputs(_(" --selinux-label <label>  set SELinux label (requires process:transition)\n"), out);
-	fputs(_(" --apparmor-profile <pr>  set AppArmor profile (requires onexec permission)\n"), out);
+	fputs(_(" --selinux-label <label>  set SELinux label\n"), out);
+	fputs(_(" --apparmor-profile <pr>  set AppArmor profile\n"), out);
 	fputs(USAGE_SEPARATOR, out);
 	fputs(USAGE_HELP, out);
 	fputs(USAGE_VERSION, out);
@@ -254,9 +254,10 @@ static void dump_groups(void)
 		return;
 	}
 
-	groups = alloca(n * sizeof(gid_t));
+	groups = xmalloc(n * sizeof(gid_t));
 	n = getgroups(n, groups);
 	if (n < 0) {
+		free(groups);
 		warn("getgroups failed");
 		return;
 	}
@@ -273,6 +274,7 @@ static void dump_groups(void)
 		}
 	}
 	printf("\n");
+	free(groups);
 }
 
 static void dump(int dumplevel)
@@ -526,9 +528,9 @@ static void do_selinux_label(const char *label)
 		err(SETPRIV_EXIT_PRIVERR,
 		    _("write failed: %s"), _PATH_PROC_ATTR_EXEC);
 
-	if (close_fd(fd) != 0)
+	if (close(fd) != 0)
 		err(SETPRIV_EXIT_PRIVERR,
-		    _("write failed: %s"), _PATH_PROC_ATTR_EXEC);
+		    _("close failed: %s"), _PATH_PROC_ATTR_EXEC);
 }
 
 static void do_apparmor_profile(const char *label)
@@ -538,12 +540,12 @@ static void do_apparmor_profile(const char *label)
 	if (access(_PATH_SYS_APPARMOR, F_OK) != 0)
 		errx(SETPRIV_EXIT_PRIVERR, _("AppArmor is not running"));
 
-	f = fopen(_PATH_PROC_ATTR_EXEC, "wx");
+	f = fopen(_PATH_PROC_ATTR_EXEC, "r+");
 	if (!f)
 		err(SETPRIV_EXIT_PRIVERR,
 		    _("cannot open %s"), _PATH_PROC_ATTR_EXEC);
 
-	fprintf(f, "changeprofile %s", label);
+	fprintf(f, "exec %s", label);
 
 	if (close_stream(f) != 0)
 		err(SETPRIV_EXIT_PRIVERR,

@@ -22,7 +22,7 @@
 #define DEFAULT_SECTOR_SIZE       512
 
 #ifdef __linux__
-/* very basic ioclts, should be available everywhere */
+/* very basic ioctls, should be available everywhere */
 # ifndef BLKROSET
 #  define BLKROSET   _IO(0x12,93)	/* set device read-only (0 = read-write) */
 #  define BLKROGET   _IO(0x12,94)	/* get read-only status (0 = read_write) */
@@ -122,7 +122,7 @@ int blkdev_is_cdrom(int fd);
 int blkdev_get_geometry(int fd, unsigned int *h, unsigned int *s);
 
 /* SCSI device types.  Copied almost as-is from kernel header.
- * http://git.kernel.org/?p=linux/kernel/git/torvalds/linux.git;a=blob;f=include/scsi/scsi.h */
+ * http://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/include/scsi/scsi.h */
 #define SCSI_TYPE_DISK			0x00
 #define SCSI_TYPE_TAPE			0x01
 #define SCSI_TYPE_PRINTER		0x02

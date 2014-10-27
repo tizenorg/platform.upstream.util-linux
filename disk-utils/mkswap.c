@@ -53,7 +53,6 @@
 #include "nls.h"
 #include "blkdev.h"
 #include "pathnames.h"
-#include "wholedisk.h"
 #include "all-io.h"
 #include "xalloc.h"
 #include "c.h"
@@ -177,7 +176,7 @@ write_signature(char *sig)
 {
 	char *sp = (char *) signature_page;
 
-	strncpy(sp + pagesize - 10, sig, 10);
+	strncpy(sp + pagesize - SWAP_SIGNATURE_SZ, sig, SWAP_SIGNATURE_SZ);
 }
 
 static void
@@ -186,8 +185,7 @@ write_uuid_and_label(unsigned char *uuid, char *volume_name)
 	struct swap_header_v1_2 *h;
 
 	/* Sanity check */
-	if (sizeof(struct swap_header_v1) !=
-	    sizeof(struct swap_header_v1_2)) {
+	if (sizeof(struct swap_header_v1_2) != SWAP_HEADER_SIZE) {
 		warnx(_("Bad swap header size, no label written."));
 		return;
 	}
@@ -399,7 +397,6 @@ wipe_device(int fd, const char *devname, int force)
 		 * Wipe boodbits
 		 */
 		char buf[1024];
-		const char *data = NULL;
 
 		if (lseek(fd, 0, SEEK_SET) != 0)
 			errx(EXIT_FAILURE, _("unable to rewind swap-device"));
@@ -419,6 +416,8 @@ wipe_device(int fd, const char *devname, int force)
 		blkid_probe_set_superblocks_flags(pr, BLKID_SUBLKS_MAGIC|BLKID_SUBLKS_TYPE);
 
 		while (blkid_do_probe(pr) == 0) {
+			const char *data = NULL;
+
 			if (blkid_probe_lookup_value(pr, "TYPE", &data, NULL) == 0 && data)
 				warnx(_("%s: warning: wiping old %s signature."), devname, data);
 			blkid_do_wipe(pr, 0);
@@ -448,7 +447,7 @@ main(int argc, char **argv) {
 	unsigned long long sz;
 	off_t offset;
 	int force = 0;
-	int version = 1;
+	int version = SWAP_VERSION;
 	char *block_count = 0;
 	char *opt_label = NULL;
 	unsigned char *uuid = NULL;
@@ -516,7 +515,7 @@ main(int argc, char **argv) {
 		usage(stderr);
 	}
 
-	if (version != 1)
+	if (version != SWAP_VERSION)
 		errx(EXIT_FAILURE,
 			_("swapspace version %d is not supported"), version);
 
@@ -544,18 +543,16 @@ main(int argc, char **argv) {
 	sz = get_size(device_name);
 	if (!PAGES)
 		PAGES = sz;
-	else if (PAGES > sz && !force) {
+	else if (PAGES > sz && !force)
 		errx(EXIT_FAILURE,
 			_("error: "
 			  "size %llu KiB is larger than device size %llu KiB"),
 			PAGES*(pagesize/1024), sz*(pagesize/1024));
-	}
 
-	if (PAGES < MIN_GOODPAGES) {
-		warnx(_("error: swap area needs to be at least %ld KiB"),
-			(long)(MIN_GOODPAGES * pagesize/1024));
-		usage(stderr);
-	}
+	if (PAGES < MIN_GOODPAGES)
+		errx(EXIT_FAILURE,
+		     _("error: swap area needs to be at least %ld KiB"),
+		     (long)(MIN_GOODPAGES * pagesize / 1024));
 
 #ifdef __linux__
 	if (get_linux_version() >= KERNEL_VERSION(2,3,4))
@@ -602,7 +599,7 @@ main(int argc, char **argv) {
 	wipe_device(DEV, device_name, force);
 
 	hdr = (struct swap_header_v1_2 *) signature_page;
-	hdr->version = 1;
+	hdr->version = version;
 	hdr->last_page = PAGES - 1;
 	hdr->nr_badpages = badpages;
 
@@ -610,10 +607,10 @@ main(int argc, char **argv) {
 		errx(EXIT_FAILURE, _("Unable to set up swap-space: unreadable"));
 
 	goodpages = PAGES - badpages - 1;
-	printf(_("Setting up swapspace version 1, size = %llu KiB\n"),
-		goodpages * pagesize / 1024);
+	printf(_("Setting up swapspace version %d, size = %llu KiB\n"),
+		version, goodpages * pagesize / 1024);
 
-	write_signature("SWAPSPACE2");
+	write_signature(SWAP_SIGNATURE);
 	write_uuid_and_label(uuid, opt_label);
 
 	offset = 1024;

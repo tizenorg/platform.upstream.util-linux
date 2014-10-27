@@ -16,29 +16,32 @@
 # GNU General Public License for more details.
 #
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="losetup"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
+
+ts_check_test_command "$TS_CMD_LOSETUP"
+
+# Before checking for loop support we would need to test if losetup -f works at
+# all. At least we do a simple executable test for now.
+$TS_CMD_LOSETUP --version >/dev/null 2>$TS_OUTPUT || ts_failed
+$TS_CMD_LOSETUP --unknownopt >>$TS_OUTPUT 2>/dev/null && ts_failed
+test -s $TS_OUTPUT && ts_failed
+rm -f $TS_OUTPUT
+
 ts_skip_nonroot
+ts_check_losetup
 
-DEVICE=$(ts_scsi_debug_init dev_size_mb=11)
-REFILE=$(ts_image_init 10)
-
-function lo_print {
-	local lo=$1
-	echo "offset:    $( $TS_CMD_LOSETUP --list --raw -n -O OFFSET $lo )"
-	echo "sizelimit: $( $TS_CMD_LOSETUP --list --raw -n -O SIZELIMIT $lo )"
-	echo "size:      $( $TS_CMD_LSBLK -o SIZE -b -n -r $lo )"
-}
+. "$TS_SELF/losetup_functions.sh"
 
 #
 # file-* tests: Backing file is a regular file
 #
-BACKFILE="$REFILE"
+BACKFILE=$(ts_image_init 10)
 
-ts_init_subtest "file"
+ts_init_subtest "file-show"
 LODEV=$( $TS_CMD_LOSETUP --find --show $BACKFILE )
 if [ -z "$LODEV" ]; then
 	ts_log "Failed to create loop device"
@@ -78,54 +81,6 @@ ts_finalize_subtest
 
 rm -rf $BACKFILE
 
-#
-# Backing file is a block device
-#
-BACKFILE="$DEVICE"
-
-ts_init_subtest "blkdev"
-LODEV=$( $TS_CMD_LOSETUP --find --show $BACKFILE )
-if [ -z "$LODEV" ]; then
-	ts_log "Failed to create loop device"
-fi
-lo_print $LODEV >> $TS_OUTPUT
-$TS_CMD_LOSETUP -d $LODEV
-ts_finalize_subtest
-
-ts_init_subtest "blkdev-offset"
-LODEV=$( $TS_CMD_LOSETUP --offset 1MiB --find --show $BACKFILE )
-if [ -z "$LODEV" ]; then
-	ts_log "Failed to create loop device"
-fi
-lo_print $LODEV >> $TS_OUTPUT
-$TS_CMD_LOSETUP -d $LODEV
-ts_finalize_subtest
-
-
-ts_init_subtest "blkdev-sizelimit"
-LODEV=$( $TS_CMD_LOSETUP --sizelimit 3MiB --find --show $BACKFILE )
-if [ -z "$LODEV" ]; then
-	ts_log "Failed to create loop device"
-fi
-lo_print $LODEV >> $TS_OUTPUT
-$TS_CMD_LOSETUP -d $LODEV
-ts_finalize_subtest
-
-
-ts_init_subtest "blkdev-section"
-LODEV=$( $TS_CMD_LOSETUP --offset 1MiB --sizelimit 3MiB --find --show $BACKFILE )
-if [ -z "$LODEV" ]; then
-	ts_log "Failed to create loop device"
-fi
-lo_print $LODEV >> $TS_OUTPUT
-$TS_CMD_LOSETUP -d $LODEV
-ts_finalize_subtest
-
 udevadm settle
 
-rmmod scsi_debug
-
 ts_finalize
-
-
-

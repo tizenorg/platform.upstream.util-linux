@@ -155,19 +155,24 @@ static int last_lba(blkid_probe pr, uint64_t *lba)
  * Note that the PMBR detection is optional (enabled by default) and could be
  * disabled by BLKID_PARTS_FOPCE_GPT flag (see also blkid_paertitions_set_flags()).
  */
-static int is_pmbr_valid(blkid_probe pr)
+static int is_pmbr_valid(blkid_probe pr, int *has)
 {
 	int flags = blkid_partitions_get_flags(pr);
 	unsigned char *data;
 	struct dos_partition *p;
 	int i;
 
+	if (has)
+		*has = 0;
 	if (flags & BLKID_PARTS_FORCE_GPT)
 		goto ok;			/* skip PMBR check */
 
 	data = blkid_probe_get_sector(pr, 0);
-	if (!data)
+	if (!data) {
+		if (errno)
+			return -errno;
 		goto failed;
+	}
 
 	if (!mbr_is_valid_magic(data))
 		goto failed;
@@ -179,6 +184,8 @@ static int is_pmbr_valid(blkid_probe pr)
 failed:
 	return 0;
 ok:
+	if (has)
+		*has = 1;
 	return 1;
 }
 
@@ -229,13 +236,13 @@ static struct gpt_header *get_gpt_header(
 	h->header_crc32 = orgcrc;
 
 	if (crc != le32_to_cpu(orgcrc)) {
-		DBG(LOWPROBE, blkid_debug("GPT header corrupted"));
+		DBG(LOWPROBE, ul_debug("GPT header corrupted"));
 		return NULL;
 	}
 
 	/* Valid header has to be at MyLBA */
 	if (le64_to_cpu(h->my_lba) != lba) {
-		DBG(LOWPROBE, blkid_debug(
+		DBG(LOWPROBE, ul_debug(
 			"GPT->MyLBA mismatch with real position"));
 		return NULL;
 	}
@@ -245,14 +252,14 @@ static struct gpt_header *get_gpt_header(
 
 	/* Check if First and Last usable LBA makes sense */
 	if (lu < fu || fu > lastlba || lu > lastlba) {
-		DBG(LOWPROBE, blkid_debug(
+		DBG(LOWPROBE, ul_debug(
 			"GPT->{First,Last}UsableLBA out of range"));
 		return NULL;
 	}
 
 	/* The header has to be outside usable range */
 	if (fu < lba && lba < lu) {
-		DBG(LOWPROBE, blkid_debug("GPT header is inside usable area"));
+		DBG(LOWPROBE, ul_debug("GPT header is inside usable area"));
 		return NULL;
 	}
 
@@ -260,7 +267,7 @@ static struct gpt_header *get_gpt_header(
 	esz = le32_to_cpu(h->num_partition_entries) *
 			le32_to_cpu(h->sizeof_partition_entry);
 	if (!esz) {
-		DBG(LOWPROBE, blkid_debug("GPT entries undefined"));
+		DBG(LOWPROBE, ul_debug("GPT entries undefined"));
 		return NULL;
 	}
 
@@ -273,14 +280,14 @@ static struct gpt_header *get_gpt_header(
 	*ents = (struct gpt_entry *) get_lba_buffer(pr,
 				le64_to_cpu(h->partition_entries_lba), esz);
 	if (!*ents) {
-		DBG(LOWPROBE, blkid_debug("GPT entries unreadable"));
+		DBG(LOWPROBE, ul_debug("GPT entries unreadable"));
 		return NULL;
 	}
 
 	/* Validate entries */
 	crc = count_crc32((unsigned char *) *ents, esz);
 	if (crc != le32_to_cpu(h->partition_entry_array_crc32)) {
-		DBG(LOWPROBE, blkid_debug("GPT entries corrupted"));
+		DBG(LOWPROBE, ul_debug("GPT entries corrupted"));
 		return NULL;
 	}
 
@@ -298,23 +305,31 @@ static int probe_gpt_pt(blkid_probe pr,
 	uint64_t fu, lu;
 	uint32_t ssf, i;
 	efi_guid_t guid;
+	int ret;
 
 	if (last_lba(pr, &lastlba))
 		goto nothing;
 
-	if (!is_pmbr_valid(pr))
+	ret = is_pmbr_valid(pr, NULL);
+	if (ret < 0)
+		return ret;
+	else if (ret == 0)
 		goto nothing;
 
+	errno = 0;
 	h = get_gpt_header(pr, &hdr, &e, (lba = GPT_PRIMARY_LBA), lastlba);
-	if (!h)
+	if (!h && !errno)
 		h = get_gpt_header(pr, &hdr, &e, (lba = lastlba), lastlba);
 
-	if (!h)
+	if (!h) {
+		if (errno)
+			return -errno;
 		goto nothing;
+	}
 
 	blkid_probe_use_wiper(pr, lba * blkid_probe_get_size(pr), 8);
 
-	if (blkid_probe_set_magic(pr, lba << 9,
+	if (blkid_probe_set_magic(pr, blkid_probe_get_sectorsize(pr) * lba,
 			      sizeof(GPT_HEADER_SIGNATURE_STR) - 1,
 			      (unsigned char *) GPT_HEADER_SIGNATURE_STR))
 		goto err;
@@ -326,14 +341,15 @@ static int probe_gpt_pt(blkid_probe pr,
 		/* Non-binary interface -- caller does not ask for details
 		 * about partitions, just set generic varibles only. */
 		blkid_partitions_set_ptuuid(pr, (unsigned char *) &guid);
-		return 0;
+		return BLKID_PROBE_OK;
 	}
 
 	ls = blkid_probe_get_partlist(pr);
 	if (!ls)
-		goto err;
+		goto nothing;
 
-	tab = blkid_partlist_new_parttable(ls, "gpt", lba << 9);
+	tab = blkid_partlist_new_parttable(ls, "gpt",
+				blkid_probe_get_sectorsize(pr) * lba);
 	if (!tab)
 		goto err;
 
@@ -358,7 +374,7 @@ static int probe_gpt_pt(blkid_probe pr,
 		}
 		/* the partition has to inside usable range */
 		if (start < fu || start + size - 1 > lu) {
-			DBG(LOWPROBE, blkid_debug(
+			DBG(LOWPROBE, ul_debug(
 				"GPT entry[%d] overflows usable area - ignore",
 				i));
 			blkid_partlist_increment_partno(ls);
@@ -382,15 +398,16 @@ static int probe_gpt_pt(blkid_probe pr,
 		swap_efi_guid(&guid);
 		blkid_partition_set_type_uuid(par, (const unsigned char *) &guid);
 
-		blkid_partition_set_flags(par, e->attributes);
+		blkid_partition_set_flags(par, le64_to_cpu(e->attributes));
 	}
 
-	return 0;
+	return BLKID_PROBE_OK;
 
 nothing:
-	return 1;
+	return BLKID_PROBE_NONE;
+
 err:
-	return -1;
+	return -ENOMEM;
 }
 
 
@@ -409,5 +426,41 @@ const struct blkid_idinfo gpt_pt_idinfo =
 	 * It means we have to always call probe_gpt_pt().
 	 */
 	.magics		= BLKID_NONE_MAGIC
+};
+
+
+
+/* probe for *alone* protective MBR */
+static int probe_pmbr_pt(blkid_probe pr,
+		const struct blkid_idmag *mag __attribute__((__unused__)))
+{
+	int has = 0;
+	struct gpt_entry *e;
+	uint64_t lastlba = 0;
+	struct gpt_header hdr;
+
+	if (last_lba(pr, &lastlba))
+		goto nothing;
+
+	is_pmbr_valid(pr, &has);
+	if (!has)
+		goto nothing;
+
+	if (!get_gpt_header(pr, &hdr, &e, GPT_PRIMARY_LBA, lastlba) &&
+	    !get_gpt_header(pr, &hdr, &e, lastlba, lastlba))
+		return 0;
+nothing:
+	return 1;
+}
+
+const struct blkid_idinfo pmbr_pt_idinfo =
+{
+	.name		= "PMBR",
+	.probefunc	= probe_pmbr_pt,
+	.magics		=
+	{
+		{ .magic = "\x55\xAA", .len = 2, .sboff = 510 },
+		{ NULL }
+	}
 };
 

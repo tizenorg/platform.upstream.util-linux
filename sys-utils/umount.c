@@ -80,7 +80,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -a, --all               unmount all filesystems\n"), out);
-	fputs(_(" -A, --all-targets       unmount all mountpoins for the given device in the\n"
+	fputs(_(" -A, --all-targets       unmount all mountpoints for the given device in the\n"
 	        "                           current namespace\n"), out);
 	fputs(_(" -c, --no-canonicalize   don't canonicalize paths\n"), out);
 	fputs(_(" -d, --detach-loop       if mounted loop device, also free this loop device\n"), out);
@@ -281,10 +281,12 @@ static int umount_all(struct libmnt_context *cxt)
 			if (mnt_context_is_verbose(cxt))
 				printf(_("%-25s: ignored\n"), tgt);
 		} else {
-			rc |= mk_exit_code(cxt, mntrc);
+			int xrc = mk_exit_code(cxt, mntrc);
 
-			if (mnt_context_is_verbose(cxt))
+			if (xrc == MOUNT_EX_SUCCESS
+			    && mnt_context_is_verbose(cxt))
 				printf("%-25s: successfully unmounted\n", tgt);
+			rc |= xrc;
 		}
 	}
 
@@ -433,7 +435,9 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 		return mk_exit_code(cxt, rc);		/* error */
 
 	if (!mnt_fs_get_srcpath(fs) || !mnt_fs_get_devno(fs))
-		err(MOUNT_EX_USAGE, _("%s: failed to determine source"), spec);
+		errx(MOUNT_EX_USAGE, _("%s: failed to determine source "
+				"(--all-targets is unsupported on systems with "
+				"regular mtab file)."), spec);
 
 	itr = mnt_new_iter(MNT_ITER_BACKWARD);
 	if (!itr)
@@ -441,8 +445,10 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 
 	/* get on @cxt independent mountinfo */
 	tb = new_mountinfo(cxt);
-	if (!tb)
-		return MOUNT_EX_SOFTWARE;
+	if (!tb) {
+		rc = MOUNT_EX_SOFTWARE;
+		goto done;
+	}
 
 	/* Note that @fs is from mount context and the context will be reseted
 	 * after each umount() call */
@@ -464,6 +470,7 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 			break;
 	}
 
+done:
 	mnt_free_iter(itr);
 	mnt_unref_table(tb);
 
@@ -627,19 +634,21 @@ int main(int argc, char **argv)
 			rc += umount_recursive(cxt, *argv++);
 	} else {
 		while (argc--) {
-			char *path = *argv++;
+			char *path = *argv;
 
-			if (mnt_context_is_restricted(cxt))
+			if (mnt_context_is_restricted(cxt)
+			    && !mnt_tag_is_valid(path))
 				path = sanitize_path(path);
 
 			rc += umount_one(cxt, path);
 
-			if (mnt_context_is_restricted(cxt))
+			if (path != *argv)
 				free(path);
+			argv++;
 		}
 	}
 
 	mnt_free_context(cxt);
-	return rc;
+	return (rc < 256) ? rc : 255;
 }
 

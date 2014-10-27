@@ -53,7 +53,7 @@
 
 static int verbose = 0;
 
-static unsigned int blksize; /* settable via -b option */
+static unsigned int blksize = 0; /* settable via -b option, default page size */
 static long total_blocks = 0, total_nodes = 1; /* pre-count the root node */
 static int image_length = 0;
 static int cramfs_is_big_endian = 0; /* target is big endian */
@@ -167,11 +167,9 @@ do_mmap(char *path, unsigned int size, unsigned int mode){
 	}
 
 	start = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0);
-	if (-1 == (int) (long) start) {
-		close(fd);
-		err(MKFS_EX_ERROR, "mmap");
-	}
 	close(fd);
+	if (start == MAP_FAILED)
+		err(MKFS_EX_ERROR, "mmap");
 	return start;
 err:
 	free(start);
@@ -715,7 +713,6 @@ int main(int argc, char **argv)
 	int c;
 	cramfs_is_big_endian = HOST_IS_BIG_ENDIAN; /* default is to use host order */
 
-	blksize = getpagesize();
 	total_blocks = 0;
 
 	setlocale(LC_ALL, "");
@@ -783,6 +780,9 @@ int main(int argc, char **argv)
 		usage(MKFS_EX_USAGE);
 	dirname = argv[optind];
 	outfile = argv[optind + 1];
+
+	if (blksize == 0)
+		blksize = getpagesize();
 
 	if (stat(dirname, &st) < 0)
 		err(MKFS_EX_USAGE, _("stat failed %s"), dirname);

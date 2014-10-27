@@ -12,17 +12,28 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="fallocate"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
 
+ts_check_test_command "$TS_CMD_FALLOCATE"
+ts_check_test_command "$TS_CMD_FINDMNT"
+
 IMAGE=${TS_OUTDIR}/${TS_TESTNAME}.file
 rm -f $IMAGE
 
-$TS_CMD_FALLOCATE -o 128 -l 256 $IMAGE > $TS_OUTPUT 2>&1
-stat -c "%s" $IMAGE > $TS_OUTPUT 2>&1
+if $TS_CMD_FALLOCATE -o 128 -l 256 $IMAGE > $TS_OUTPUT 2>&1; then
+	stat -c "%s" $IMAGE >> $TS_OUTPUT 2>&1
+else
+	# fs type of $TS_OUTDIR, could be used to skip this test early
+	fs_type=$(${TS_CMD_FINDMNT} -n -o FSTYPE -T ${TS_OUTDIR})
+
+	test "$(<$TS_OUTPUT)" \
+	     = "fallocate: fallocate failed: Operation not supported" \
+	&& ts_skip "'${fs_type}' not supported"
+fi
 
 rm -f $IMAGE
 

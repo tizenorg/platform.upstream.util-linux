@@ -19,7 +19,9 @@
 #ifdef HAVE_ERRNO_H
 #include <errno.h>
 #endif
+
 #include "blkidP.h"
+#include "sysfs.h"
 
 static void blkid_probe_to_tags(blkid_probe pr, blkid_dev dev)
 {
@@ -71,13 +73,13 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 	diff = now - dev->bid_time;
 
 	if (stat(dev->bid_name, &st) < 0) {
-		DBG(PROBE, blkid_debug("blkid_verify: error %m (%d) while "
+		DBG(PROBE, ul_debug("blkid_verify: error %m (%d) while "
 			   "trying to stat %s", errno,
 			   dev->bid_name));
 	open_err:
 		if ((errno == EPERM) || (errno == EACCES) || (errno == ENOENT)) {
 			/* We don't have read permission, just return cache data. */
-			DBG(PROBE, blkid_debug("returning unverified data for %s",
+			DBG(PROBE, ul_debug("returning unverified data for %s",
 						dev->bid_name));
 			return dev;
 		}
@@ -99,12 +101,12 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 		return dev;
 
 #ifndef HAVE_STRUCT_STAT_ST_MTIM_TV_NSEC
-	DBG(PROBE, blkid_debug("need to revalidate %s (cache time %lu, stat time %lu,\t"
+	DBG(PROBE, ul_debug("need to revalidate %s (cache time %lu, stat time %lu,\t"
 		   "time since last check %lu)",
 		   dev->bid_name, (unsigned long)dev->bid_time,
 		   (unsigned long)st.st_mtime, (unsigned long)diff));
 #else
-	DBG(PROBE, blkid_debug("need to revalidate %s (cache time %lu.%lu, stat time %lu.%lu,\t"
+	DBG(PROBE, ul_debug("need to revalidate %s (cache time %lu.%lu, stat time %lu.%lu,\t"
 		   "time since last check %lu)",
 		   dev->bid_name,
 		   (unsigned long)dev->bid_time, (unsigned long)dev->bid_utime,
@@ -112,6 +114,10 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 		   (unsigned long)diff));
 #endif
 
+	if (sysfs_devno_is_lvm_private(st.st_rdev)) {
+		blkid_free_dev(dev);
+		return NULL;
+	}
 	if (!cache->probe) {
 		cache->probe = blkid_new_probe();
 		if (!cache->probe) {
@@ -122,7 +128,7 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 
 	fd = open(dev->bid_name, O_RDONLY|O_CLOEXEC);
 	if (fd < 0) {
-		DBG(PROBE, blkid_debug("blkid_verify: error %m (%d) while "
+		DBG(PROBE, ul_debug("blkid_verify: error %m (%d) while "
 					"opening %s", errno,
 					dev->bid_name));
 		goto open_err;
@@ -174,7 +180,7 @@ blkid_dev blkid_verify(blkid_cache cache, blkid_dev dev)
 
 		blkid_probe_to_tags(cache->probe, dev);
 
-		DBG(PROBE, blkid_debug("%s: devno 0x%04llx, type %s",
+		DBG(PROBE, ul_debug("%s: devno 0x%04llx, type %s",
 			   dev->bid_name, (long long)st.st_rdev, dev->bid_type));
 	}
 

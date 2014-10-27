@@ -315,22 +315,21 @@ static char *my_tgoto(char *cap, int col, int row)
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
-	fprintf(out,
-		_("Usage: %s [options] file...\n\n"),
-		program_invocation_short_name);
-	fprintf(out,
-		_("Options:\n"
-		  "  -d        display help instead of ring bell\n"
-		  "  -f        count logical, rather than screen lines\n"
-		  "  -l        suppress pause after form feed\n"
-		  "  -p        do not scroll, clean screen and display text\n"
-		  "  -c        do not scroll, display text and clean line ends\n"
-		  "  -u        suppress underlining\n"
-		  "  -s        squeeze multiple blank lines into one\n"
-		  "  -NUM      specify the number of lines per screenful\n"
-		  "  +NUM      display file beginning from line number NUM\n"
-		  "  +/STRING  display file beginning from search string match\n"
-		  "  -V        output version information and exit\n"));
+	fputs(USAGE_HEADER, out);
+	fprintf(out, _(" %s [options] <file>...\n"), program_invocation_short_name);
+	fputs(USAGE_OPTIONS, out);
+	fputs(_(" -d          display help instead of ringing bell\n"), out);
+	fputs(_(" -f          count logical rather than screen lines\n"), out);
+	fputs(_(" -l          suppress pause after form feed\n"), out);
+	fputs(_(" -c          do not scroll, display text and clean line ends\n"), out);
+	fputs(_(" -p          do not scroll, clean screen and display text\n"), out);
+	fputs(_(" -s          squeeze multiple blank lines into one\n"), out);
+	fputs(_(" -u          suppress underlining\n"), out);
+	fputs(_(" -<number>   the number of lines per screenful\n"), out);
+	fputs(_(" +<number>   display file beginning from line number\n"), out);
+	fputs(_(" +/<string>  display file beginning from search string match\n"), out);
+	fputs(_(" -V          display version information and exit\n"), out);
+	fprintf(out, USAGE_MAN_TAIL("more(1)"));
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
@@ -604,8 +603,10 @@ FILE *checkf(register char *fs, int *clearfirst)
 		perror(fs);
 		return ((FILE *)NULL);
 	}
-	if (magic(f, fs))
+	if (magic(f, fs)) {
+		fclose(f);
 		return ((FILE *)NULL);
+	}
 	fcntl(fileno(f), F_SETFD, FD_CLOEXEC);
 	c = Getc(f);
 	*clearfirst = (c == '\f');
@@ -638,7 +639,6 @@ static int magic(FILE *f, char *fs)
 		case 0x457f:	/* simple ELF detection */
 			printf(_("\n******** %s: Not a text file ********\n\n"),
 			       fs);
-			fclose(f);
 			return 1;
 		}
 	}
@@ -1232,10 +1232,9 @@ int command(char *filename, register FILE *f)
 				putchar('\n');
 				if (clreol)
 					cleareol();
-				if (nlines != 1)
-					printf(_("...back %d pages"), nlines);
-				else
-					putsout(_("...back 1 page"));
+				printf(P_("...back %d page",
+					"...back %d pages", nlines),
+					nlines);
 				if (clreol)
 					cleareol();
 				putchar('\n');
@@ -1281,10 +1280,9 @@ int command(char *filename, register FILE *f)
 			putchar('\n');
 			if (clreol)
 				cleareol();
-			if (nlines == 1)
-				putsout(_("...skipping one line"));
-			else
-				printf(_("...skipping %d lines"), nlines);
+			printf(P_("...skipping %d line",
+				"...skipping %d lines", nlines),
+				nlines);
 
 			if (clreol)
 				cleareol();

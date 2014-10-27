@@ -49,6 +49,11 @@
 # include <selinux/get_context_list.h>
 #endif
 
+#ifdef __linux__
+# include <sys/kd.h>
+# include <sys/param.h>
+#endif
+
 #include "c.h"
 #include "closestream.h"
 #include "nls.h"
@@ -76,6 +81,41 @@ static volatile sig_atomic_t sigchild;
 # define IUCLC		0
 #endif
 
+#ifdef TIOCGLCKTRMIOS
+/*
+ * For the case plymouth is found on this system
+ */
+static int plymouth_command(const char* arg)
+{
+	const char *cmd = "/usr/bin/plymouth";
+	static int has_plymouth = 1;
+	pid_t pid;
+
+	if (!has_plymouth)
+		return 127;
+
+	pid = fork();
+	if (!pid) {
+		int fd = open("/dev/null", O_RDWR);
+		if (fd < 0)
+			exit(127);
+		dup2(fd, 0);
+		dup2(fd, 1);
+		dup2(fd, 2);
+		close(fd);
+		execl(cmd, cmd, arg, (char *) NULL);
+		exit(127);
+	} else if (pid > 0) {
+		int status;
+		waitpid(pid, &status, 0);
+		if (status == 127)
+			has_plymouth = 0;
+		return status;
+	}
+	return 1;
+}
+#endif
+
 /*
  * Fix the tty modes and set reasonable defaults.
  */
@@ -83,7 +123,28 @@ static void tcinit(struct console *con)
 {
 	int mode = 0, flags = 0;
 	struct termios *tio = &con->tio;
+	struct termios lock;
 	int fd = con->fd;
+#ifdef TIOCGLCKTRMIOS
+	int i = (plymouth_command("--ping")) ? 20 : 0;
+
+	while (i-- > 0) {
+		/*
+		 * With plymouth the termios flags become changed after this
+		 * function had changed the termios.
+		 */
+		memset(&lock, 0, sizeof(struct termios));
+		if (ioctl(fd, TIOCGLCKTRMIOS, &lock) < 0)
+			break;
+		if (!lock.c_iflag && !lock.c_oflag && !lock.c_cflag && !lock.c_lflag)
+			break;
+		if (i == 15 && plymouth_command("quit") != 0)
+			break;
+		sleep(1);
+	}
+	memset(&lock, 0, sizeof(struct termios));
+	ioctl(fd, TIOCSLCKTRMIOS, &lock);
+#endif
 
 	errno = 0;
 
@@ -93,10 +154,14 @@ static void tcinit(struct console *con)
 		return;
 	}
 
-	/* Handle serial lines here */
-	if (ioctl(fd, TIOCMGET, (char *) &mode) == 0) {
+	/* Handle lines other than virtual consoles here */
+#if defined(KDGKBMODE)
+	if (ioctl(fd, KDGKBMODE, &mode) < 0)
+#endif
+	{
 		speed_t ispeed, ospeed;
 		struct winsize ws;
+		errno = 0;
 
 		/* this is a modem line */
 		con->flags |= CON_SERIAL;
@@ -142,9 +207,7 @@ static void tcinit(struct console *con)
 		goto setattr;
 	}
 #if defined(IUTF8) && defined(KDGKBMODE)
-	/* Detect mode of current keyboard setup, e.g. for UTF-8 */
-	if (ioctl(fd, KDGKBMODE, &mode) < 0)
-		mode = K_RAW;
+	/* Handle mode of current keyboard setup, e.g. for UTF-8 */
 	switch(mode) {
 	case K_UNICODE:
 		setlocale(LC_CTYPE, "C.UTF-8");
@@ -182,10 +245,16 @@ static void tcfinal(struct console *con)
 		setenv("TERM", "linux", 1);
 		return;
 	}
-	if (con->flags & CON_NOTTY)
+	if (con->flags & CON_NOTTY) {
+		setenv("TERM", "dumb", 1);
 		return;
+	}
 
+#if defined (__s390__) || defined (__s390x__)
+	setenv("TERM", "dumb", 1);
+#else
 	setenv("TERM", "vt102", 1);
+#endif
 	tio = &con->tio;
 	fd = con->fd;
 
@@ -576,6 +645,7 @@ static char *getpasswd(struct console *con)
 	tty.c_lflag &= ~(ECHO|ECHOE|ECHOK|ECHONL|TOSTOP|ISIG);
 	tc = (tcsetattr(fd, TCSAFLUSH, &tty) == 0);
 
+	sigemptyset(&sa.sa_mask);
 	sa.sa_handler = alrm_handler;
 	sa.sa_flags = 0;
 	sigaction(SIGALRM, &sa, NULL);
@@ -590,7 +660,7 @@ static char *getpasswd(struct console *con)
 	while (cp->eol == '\0') {
 		if (read(fd, &c, 1) < 1) {
 			if (errno == EINTR || errno == EAGAIN) {
-				usleep(1000);
+				xusleep(250000);
 				continue;
 			}
 			ret = (char*)0;
@@ -825,7 +895,7 @@ int main(int argc, char **argv)
 	}
 
 	if (geteuid() != 0)
-		errx(EXIT_FAILURE, _("only root can run this program."));
+		errx(EXIT_FAILURE, _("only superuser can run this program"));
 
 	mask_signal(SIGQUIT, SIG_IGN, &saved_sigquit);
 	mask_signal(SIGTSTP, SIG_IGN, &saved_sigtstp);
@@ -875,7 +945,7 @@ int main(int argc, char **argv)
 	 * Get the root password.
 	 */
 	if ((pwd = getrootpwent(opt_e)) == NULL) {
-		warnx(_("cannot open password database."));
+		warnx(_("cannot open password database"));
 		sleep(2);
 		return EXIT_FAILURE;
 	}
@@ -993,7 +1063,7 @@ int main(int argc, char **argv)
 			if (*usemask & (1<<con->id))
 				continue;
 			kill(con->pid, SIGHUP);
-			usleep(5000);
+			usleep(50000);
 			kill(con->pid, SIGKILL);
 		}
 	}

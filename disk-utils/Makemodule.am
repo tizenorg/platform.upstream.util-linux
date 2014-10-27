@@ -1,4 +1,5 @@
 
+if BUILD_MINIX
 sbin_PROGRAMS += fsck.minix
 dist_man_MANS += disk-utils/fsck.minix.8
 fsck_minix_SOURCES = \
@@ -12,15 +13,23 @@ mkfs_minix_SOURCES = \
 	disk-utils/minix_programs.h \
 	disk-utils/mkfs.minix.c
 mkfs_minix_LDADD = $(LDADD) libcommon.la
+endif
 
+
+if BUILD_MKFS
 sbin_PROGRAMS += mkfs
 dist_man_MANS += disk-utils/mkfs.8
 mkfs_SOURCES = disk-utils/mkfs.c
+endif
 
+
+if BUILD_ISOSIZE
 usrbin_exec_PROGRAMS += isosize
 dist_man_MANS += disk-utils/isosize.8
 isosize_SOURCES = disk-utils/isosize.c
 isosize_LDADD = $(LDADD) libcommon.la
+endif
+
 
 if BUILD_BFS
 sbin_PROGRAMS += mkfs.bfs
@@ -30,6 +39,8 @@ mkfs_bfs_SOURCES = \
 mkfs_bfs_LDADD = $(LDADD) libcommon.la
 endif
 
+
+if BUILD_MKSWAP
 sbin_PROGRAMS += mkswap
 dist_man_MANS += disk-utils/mkswap.8
 mkswap_SOURCES = \
@@ -48,6 +59,7 @@ endif
 if HAVE_SELINUX
 mkswap_LDADD += -lselinux
 endif
+endif # BUILD_MKSWAP
 
 
 if BUILD_SWAPLABEL
@@ -69,7 +81,7 @@ if BUILD_FSCK
 sbin_PROGRAMS += fsck
 dist_man_MANS += disk-utils/fsck.8
 fsck_SOURCES = disk-utils/fsck.c
-fsck_LDADD = $(LDADD) libmount.la libblkid.la
+fsck_LDADD = $(LDADD) libmount.la libblkid.la libcommon.la
 fsck_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir) -I$(ul_libblkid_incdir)
 endif
 
@@ -92,11 +104,6 @@ sbin_PROGRAMS += mkfs.cramfs
 mkfs_cramfs_SOURCES = disk-utils/mkfs.cramfs.c $(cramfs_common_sources)
 mkfs_cramfs_LDADD = $(LDADD) -lz libcommon.la
 dist_man_MANS += disk-utils/mkfs.cramfs.8
-
-check_PROGRAMS += test_fsck.cramfs
-test_fsck_cramfs_SOURCES = $(fsck_cramfs_SOURCES)
-test_fsck_cramfs_LDADD = $(fsck_cramfs_LDADD)
-test_fsck_cramfs_CFLAGS = $(AM_CFLAGS) -DINCLUDE_FS_TESTS
 endif
 
 if BUILD_FDFORMAT
@@ -105,12 +112,90 @@ dist_man_MANS += disk-utils/fdformat.8
 fdformat_SOURCES = disk-utils/fdformat.c
 endif
 
-if LINUX
+if BUILD_BLOCKDEV
 sbin_PROGRAMS += blockdev
 dist_man_MANS += disk-utils/blockdev.8
 blockdev_SOURCES = disk-utils/blockdev.c
 blockdev_LDADD = $(LDADD) libcommon.la
 endif
+
+
+if BUILD_FDISK
+sbin_PROGRAMS += fdisk
+dist_man_MANS += disk-utils/fdisk.8
+fdisk_SOURCES = \
+	disk-utils/fdisk.c \
+	disk-utils/fdisk.h \
+	disk-utils/fdisk-menu.c
+
+fdisk_LDADD = $(LDADD) libcommon.la libfdisk.la
+fdisk_CFLAGS = $(AM_CFLAGS) -I$(ul_libfdisk_incdir)
+
+if BUILD_LIBBLKID
+fdisk_CFLAGS += -I$(ul_libblkid_incdir)
+fdisk_LDADD += libblkid.la
+endif
+
+if BUILD_LIBUUID
+fdisk_CFLAGS += -I$(ul_libuuid_incdir)
+fdisk_LDADD += libuuid.la
+endif
+
+if HAVE_STATIC_FDISK
+sbin_PROGRAMS += fdisk.static
+fdisk_static_SOURCES = $(fdisk_SOURCES)
+fdisk_static_LDFLAGS = -all-static
+fdisk_static_CFLAGS = $(fdisk_CFLAGS)
+fdisk_static_LDADD = $(fdisk_LDADD)
+endif
+endif # BUILD_FDISK
+
+
+if BUILD_SFDISK
+sbin_PROGRAMS += sfdisk
+dist_man_MANS += disk-utils/sfdisk.8
+sfdisk_SOURCES = disk-utils/sfdisk.c
+sfdisk_LDADD = $(LDADD) libcommon.la
+
+if HAVE_STATIC_SFDISK
+sbin_PROGRAMS += sfdisk.static
+sfdisk_static_SOURCES = $(sfdisk_SOURCES)
+sfdisk_static_LDFLAGS = -all-static
+sfdisk_static_LDADD = $(sfdisk_LDADD)
+endif
+endif # BUILD_SFDISK
+
+
+if BUILD_CFDISK
+sbin_PROGRAMS += cfdisk
+dist_man_MANS += disk-utils/cfdisk.8
+cfdisk_SOURCES = disk-utils/cfdisk.c
+cfdisk_LDADD = $(LDADD) libcommon.la libfdisk.la
+cfdisk_CFLAGS = $(AM_CFLAGS) -I$(ul_libfdisk_incdir)
+
+if BUILD_LIBUUID
+cfdisk_CFLAGS += -I$(ul_libuuid_incdir)
+cfdisk_LDADD += libuuid.la
+endif
+
+if BUILD_LIBBLKID
+cfdisk_CFLAGS += -I$(ul_libblkid_incdir)
+cfdisk_LDADD += libblkid.la
+endif
+
+if BUILD_LIBSMARTCOLS
+cfdisk_CFLAGS += -I$(ul_libsmartcols_incdir)
+cfdisk_LDADD += libsmartcols.la
+endif
+
+if HAVE_SLANG
+cfdisk_LDADD += -lslang
+else
+cfdisk_CFLAGS += $(NCURSES_CFLAGS)
+cfdisk_LDADD += $(NCURSES_LIBS)
+endif
+endif # BUILD_CFDISK
+
 
 if BUILD_PARTX
 usrsbin_exec_PROGRAMS += partx addpart delpart resizepart
@@ -138,7 +223,7 @@ resizepart_LDADD = $(LDADD) libcommon.la
 partx_SOURCES = \
 	disk-utils/partx.c \
 	disk-utils/partx.h
-partx_CFLAGS = -I$(ul_libblkid_incdir)
-partx_LDADD = $(LDADD) libblkid.la libcommon.la
+partx_CFLAGS = -I$(ul_libblkid_incdir) -I$(ul_libsmartcols_incdir)
+partx_LDADD = $(LDADD) libblkid.la libcommon.la libsmartcols.la
 
 endif # BUILD_PARTX

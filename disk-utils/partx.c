@@ -21,11 +21,11 @@
 #include <dirent.h>
 
 #include <blkid.h>
+#include <libsmartcols.h>
 
 #include "c.h"
 #include "pathnames.h"
 #include "nls.h"
-#include "tt.h"
 #include "blkdev.h"
 #include "strutils.h"
 #include "xalloc.h"
@@ -38,6 +38,13 @@
 
 /* this is the default upper limit, could be modified by --nr */
 #define SLICES_MAX	256
+
+/* basic table settings */
+enum {
+	PARTX_RAW =		(1 << 0),
+	PARTX_NOHEADINGS =	(1 << 1),
+	PARTX_EXPORT =		(1 << 2),
+};
 
 /* all the columns (-o option) */
 enum {
@@ -71,22 +78,22 @@ enum {
 struct colinfo {
 	const char	*name;	/* header */
 	double		whint;	/* width hint (N < 1 is in percent of termwidth) */
-	int		flags;	/* TT_FL_* */
+	int		flags;	/* SCOLS_FL_* */
 	const char      *help;
 };
 
 /* columns descriptions */
 struct colinfo infos[] = {
-	[COL_PARTNO]   = { "NR",    0.25, TT_FL_RIGHT, N_("partition number") },
-	[COL_START]    = { "START",   0.30, TT_FL_RIGHT, N_("start of the partition in sectors") },
-	[COL_END]      = { "END",     0.30, TT_FL_RIGHT, N_("end of the partition in sectors") },
-	[COL_SECTORS]  = { "SECTORS", 0.30, TT_FL_RIGHT, N_("number of sectors") },
-	[COL_SIZE]     = { "SIZE",    0.30, TT_FL_RIGHT, N_("human readable size") },
-	[COL_NAME]     = { "NAME",    0.30, TT_FL_TRUNC, N_("partition name") },
+	[COL_PARTNO]   = { "NR",    0.25, SCOLS_FL_RIGHT, N_("partition number") },
+	[COL_START]    = { "START",   0.30, SCOLS_FL_RIGHT, N_("start of the partition in sectors") },
+	[COL_END]      = { "END",     0.30, SCOLS_FL_RIGHT, N_("end of the partition in sectors") },
+	[COL_SECTORS]  = { "SECTORS", 0.30, SCOLS_FL_RIGHT, N_("number of sectors") },
+	[COL_SIZE]     = { "SIZE",    0.30, SCOLS_FL_RIGHT, N_("human readable size") },
+	[COL_NAME]     = { "NAME",    0.30, SCOLS_FL_TRUNC, N_("partition name") },
 	[COL_UUID]     = { "UUID",    36, 0, N_("partition UUID")},
-	[COL_SCHEME]   = { "SCHEME",  0.1, TT_FL_TRUNC, N_("partition table type (dos, gpt, ...)")},
-	[COL_FLAGS]    = { "FLAGS",   0.1, TT_FL_TRUNC, N_("partition flags")},
-	[COL_TYPE]     = { "TYPE",    1, TT_FL_RIGHT, N_("partition type (a string, a UUID, or hex)")},
+	[COL_SCHEME]   = { "SCHEME",  0.1, SCOLS_FL_TRUNC, N_("partition table type (dos, gpt, ...)")},
+	[COL_FLAGS]    = { "FLAGS",   0.1, SCOLS_FL_TRUNC, N_("partition flags")},
+	[COL_TYPE]     = { "TYPE",    1, SCOLS_FL_RIGHT, N_("partition type (a string, a UUID, or hex)")},
 };
 
 #define NCOLS ARRAY_SIZE(infos)
@@ -234,7 +241,7 @@ static int get_max_partno(const char *disk, dev_t devno)
 		    !strcmp(d->d_name, ".."))
 			continue;
 #ifdef _DIRENT_HAVE_D_TYPE
-		if (d->d_type != DT_DIR)
+		if (d->d_type != DT_DIR && d->d_type != DT_UNKNOWN)
 			continue;
 #endif
 		if (strncmp(parent, d->d_name, strlen(parent)))
@@ -415,7 +422,7 @@ static void upd_parts_warnx(const char *device, int first, int last)
 static int upd_parts(int fd, const char *device, dev_t devno,
 		     blkid_partlist ls, int lower, int upper)
 {
-	int i, n, an, nparts, rc = 0, errfirst = 0, errlast = 0, err;
+	int n, nparts, rc = 0, errfirst = 0, errlast = 0, err;
 	blkid_partition par;
 	uintmax_t start, size;
 
@@ -441,18 +448,16 @@ static int upd_parts(int fd, const char *device, dev_t devno,
 		return -1;
 	}
 
-	for (i = 0, n = lower; n <= upper; n++) {
-		par = blkid_partlist_get_partition(ls, i);
-		an = blkid_partition_get_partno(par);
-
-		if (lower && n < lower)
+	for (n = lower; n <= upper; n++) {
+		par = blkid_partlist_get_partition_by_partno(ls, n);
+		if (!par) {
+			if (verbose)
+				warn(_("%s: no partition #%d"), device, n);
 			continue;
-		if (upper && n > upper)
-			continue;
+		}
 
 		start = blkid_partition_get_start(par);
 		size =  blkid_partition_get_size(par);
-
 		if (blkid_partition_is_extended(par))
 			/*
 			 * Let's follow the Linux kernel and reduce
@@ -463,25 +468,21 @@ static int upd_parts(int fd, const char *device, dev_t devno,
 		err = partx_del_partition(fd, n);
 		if (err == -1 && errno == ENXIO)
 			err = 0; /* good, it already doesn't exist */
-		if (an == n)
+		if (err == -1 && errno == EBUSY)
 		{
-			if (i < nparts)
-				i++;
-			if (err == -1 && errno == EBUSY)
-			{
-				/* try to resize */
-				err = partx_resize_partition(fd, n, start, size);
-				if (verbose)
-					printf(_("%s: partition #%d resized\n"), device, n);
-				if (err == 0)
-					continue;
-			}
-			if (err == 0 && partx_add_partition(fd, n, start, size) == 0) {
-				if (verbose)
-					printf(_("%s: partition #%d added\n"), device, n);
+			/* try to resize */
+			err = partx_resize_partition(fd, n, start, size);
+			if (verbose)
+				printf(_("%s: partition #%d resized\n"), device, n);
+			if (err == 0)
 				continue;
-			}
 		}
+		if (err == 0 && partx_add_partition(fd, n, start, size) == 0) {
+			if (verbose)
+				printf(_("%s: partition #%d added\n"), device, n);
+			continue;
+		}
+
 		if (err == 0)
 			continue;
 		rc = -1;
@@ -532,22 +533,23 @@ static int list_parts(blkid_partlist ls, int lower, int upper)
 	return 0;
 }
 
-static void add_tt_line(struct tt *tt, blkid_partition par)
+static int add_scols_line(struct libscols_table *table, blkid_partition par)
 {
-	struct tt_line *line;
-	int i;
+	struct libscols_line *line;
+	int i, rc = 0;
 
-	assert(tt);
+	assert(table);
 	assert(par);
 
-	line = tt_add_line(tt, NULL);
+	line = scols_table_new_line(table, NULL);
 	if (!line) {
 		warn(_("failed to add line to output"));
-		return;
+		return -ENOMEM;
 	}
 
 	for (i = 0; i < ncolumns; i++) {
-		char *str = NULL;
+		char *str = NULL;			/* allocated string */
+		const char *cstr = NULL;		/* foreign string */
 
 		switch (get_column_id(i)) {
 		case COL_PARTNO:
@@ -573,14 +575,14 @@ static void add_tt_line(struct tt *tt, blkid_partition par)
 					blkid_partition_get_size(par) << 9);
 			break;
 		case COL_NAME:
-			str = xstrdup(blkid_partition_get_name(par));
+			cstr = blkid_partition_get_name(par);
 			break;
 		case COL_UUID:
-			str = xstrdup(blkid_partition_get_uuid(par));
+			cstr = blkid_partition_get_uuid(par);
 			break;
 		case COL_TYPE:
 			if (blkid_partition_get_type_string(par))
-				str = xstrdup(blkid_partition_get_type_string(par));
+				cstr = blkid_partition_get_type_string(par);
 			else
 				xasprintf(&str, "0x%x",
 					blkid_partition_get_type(par));
@@ -592,22 +594,30 @@ static void add_tt_line(struct tt *tt, blkid_partition par)
 		{
 			blkid_parttable tab = blkid_partition_get_table(par);
 			if (tab)
-				str = xstrdup(blkid_parttable_get_type(tab));
+				cstr = blkid_parttable_get_type(tab);
 			break;
 		}
 		default:
 			break;
 		}
 
-		if (str)
-			tt_line_set_data(line, i, str);
+		if (cstr)
+			rc = scols_line_set_data(line, i, cstr);
+		else if (str)
+			rc = scols_line_refer_data(line, i, str);
+		if (rc) {
+			warn(_("failed to add data to output table"));
+			break;
+		}
 	}
+
+	return rc;
 }
 
-static int show_parts(blkid_partlist ls, int tt_flags, int lower, int upper)
+static int show_parts(blkid_partlist ls, int scols_flags, int lower, int upper)
 {
 	int i, rc = -1;
-	struct tt *tt;
+	struct libscols_table *table;
 	int nparts;
 
 	assert(ls);
@@ -616,16 +626,20 @@ static int show_parts(blkid_partlist ls, int tt_flags, int lower, int upper)
 	if (!nparts)
 		return 0;
 
-	tt = tt_new_table(tt_flags | TT_FL_FREEDATA);
-	if (!tt) {
+	scols_init_debug(0);
+	table = scols_new_table();
+	if (!table) {
 		warn(_("failed to initialize output table"));
 		return -1;
 	}
+	scols_table_enable_raw(table, !!(scols_flags & PARTX_RAW));
+	scols_table_enable_export(table, !!(scols_flags & PARTX_EXPORT));
+	scols_table_enable_noheadings(table, !!(scols_flags & PARTX_NOHEADINGS));
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *col = get_column_info(i);
 
-		if (!tt_define_column(tt, col->name, col->whint, col->flags)) {
+		if (!scols_table_new_column(table, col->name, col->whint, col->flags)) {
 			warnx(_("failed to initialize output column"));
 			goto done;
 		}
@@ -640,13 +654,15 @@ static int show_parts(blkid_partlist ls, int tt_flags, int lower, int upper)
 		if (upper && n > upper)
 			continue;
 
-		add_tt_line(tt, par);
+		rc = add_scols_line(table, par);
+		if (rc)
+			break;
 	}
 
 	rc = 0;
-	tt_print_table(tt);
+	scols_print_table(table);
 done:
-	tt_free_table(tt);
+	scols_unref_table(table);
 	return rc;
 }
 
@@ -728,7 +744,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 int main(int argc, char **argv)
 {
 	int fd, c, what = ACT_NONE, lower = 0, upper = 0, rc = 0;
-	int tt_flags = 0;
+	int scols_flags = 0;
 	char *type = NULL;
 	char *device = NULL; /* pointer to argv[], ie: /dev/sda1 */
 	char *wholedisk = NULL; /* allocated, ie: /dev/sda */
@@ -781,7 +797,7 @@ int main(int argc, char **argv)
 			what = ACT_DELETE;
 			break;
 		case 'g':
-			tt_flags |= TT_FL_NOHEADINGS;
+			scols_flags |= PARTX_NOHEADINGS;
 			break;
 		case 'l':
 			what = ACT_LIST;
@@ -794,11 +810,11 @@ int main(int argc, char **argv)
 			outarg = optarg;
 			break;
 		case 'P':
-			tt_flags |= TT_FL_EXPORT;
+			scols_flags |= PARTX_EXPORT;
 			what = ACT_SHOW;
 			break;
 		case 'r':
-			tt_flags |= TT_FL_RAW;
+			scols_flags |= PARTX_RAW;
 			what = ACT_SHOW;
 			break;
 		case 's':
@@ -959,7 +975,7 @@ int main(int argc, char **argv)
 
 			switch (what) {
 			case ACT_SHOW:
-				rc = show_parts(ls, tt_flags, lower, upper);
+				rc = show_parts(ls, scols_flags, lower, upper);
 				break;
 			case ACT_LIST:
 				rc = list_parts(ls, lower, upper);

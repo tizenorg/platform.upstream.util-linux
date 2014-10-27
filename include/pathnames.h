@@ -50,6 +50,9 @@
 #define _PATH_SECURE		"/etc/securesingle"
 #define _PATH_USERTTY           "/etc/usertty"
 
+#define _PATH_TERMCOLORS_DIRNAME "terminal-colors.d"
+#define _PATH_TERMCOLORS_DIR	"/etc/" _PATH_TERMCOLORS_DIRNAME
+
 /* used in login-utils/shutdown.c */
 
 /* used in login-utils/setpwnam.h and login-utils/islocal.c */
@@ -86,6 +89,9 @@
 #define _PATH_PROC_MOUNTINFO	"/proc/self/mountinfo"
 #define _PATH_PROC_LOCKS        "/proc/locks"
 #define _PATH_PROC_CDROMINFO	"/proc/sys/dev/cdrom/info"
+
+#define _PATH_PROC_UIDMAP	"/proc/self/uid_map"
+#define _PATH_PROC_GIDMAP	"/proc/self/gid_map"
 
 #define _PATH_PROC_ATTR_CURRENT	"/proc/self/attr/current"
 #define _PATH_PROC_ATTR_EXEC	"/proc/self/attr/exec"
@@ -144,7 +150,11 @@
 #define _PATH_DEV_BYPARTUUID	"/dev/disk/by-partuuid"
 
 /* hwclock paths */
+#ifdef CONFIG_ADJTIME_PATH
+# define _PATH_ADJTIME		CONFIG_ADJTIME_PATH
+#else
 # define _PATH_ADJTIME		"/etc/adjtime"
+#endif
 
 #define _PATH_LASTDATE		"/var/lib/lastdate"
 #ifdef __ia64__

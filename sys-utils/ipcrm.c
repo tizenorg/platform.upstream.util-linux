@@ -43,20 +43,20 @@ typedef enum type_id {
 
 static int verbose = 0;
 
-/* print the new usage */
+/* print the usage */
 static void __attribute__ ((__noreturn__)) usage(FILE * out)
 {
 	fprintf(out, USAGE_HEADER);
 	fprintf(out, " %s [options]\n", program_invocation_short_name);
-	fprintf(out, " %s <shm|msg|sem> <id> [...]\n", program_invocation_short_name);
+	fprintf(out, " %s shm|msg|sem <id>...\n", program_invocation_short_name);
 	fprintf(out, USAGE_OPTIONS);
-	fputs(_(" -m, --shmem-id <id>        remove shared memory segment by shmid\n"), out);
+	fputs(_(" -m, --shmem-id <id>        remove shared memory segment by id\n"), out);
 	fputs(_(" -M, --shmem-key <key>      remove shared memory segment by key\n"), out);
 	fputs(_(" -q, --queue-id <id>        remove message queue by id\n"), out);
 	fputs(_(" -Q, --queue-key <key>      remove message queue by key\n"), out);
 	fputs(_(" -s, --semaphore-id <id>    remove semaphore by id\n"), out);
 	fputs(_(" -S, --semaphore-key <key>  remove semaphore by key\n"), out);
-	fputs(_(" -a, --all[=<shm|msg|sem>]  remove all\n"), out);
+	fputs(_(" -a, --all[=shm|msg|sem]    remove all (in the specified category)\n"), out);
 	fputs(_(" -v, --verbose              explain what is being done\n"), out);
 	fprintf(out, USAGE_SEPARATOR);
 	fprintf(out, USAGE_HELP);
@@ -271,6 +271,13 @@ static int remove_all(type_id type)
 			ret |= remove_id(SEM, 0, rm_me);
 		}
 	}
+/* kFreeBSD hackery -- ah 20140723 */
+#ifndef MSG_STAT
+#define MSG_STAT 11
+#endif
+#ifndef MSG_INFO
+#define MSG_INFO 12
+#endif
 	if (type == MSG || type == ALL) {
 		maxid =
 		    msgctl(0, MSG_INFO, (struct msqid_ds *)(void *)&msginfo);

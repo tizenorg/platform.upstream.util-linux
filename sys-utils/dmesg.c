@@ -32,6 +32,8 @@
 #include "bitops.h"
 #include "closestream.h"
 #include "optutils.h"
+#include "timeutils.h"
+#include "boottime.h"
 #include "mangle.h"
 #include "pager.h"
 
@@ -59,16 +61,36 @@
 #define SYSLOG_ACTION_SIZE_BUFFER   10
 
 /*
- * Colors
+ * Color scheme
  */
-#define DMESG_COLOR_SUBSYS	UL_COLOR_BROWN
-#define DMESG_COLOR_TIME	UL_COLOR_GREEN
-#define DMESG_COLOR_RELTIME	UL_COLOR_BOLD_GREEN
-#define DMESG_COLOR_ALERT	UL_COLOR_REVERSE UL_COLOR_RED
-#define DMESG_COLOR_CRIT	UL_COLOR_BOLD_RED
-#define DMESG_COLOR_ERR		UL_COLOR_RED
-#define DMESG_COLOR_WARN	UL_COLOR_BOLD
-#define DMESG_COLOR_SEGFAULT	UL_COLOR_HALFBRIGHT UL_COLOR_RED
+struct dmesg_color {
+	const char *scheme;	/* name used in termina-colors.d/dmesg.scheme */
+	const char *dflt;	/* default color ESC sequence */
+};
+
+enum {
+	DMESG_COLOR_SUBSYS,
+	DMESG_COLOR_TIME,
+	DMESG_COLOR_ALERT,
+	DMESG_COLOR_CRIT,
+	DMESG_COLOR_ERR,
+	DMESG_COLOR_WARN,
+	DMESG_COLOR_SEGFAULT
+};
+
+static const struct dmesg_color colors[] =
+{
+	[DMESG_COLOR_SUBSYS]    = { "subsys",	UL_COLOR_BROWN },
+	[DMESG_COLOR_TIME]	= { "time",     UL_COLOR_GREEN },
+	[DMESG_COLOR_ALERT]	= { "alert",    UL_COLOR_REVERSE UL_COLOR_RED },
+	[DMESG_COLOR_CRIT]	= { "crit",     UL_COLOR_BOLD UL_COLOR_RED },
+	[DMESG_COLOR_ERR]       = { "err",      UL_COLOR_RED },
+	[DMESG_COLOR_WARN]	= { "warn",     UL_COLOR_BOLD },
+	[DMESG_COLOR_SEGFAULT]	= { "segfault", UL_COLOR_HALFBRIGHT UL_COLOR_RED }
+};
+
+#define dmesg_enable_color(_id) \
+		color_scheme_enable(colors[_id].scheme, colors[_id].dflt);
 
 /*
  * Priority and facility names
@@ -200,19 +222,21 @@ static int read_kmsg(struct dmesg_control *ctl);
 
 static int set_level_color(int log_level, const char *mesg, size_t mesgsz)
 {
+	int id = -1;
+
 	switch (log_level) {
 	case LOG_ALERT:
-		color_enable(DMESG_COLOR_ALERT);
-		return 0;
+		id = DMESG_COLOR_ALERT;
+		break;
 	case LOG_CRIT:
-		color_enable(DMESG_COLOR_CRIT);
-		return 0;
+		id = DMESG_COLOR_CRIT;
+		break;
 	case LOG_ERR:
-		color_enable(DMESG_COLOR_ERR);
-		return 0;
+		id = DMESG_COLOR_ERR;
+		break;
 	case LOG_WARNING:
-		color_enable(DMESG_COLOR_WARN);
-		return 0;
+		id = DMESG_COLOR_WARN;
+		break;
 	default:
 		break;
 	}
@@ -220,12 +244,13 @@ static int set_level_color(int log_level, const char *mesg, size_t mesgsz)
 	/* well, sometimes the messges contains important keywords, but in
 	 * non-warning/error messages
 	 */
-	if (memmem(mesg, mesgsz, "segfault at", 11)) {
-		color_enable(DMESG_COLOR_SEGFAULT);
-		return 0;
-	}
+	if (id < 0 && memmem(mesg, mesgsz, "segfault at", 11))
+		id = DMESG_COLOR_SEGFAULT;
 
-	return 1;
+	if (id >= 0)
+		dmesg_enable_color(id);
+
+	return id >= 0 ? 0 : -1;
 }
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
@@ -472,33 +497,6 @@ static int get_syslog_buffer_size(void)
 	return n > 0 ? n : 0;
 }
 
-static int get_boot_time(struct timeval *boot_time)
-{
-	struct timespec hires_uptime;
-	struct timeval lores_uptime, now;
-	struct sysinfo info;
-
-	if (gettimeofday(&now, NULL) != 0) {
-		warn(_("gettimeofday failed"));
-		return -errno;
-	}
-
-#ifdef CLOCK_BOOTTIME
-	if (clock_gettime(CLOCK_BOOTTIME, &hires_uptime) == 0) {
-		TIMESPEC_TO_TIMEVAL(&lores_uptime, &hires_uptime);
-		timersub(&now, &lores_uptime, boot_time);
-		return 0;
-	}
-#endif
-	/* fallback */
-	if (sysinfo(&info) != 0)
-		warn(_("sysinfo failed"));
-
-	boot_time->tv_sec = now.tv_sec - info.uptime;
-	boot_time->tv_usec = 0;
-	return 0;
-}
-
 /*
  * Reads messages from regular file by mmap
  */
@@ -614,7 +612,7 @@ static void safe_fwrite(const char *buf, size_t size, FILE *out)
 	for (i = 0; i < size; i++) {
 		const char *p = buf + i;
 		int rc, hex = 0;
-	        size_t len = 1;
+		size_t len;
 
 #ifdef HAVE_WIDECHAR
 		wchar_t wc;
@@ -631,6 +629,7 @@ static void safe_fwrite(const char *buf, size_t size, FILE *out)
 		}
 		i += len - 1;
 #else
+		len = 1;
 		if (!isprint((unsigned int) *p) &&
 			!isspace((unsigned int) *p))        /* non-printable */
 			hex = 1;
@@ -639,8 +638,11 @@ static void safe_fwrite(const char *buf, size_t size, FILE *out)
 			rc = fwrite_hex(p, len, out);
 		else
 			rc = fwrite(p, 1, len, out) != len;
-		if (rc != 0)
-			err(EXIT_FAILURE, _("write failed"));
+		if (rc != 0) {
+			if (errno != EPIPE)
+				err(EXIT_FAILURE, _("write failed"));
+			exit(EXIT_SUCCESS);
+		}
 	}
 }
 
@@ -895,7 +897,7 @@ static void print_record(struct dmesg_control *ctl,
 				      level_names[rec->level].name);
 
 	if (ctl->color)
-		color_enable(DMESG_COLOR_TIME);
+		dmesg_enable_color(DMESG_COLOR_TIME);
 
 	switch (ctl->time_fmt) {
 		double delta;
@@ -954,7 +956,7 @@ mesg:
 		/* subsystem prefix */
 		const char *subsys = get_subsys_delimiter(mesg, mesg_size);
 		if (subsys) {
-			color_enable(DMESG_COLOR_SUBSYS);
+			dmesg_enable_color(DMESG_COLOR_SUBSYS);
 			safe_fwrite(mesg, subsys - mesg, stdout);
 			color_disable();
 
@@ -1010,6 +1012,8 @@ static int init_kmsg(struct dmesg_control *ctl)
 
 	if (!ctl->follow)
 		mode |= O_NONBLOCK;
+	else
+		setlinebuf(stdout);
 
 	ctl->kmsg = open("/dev/kmsg", mode);
 	if (ctl->kmsg < 0)
@@ -1185,7 +1189,7 @@ int main(int argc, char *argv[])
 		.kmsg = -1,
 		.time_fmt = DMESG_TIMEFTM_TIME,
 	};
-	int colormode = UL_COLORMODE_NEVER;
+	int colormode = UL_COLORMODE_UNDEF;
 	enum {
 		OPT_TIME_FORMAT = CHAR_MAX + 1,
 	};
@@ -1220,10 +1224,15 @@ int main(int argc, char *argv[])
 	};
 
 	static const ul_excl_t excl[] = {	/* rows and cols in in ASCII order */
-		{ 'C','D','E','c','n' },	/* clear,off,on,read-clear,level*/
+		{ 'C','D','E','c','n','r' },	/* clear,off,on,read-clear,level,raw*/
 		{ 'H','r' },			/* human, raw */
 		{ 'L','r' },			/* color, raw */
 		{ 'S','w' },			/* syslog,follow */
+		{ 'T','r' },			/* ctime, raw */
+		{ 'd','r' },			/* delta, raw */
+		{ 'e','r' },			/* reltime, raw */
+		{ 'r','x' },			/* raw, decode */
+		{ 'r','t' },			/* notime, raw */
 		{ 0 }
 	};
 	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
@@ -1300,8 +1309,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'r':
 			ctl.raw = 1;
-			ctl.time_fmt = DMESG_TIMEFTM_NONE;
-			delta = 0;
 			break;
 		case 'S':
 			ctl.method = DMESG_METHOD_SYSLOG;
@@ -1371,13 +1378,8 @@ int main(int argc, char *argv[])
 			ctl.time_fmt = DMESG_TIMEFTM_DELTA;
 		}
 
-	if (ctl.raw
-	    && (ctl.fltr_lev || ctl.fltr_fac || ctl.decode
-			     || !is_timefmt(&ctl, NONE)))
-	    errx(EXIT_FAILURE, _("--raw can't be used together with level, "
-				 "facility, decode, delta, ctime or notime options"));
 
-	ctl.color = colors_init(colormode) ? 1 : 0;
+	ctl.color = colors_init(colormode, "dmesg") ? 1 : 0;
 	if (ctl.follow)
 		nopager = 1;
 	ctl.pager = nopager ? 0 : ctl.pager;
@@ -1389,6 +1391,12 @@ int main(int argc, char *argv[])
 	case SYSLOG_ACTION_READ_CLEAR:
 		if (ctl.method == DMESG_METHOD_KMSG && init_kmsg(&ctl) != 0)
 			ctl.method = DMESG_METHOD_SYSLOG;
+
+		if (ctl.raw
+		    && ctl.method != DMESG_METHOD_KMSG
+		    && (ctl.fltr_lev || ctl.fltr_fac))
+			    errx(EXIT_FAILURE, _("--raw could be used together with --level or "
+				 "--facility only when read messages from /dev/kmsg"));
 		if (ctl.pager)
 			setup_pager();
 		n = read_buffer(&ctl, &buf);

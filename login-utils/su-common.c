@@ -363,10 +363,9 @@ create_watching_parent (void)
         {
           if (WIFSIGNALED (status))
             {
+              fprintf (stderr, "%s%s\n", strsignal (WTERMSIG (status)),
+                       WCOREDUMP (status) ? _(" (core dumped)") : "");
               status = WTERMSIG (status) + 128;
-              if (WCOREDUMP (status))
-                fprintf (stderr, _("%s (core dumped)\n"),
-                   strsignal (WTERMSIG (status)));
             }
           else
             status = WEXITSTATUS (status);
@@ -415,7 +414,7 @@ create_watching_parent (void)
           caught_signal = SIGKILL;
           break;
       }
-      kill(0, caught_signal);
+      kill(getpid(), caught_signal);
     }
   exit (status);
 }
@@ -857,7 +856,7 @@ su_main (int argc, char **argv, int mode)
     }
 
   if (simulate_login && !change_environment) {
-    warnx(_("ignore --preserve-environment, it's mutually exclusive to --login."));
+    warnx(_("ignoring --preserve-environment, it's mutually exclusive with --login"));
     change_environment = true;
   }
 
@@ -869,10 +868,10 @@ su_main (int argc, char **argv, int mode)
       if (shell || fast_startup || command || simulate_login) {
         errx(EXIT_FAILURE,
 	   _("options --{shell,fast,command,session-command,login} and "
-	     "--user are mutually exclusive."));
+	     "--user are mutually exclusive"));
       }
       if (optind == argc)
-        errx(EXIT_FAILURE, _("COMMAND not specified."));
+        errx(EXIT_FAILURE, _("no command was specified"));
 
       break;
     }

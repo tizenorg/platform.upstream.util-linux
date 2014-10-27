@@ -28,6 +28,7 @@
 #include <assert.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <grp.h>
 
 #include "strutils.h"
 #include "nls.h"
@@ -192,7 +193,7 @@ int main(int argc, char *argv[])
 	atexit(close_stdout);
 
 	while ((c =
-		getopt_long(argc, argv, "hVt:m::u::i::n::p::U::S:G:r::w::F",
+		getopt_long(argc, argv, "+hVt:m::u::i::n::p::U::S:G:r::w::F",
 			    longopts, NULL)) != -1) {
 		switch (c) {
 		case 'h':
@@ -328,10 +329,12 @@ int main(int argc, char *argv[])
 		continue_as_child();
 
 	if (namespaces & CLONE_NEWUSER) {
-		if (setuid(uid) < 0)
-			err(EXIT_FAILURE, _("setuid failed"));
+		if (setgroups(0, NULL))		/* drop supplementary groups */
+			err(EXIT_FAILURE, _("setgroups failed"));
 		if (setgid(gid) < 0)
 			err(EXIT_FAILURE, _("setgid failed"));
+		if (setuid(uid) < 0)
+			err(EXIT_FAILURE, _("setuid failed"));
 	}
 
 	if (optind < argc) {

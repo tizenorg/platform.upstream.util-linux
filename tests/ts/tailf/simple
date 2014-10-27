@@ -12,11 +12,13 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="simple"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
+
+ts_check_test_command "$TS_CMD_TAILF"
 
 INPUT=$TS_OUTDIR/$TS_TESTNAME.input
 
@@ -25,9 +27,9 @@ echo {a..z} > $INPUT
 
 $TS_CMD_TAILF $INPUT > $TS_OUTPUT 2>&1 &
 
-sleep 0.1
+sleep 0.5
 echo {0..9} >> $INPUT
-sleep 0.1
+sleep 0.5
 
 rm -f $INPUT
 

@@ -34,7 +34,7 @@ struct libmnt_fs *mnt_new_fs(void)
 
 	fs->refcount = 1;
 	INIT_LIST_HEAD(&fs->ents);
-	/*DBG(FS, mnt_debug_h(fs, "alloc"));*/
+	/*DBG(FS, ul_debugobj(fs, "alloc"));*/
 	return fs;
 }
 
@@ -52,9 +52,7 @@ void mnt_free_fs(struct libmnt_fs *fs)
 	if (!fs)
 		return;
 	list_del(&fs->ents);
-
-	/*DBG(FS, mnt_debug_h(fs, "free"));*/
-	WARN_REFCOUNT(FS, fs, fs->refcount);
+	DBG(FS, ul_debugobj(fs, "free [refcount=%d]", fs->refcount));
 
 	free(fs->source);
 	free(fs->bindsrc);
@@ -104,7 +102,7 @@ void mnt_ref_fs(struct libmnt_fs *fs)
 {
 	if (fs) {
 		fs->refcount++;
-		/*DBG(FS, mnt_debug_h(fs, "ref=%d", fs->refcount));*/
+		/*DBG(FS, ul_debugobj(fs, "ref=%d", fs->refcount));*/
 	}
 }
 
@@ -119,7 +117,7 @@ void mnt_unref_fs(struct libmnt_fs *fs)
 {
 	if (fs) {
 		fs->refcount--;
-		/*DBG(FS, mnt_debug_h(fs, "unref=%d", fs->refcount));*/
+		/*DBG(FS, ul_debugobj(fs, "unref=%d", fs->refcount));*/
 		if (fs->refcount <= 0)
 			mnt_free_fs(fs);
 	}
@@ -184,7 +182,7 @@ struct libmnt_fs *mnt_copy_fs(struct libmnt_fs *dest,
 			return NULL;
 	}
 
-	/*DBG(FS, mnt_debug_h(dest, "copy from %p", src));*/
+	/*DBG(FS, ul_debugobj(dest, "copy from %p", src));*/
 
 	dest->id         = src->id;
 	dest->parent     = src->parent;
@@ -301,7 +299,7 @@ void *mnt_fs_get_userdata(struct libmnt_fs *fs)
 	if (!fs)
 		return NULL;
 
-	/*DBG(FS, mnt_debug_h(fs, "get userdata [%p]", fs->userdata));*/
+	/*DBG(FS, ul_debugobj(fs, "get userdata [%p]", fs->userdata));*/
 	return fs->userdata;
 }
 
@@ -320,7 +318,7 @@ int mnt_fs_set_userdata(struct libmnt_fs *fs, void *data)
 	if (!fs)
 		return -EINVAL;
 
-	/*DBG(FS, mnt_debug_h(fs, "set userdata [%p]", fs->userdata));*/
+	/*DBG(FS, ul_debugobj(fs, "set userdata [%p]", fs->userdata));*/
 	fs->userdata = data;
 	return 0;
 }
@@ -1413,9 +1411,15 @@ int mnt_fs_append_comment(struct libmnt_fs *fs, const char *comm)
  *
  * Possible are three attempts:
  *	1) compare @target with @fs->target
+ *
  *	2) realpath(@target) with @fs->target
+ *
  *	3) realpath(@target) with realpath(@fs->target) if @fs is not from
  *	   /proc/self/mountinfo.
+ *
+ *	   However, if mnt_cache_set_targets(cache, mtab) was called, and the
+ *	   path @target or @fs->target is found in the @mtab, the canonicalization is
+ *	   is not performed (see mnt_resolve_target()).
  *
  * The 2nd and 3rd attempts are not performed when @cache is NULL.
  *
@@ -1435,12 +1439,12 @@ int mnt_fs_match_target(struct libmnt_fs *fs, const char *target,
 
 	if (!rc && cache) {
 		/* 2) - canonicalized and non-canonicalized */
-		char *cn = mnt_resolve_path(target, cache);
-		rc = (cn && strcmp(cn, fs->target) == 0);
+		char *cn = mnt_resolve_target(target, cache);
+		rc = (cn && mnt_fs_streq_target(fs, cn));
 
 		/* 3) - canonicalized and canonicalized */
-		if (!rc && cn && !mnt_fs_is_kernel(fs)) {
-			char *tcn = mnt_resolve_path(fs->target, cache);
+		if (!rc && cn && !mnt_fs_is_kernel(fs) && !mnt_fs_is_swaparea(fs)) {
+			char *tcn = mnt_resolve_target(fs->target, cache);
 			rc = (tcn && strcmp(cn, tcn) == 0);
 		}
 	}

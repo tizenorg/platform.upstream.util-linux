@@ -17,6 +17,9 @@ libfdisk_la_SOURCES = \
 	libfdisk/src/utils.c \
 	libfdisk/src/context.c \
 	libfdisk/src/parttype.c \
+	libfdisk/src/partition.c \
+	libfdisk/src/table.c \
+	libfdisk/src/iter.c \
 	\
 	libfdisk/src/sun.c \
 	libfdisk/src/sgi.c \
@@ -28,6 +31,7 @@ libfdisk_la_SOURCES = \
 nodist_libfdisk_la_SOURCES = libfdisk/src/fdiskP.h
 
 libfdisk_la_LIBADD = libcommon.la
+libfdisk_la_DEPENDENCIES = libcommon.la
 
 libfdisk_la_CFLAGS = \
 	-I$(ul_libfdisk_incdir) \
@@ -35,16 +39,21 @@ libfdisk_la_CFLAGS = \
 
 if BUILD_LIBBLKID
 libfdisk_la_LIBADD += libblkid.la
+libfdisk_la_DEPENDENCIES += libblkid.la
 libfdisk_la_CFLAGS += -I$(ul_libblkid_incdir)
 endif
 
 if BUILD_LIBUUID
 libfdisk_la_LIBADD += libuuid.la
+libfdisk_la_DEPENDENCIES += libuuid.la
 libfdisk_la_CFLAGS += -I$(ul_libuuid_incdir)
 endif
 
-libfdisk_la_DEPENDENCIES = $(libfdisk_la_LIBADD)
-
+if BUILD_LIBSMARTCOLS
+libfdisk_la_LIBADD += libsmartcols.la
+libfdisk_la_DEPENDENCIES += libsmartcols.la
+libfdisk_la_CFLAGS += -I$(ul_libsmartcols_incdir)
+endif
 
 check_PROGRAMS += \
 	test_fdisk_ask \
@@ -60,6 +69,10 @@ endif
 
 if BUILD_LIBUUID
 libfdisk_tests_ldflags += libuuid.la
+endif
+
+if BUILD_LIBSMARTCOLS
+libfdisk_tests_ldflags += libsmartcols.la
 endif
 
 test_fdisk_ask_SOURCES = libfdisk/src/ask.c

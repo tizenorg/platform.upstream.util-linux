@@ -19,12 +19,8 @@
 # include <err.h>
 #endif
 
-#ifndef HAVE_USLEEP
-# include <time.h>
-#endif
-
 /*
- * Compiler specific stuff
+ * Compiler-specific stuff
  */
 #ifndef __GNUC_PREREQ
 # if defined __GNUC__ && defined __GNUC_MINOR__
@@ -70,9 +66,10 @@
 # endif
 #endif
 
-/* Force a compilation error if condition is true, but also produce a
+/*
+ * Force a compilation error if condition is true, but also produce a
  * result (of value 0 and type size_t), so the expression can be used
- * e.g. in a structure initializer (or where-ever else comma expressions
+ * e.g. in a structure initializer (or wherever else comma expressions
  * aren't permitted).
  */
 #define UL_BUILD_BUG_ON_ZERO(e) (sizeof(struct { int:-!!(e); }))
@@ -253,20 +250,27 @@ static inline size_t get_hostname_max(void)
 	return 64;
 }
 
-#ifndef HAVE_USLEEP
 /*
- * This function is marked obsolete in POSIX.1-2001 and removed in
- * POSIX.1-2008. It is replaced with nanosleep().
+ * The usleep function was marked obsolete in POSIX.1-2001 and was removed
+ * in POSIX.1-2008.  It was replaced with nanosleep() that provides more
+ * advantages (like no interaction with signals and other timer functions).
  */
-static inline int usleep(useconds_t usec)
+#include <time.h>
+
+static inline int xusleep(useconds_t usec)
 {
+#ifdef HAVE_NANOSLEEP
 	struct timespec waittime = {
 		.tv_sec   =  usec / 1000000L,
 		.tv_nsec  = (usec % 1000000L) * 1000
 	};
 	return nanosleep(&waittime, NULL);
-}
+#elif defined(HAVE_USLEEP)
+	return usleep(usec);
+#else
+# error	"System with usleep() or nanosleep() required!"
 #endif
+}
 
 /*
  * Constant strings for usage() functions. For more info see
@@ -274,7 +278,7 @@ static inline int usleep(useconds_t usec)
  */
 #define USAGE_HEADER     _("\nUsage:\n")
 #define USAGE_OPTIONS    _("\nOptions:\n")
-#define USAGE_SEPARATOR  _("\n")
+#define USAGE_SEPARATOR    "\n"
 #define USAGE_HELP       _(" -h, --help     display this help and exit\n")
 #define USAGE_VERSION    _(" -V, --version  output version information and exit\n")
 #define USAGE_MAN_TAIL(_man)   _("\nFor more details see %s.\n"), _man
@@ -299,5 +303,14 @@ static inline int usleep(useconds_t usec)
 #ifndef SEEK_HOLE
 # define SEEK_HOLE	4
 #endif
+
+
+/*
+ * Macros to convert #define'itions to strings, for example
+ * #define XYXXY 42
+ * printf ("%s=%s\n", stringify(XYXXY), stringify_value(XYXXY));
+ */
+#define stringify_value(s) stringify(s)
+#define stringify(s) #s
 
 #endif /* UTIL_LINUX_C_H */

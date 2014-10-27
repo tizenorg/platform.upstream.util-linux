@@ -10,6 +10,7 @@
 #include "at.h"
 #include "pathnames.h"
 #include "sysfs.h"
+#include "fileutils.h"
 
 char *sysfs_devno_attribute_path(dev_t devno, char *buf,
 				 size_t bufsiz, const char *attr)
@@ -290,7 +291,8 @@ int sysfs_is_partition_dirent(DIR *dir, struct dirent *d, const char *parent_nam
 
 #ifdef _DIRENT_HAVE_D_TYPE
 	if (d->d_type != DT_DIR &&
-	    d->d_type != DT_LNK)
+	    d->d_type != DT_LNK &&
+	    d->d_type != DT_UNKNOWN)
 		return 0;
 #endif
 	if (parent_name) {
@@ -509,17 +511,6 @@ char *sysfs_get_devname(struct sysfs_cxt *cxt, char *buf, size_t bufsiz)
 	return buf;
 }
 
-/* returns basename and keeps dirname in the @path */
-static char *stripoff_last_component(char *path)
-{
-    char *p = strrchr(path, '/');
-
-    if (!p)
-        return NULL;
-    *p = '\0';
-    return ++p;
-}
-
 static int get_dm_wholedisk(struct sysfs_cxt *cxt, char *diskname,
                 size_t len, dev_t *diskdevno)
 {
@@ -548,6 +539,10 @@ static int get_dm_wholedisk(struct sysfs_cxt *cxt, char *diskname,
     return rc;
 }
 
+/*
+ * Returns by @diskdevno whole disk device devno and (optionaly) by
+ * @diskname the whole disk device name.
+ */
 int sysfs_devno_to_wholedisk(dev_t dev, char *diskname,
             size_t len, dev_t *diskdevno)
 {
@@ -638,6 +633,47 @@ err:
     return -1;
 }
 
+/*
+ * Returns 1 if the device is private LVM device.
+ */
+int sysfs_devno_is_lvm_private(dev_t devno)
+{
+	struct sysfs_cxt cxt = UL_SYSFSCXT_EMPTY;
+	char *uuid = NULL;
+	int rc = 0;
+
+	if (sysfs_init(&cxt, devno, NULL) != 0)
+		return 0;
+
+	uuid = sysfs_strdup(&cxt, "dm/uuid");
+
+	/* Private LVM devices use "LVM-<uuid>-<name>" uuid format (important
+	 * is the "LVM" prefix and "-<name>" postfix).
+	 */
+	if (uuid && strncmp(uuid, "LVM-", 4) == 0) {
+		char *p = strrchr(uuid + 4, '-');
+
+		if (p && *(p + 1))
+			rc = 1;
+	}
+
+	sysfs_deinit(&cxt);
+	free(uuid);
+	return rc;
+}
+
+/*
+ * Return 0 or 1, or < 0 in case of error
+ */
+int sysfs_devno_is_wholedisk(dev_t devno)
+{
+	dev_t disk;
+
+	if (sysfs_devno_to_wholedisk(devno, NULL, 0, &disk) != 0)
+		return -1;
+
+	return devno == disk;
+}
 
 int sysfs_scsi_get_hctl(struct sysfs_cxt *cxt, int *h, int *c, int *t, int *l)
 {
@@ -659,7 +695,7 @@ int sysfs_scsi_get_hctl(struct sysfs_cxt *cxt, int *h, int *c, int *t, int *l)
 		return -1;
 	hctl++;
 
-	if (sscanf(hctl, "%d:%d:%d:%d", &cxt->scsi_host, &cxt->scsi_channel,
+	if (sscanf(hctl, "%u:%u:%u:%u", &cxt->scsi_host, &cxt->scsi_channel,
 				&cxt->scsi_target, &cxt->scsi_lun) != 4)
 		return -1;
 

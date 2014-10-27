@@ -75,7 +75,7 @@ sector_t fdisk_align_lba(struct fdisk_context *cxt, sector_t lba, int direction)
 	}
 
 	if (lba != res)
-		DBG(TOPOLOGY, dbgprint("LBA %ju -aligned-to-> %ju",
+		DBG(CXT, ul_debugobj(cxt, "LBA %ju -aligned-to-> %ju",
 				(uintmax_t) lba,
 				(uintmax_t) res));
 	return res;
@@ -105,7 +105,7 @@ sector_t fdisk_align_lba_in_range(struct fdisk_context *cxt,
 void fdisk_warn_alignment(struct fdisk_context *cxt, sector_t lba, int partition)
 {
 	if (!lba_is_phy_aligned(cxt, lba))
-		printf(_("Partition %i does not start on physical sector boundary.\n"),
+		fdisk_warnx(cxt, _("Partition %i does not start on physical sector boundary.\n"),
 			partition + 1);
 }
 
@@ -160,7 +160,7 @@ int fdisk_override_geometry(struct fdisk_context *cxt,
 
 	fdisk_reset_alignment(cxt);
 
-	DBG(GEOMETRY, dbgprint("override C/H/S: %u/%u/%u",
+	DBG(CXT, ul_debugobj(cxt, "override C/H/S: %u/%u/%u",
 		(unsigned) cxt->geom.cylinders,
 		(unsigned) cxt->geom.heads,
 		(unsigned) cxt->geom.sectors));
@@ -183,7 +183,7 @@ int fdisk_save_user_geometry(struct fdisk_context *cxt,
 	if (cylinders)
 		cxt->user_geom.cylinders = cylinders;
 
-	DBG(GEOMETRY, dbgprint("user C/H/S: %u/%u/%u",
+	DBG(CXT, ul_debugobj(cxt, "user C/H/S: %u/%u/%u",
 				(unsigned) cxt->user_geom.cylinders,
 				(unsigned) cxt->user_geom.heads,
 				(unsigned) cxt->user_geom.sectors));
@@ -198,7 +198,7 @@ int fdisk_save_user_sector_size(struct fdisk_context *cxt,
 	if (!cxt)
 		return -EINVAL;
 
-	DBG(TOPOLOGY, dbgprint("user phy/log sector size: %u/%u", phy, log));
+	DBG(CXT, ul_debugobj(cxt, "user phy/log sector size: %u/%u", phy, log));
 
 	cxt->user_pyh_sector = phy;
 	cxt->user_log_sector = log;
@@ -220,7 +220,7 @@ int fdisk_apply_user_device_properties(struct fdisk_context *cxt)
 	if (!cxt)
 		return -EINVAL;
 
-	DBG(TOPOLOGY, dbgprint("appling user device properties"));
+	DBG(CXT, ul_debugobj(cxt, "appling user device properties"));
 
 	if (cxt->user_pyh_sector)
 		cxt->phy_sector_size = cxt->user_pyh_sector;
@@ -239,12 +239,14 @@ int fdisk_apply_user_device_properties(struct fdisk_context *cxt)
 		recount_geometry(cxt);
 
 	fdisk_reset_alignment(cxt);
+	if (cxt->firstsector_bufsz != cxt->sector_size)
+		fdisk_read_firstsector(cxt);
 
-	DBG(GEOMETRY, dbgprint("new C/H/S: %u/%u/%u",
+	DBG(CXT, ul_debugobj(cxt, "new C/H/S: %u/%u/%u",
 		(unsigned) cxt->geom.cylinders,
 		(unsigned) cxt->geom.heads,
 		(unsigned) cxt->geom.sectors));
-	DBG(TOPOLOGY, dbgprint("new log/phy sector size: %u/%u",
+	DBG(CXT, ul_debugobj(cxt, "new log/phy sector size: %u/%u",
 		(unsigned) cxt->sector_size,
 		(unsigned) cxt->phy_sector_size));
 
@@ -263,6 +265,7 @@ void fdisk_zeroize_device_properties(struct fdisk_context *cxt)
 	cxt->alignment_offset = 0;
 	cxt->grain = 0;
 	cxt->first_lba = 0;
+	cxt->last_lba = 0;
 	cxt->total_sectors = 0;
 
 	memset(&cxt->geom, 0, sizeof(struct fdisk_geometry));
@@ -275,7 +278,7 @@ int fdisk_reset_device_properties(struct fdisk_context *cxt)
 	if (!cxt)
 		return -EINVAL;
 
-	DBG(TOPOLOGY, dbgprint("*** reseting device properties"));
+	DBG(CXT, ul_debugobj(cxt, "*** reseting device properties"));
 
 	fdisk_zeroize_device_properties(cxt);
 	fdisk_discover_topology(cxt);
@@ -299,7 +302,7 @@ int fdisk_discover_geometry(struct fdisk_context *cxt)
 	assert(cxt);
 	assert(cxt->geom.heads == 0);
 
-	DBG(GEOMETRY, dbgprint("%s: discovering geometry...", cxt->dev_path));
+	DBG(CXT, ul_debugobj(cxt, "%s: discovering geometry...", cxt->dev_path));
 
 	/* get number of 512-byte sectors, and convert it the real sectors */
 	if (!blkdev_get_sectors(cxt->dev_fd, &nsects))
@@ -311,7 +314,7 @@ int fdisk_discover_geometry(struct fdisk_context *cxt)
 	/* obtained heads and sectors */
 	recount_geometry(cxt);
 
-	DBG(GEOMETRY, dbgprint("result: C/H/S: %u/%u/%u",
+	DBG(CXT, ul_debugobj(cxt, "result: C/H/S: %u/%u/%u",
 			       (unsigned) cxt->geom.cylinders,
 			       (unsigned) cxt->geom.heads,
 			       (unsigned) cxt->geom.sectors));
@@ -326,9 +329,9 @@ int fdisk_discover_topology(struct fdisk_context *cxt)
 	assert(cxt);
 	assert(cxt->sector_size == 0);
 
-	DBG(TOPOLOGY, dbgprint("%s: discovering topology...", cxt->dev_path));
+	DBG(CXT, ul_debugobj(cxt, "%s: discovering topology...", cxt->dev_path));
 #ifdef HAVE_LIBBLKID
-	DBG(TOPOLOGY, dbgprint("initialize libblkid prober"));
+	DBG(CXT, ul_debugobj(cxt, "initialize libblkid prober"));
 
 	pr = blkid_new_probe();
 	if (pr && blkid_probe_set_device(pr, cxt->dev_fd, 0, 0) == 0) {
@@ -360,9 +363,9 @@ int fdisk_discover_topology(struct fdisk_context *cxt)
 	if (!cxt->io_size)
 		cxt->io_size = cxt->sector_size;
 
-	DBG(TOPOLOGY, dbgprint("result: log/phy sector size: %ld/%ld",
+	DBG(CXT, ul_debugobj(cxt, "result: log/phy sector size: %ld/%ld",
 			cxt->sector_size, cxt->phy_sector_size));
-	 DBG(TOPOLOGY, dbgprint("result: fdisk/min/optimal io: %ld/%ld/%ld",
+	DBG(CXT, ul_debugobj(cxt, "result: fdisk/min/optimal io: %ld/%ld/%ld",
 		       cxt->io_size, cxt->optimal_io_size, cxt->min_io_size));
 	return 0;
 }
@@ -472,20 +475,20 @@ int fdisk_reset_alignment(struct fdisk_context *cxt)
 	if (!cxt)
 		return -EINVAL;
 
-	DBG(TOPOLOGY, dbgprint("reseting alignment..."));
+	DBG(CXT, ul_debugobj(cxt, "reseting alignment..."));
 
 	/* default */
 	cxt->grain = fdisk_topology_get_grain(cxt);
 	cxt->first_lba = fdisk_topology_get_first_lba(cxt);
+	cxt->last_lba = cxt->total_sectors - 1;
 
 	/* overwrite default by label stuff */
 	if (cxt->label && cxt->label->op->reset_alignment)
 		rc = cxt->label->op->reset_alignment(cxt);
 
-	DBG(TOPOLOGY, dbgprint("%s alignment reseted to: "
-			    "first LBA=%ju, grain=%lu [rc=%d]",
-			    cxt->label ? cxt->label->name : NULL,
-			    (uintmax_t) cxt->first_lba,
+	DBG(CXT, ul_debugobj(cxt, "alignment reseted to: "
+			    "first LBA=%ju, last LBA=%ju, grain=%lu [rc=%d]",
+			    (uintmax_t) cxt->first_lba, (uintmax_t) cxt->last_lba,
 			    cxt->grain,	rc));
 	return rc;
 }

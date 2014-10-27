@@ -12,7 +12,6 @@
 #include "c.h"
 #include "fileutils.h"
 #include "pathnames.h"
-#include "xalloc.h"
 
 /* Create open temporary file in safe way.  Please notice that the
  * file permissions are -rw------- by default. */
@@ -21,7 +20,7 @@ int xmkstemp(char **tmpname, char *dir)
 	char *localtmp;
 	char *tmpenv;
 	mode_t old_mode;
-	int fd;
+	int fd, rc;
 
 	/* Some use cases must be capable of being moved atomically
 	 * with rename(2), which is the reason why dir is here.  */
@@ -31,11 +30,15 @@ int xmkstemp(char **tmpname, char *dir)
 		tmpenv = getenv("TMPDIR");
 
 	if (tmpenv)
-		xasprintf(&localtmp, "%s/%s.XXXXXX", tmpenv,
+		rc = asprintf(&localtmp, "%s/%s.XXXXXX", tmpenv,
 			  program_invocation_short_name);
 	else
-		xasprintf(&localtmp, "%s/%s.XXXXXX", _PATH_TMP,
+		rc = asprintf(&localtmp, "%s/%s.XXXXXX", _PATH_TMP,
 			  program_invocation_short_name);
+
+	if (rc < 0)
+		return -1;
+
 	old_mode = umask(077);
 	fd = mkostemp(localtmp, O_RDWR|O_CREAT|O_EXCL|O_CLOEXEC);
 	umask(old_mode);
@@ -81,3 +84,51 @@ int main(void)
 	return EXIT_FAILURE;
 }
 #endif
+
+
+int mkdir_p(const char *path, mode_t mode)
+{
+	char *p, *dir;
+	int rc = 0;
+
+	if (!path || !*path)
+		return -EINVAL;
+
+	dir = p = strdup(path);
+	if (!dir)
+		return -ENOMEM;
+
+	if (*p == '/')
+		p++;
+
+	while (p && *p) {
+		char *e = strchr(p, '/');
+		if (e)
+			*e = '\0';
+		if (*p) {
+			rc = mkdir(dir, mode);
+			if (rc && errno != EEXIST)
+				break;
+			rc = 0;
+		}
+		if (!e)
+			break;
+		*e = '/';
+		p = e + 1;
+	}
+
+	free(dir);
+	return rc;
+}
+
+/* returns basename and keeps dirname in the @path, if @path is "/" (root)
+ * then returns empty string */
+char *stripoff_last_component(char *path)
+{
+	char *p = path ? strrchr(path, '/') : NULL;
+
+	if (!p)
+		return NULL;
+	*p = '\0';
+	return p + 1;
+}

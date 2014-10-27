@@ -21,9 +21,12 @@
 #include <assert.h>
 #include <ctype.h>
 #include <string.h>
+#include <sys/sysinfo.h>
+#include <sys/time.h>
 #include <time.h>
 
 #include "c.h"
+#include "nls.h"
 #include "strutils.h"
 #include "timeutils.h"
 
@@ -236,6 +239,7 @@ int parse_timestamp(const char *t, usec_t *usec)
 			return -ENOMEM;
 
 		r = parse_sec(z, &minus);
+		free(z);
 		if (r < 0)
 			return r;
 

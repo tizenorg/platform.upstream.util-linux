@@ -6,6 +6,9 @@
 /* Should chfn and chsh require the user to enter the password? */
 #undef CHFN_CHSH_PASSWORD
 
+/* Path to hwclock adjtime file */
+#undef CONFIG_ADJTIME_PATH
+
 /* Define to 1 if translation of program messages to the user's native
    language is requested. */
 #undef ENABLE_NLS
@@ -18,6 +21,14 @@
 
 /* Define to 1 if you have the <byteswap.h> header file. */
 #undef HAVE_BYTESWAP_H
+
+/* Define to 1 if you have the Mac OS X function CFLocaleCopyCurrent in the
+   CoreFoundation framework. */
+#undef HAVE_CFLOCALECOPYCURRENT
+
+/* Define to 1 if you have the Mac OS X function CFPreferencesCopyAppValue in
+   the CoreFoundation framework. */
+#undef HAVE_CFPREFERENCESCOPYAPPVALUE
 
 /* Define to 1 if the system has the type `cpu_set_t'. */
 #undef HAVE_CPU_SET_T
@@ -83,9 +94,6 @@
 /* Define to 1 if you have the `fsync' function. */
 #undef HAVE_FSYNC
 
-/* Define to 1 if you have the `futimens' function. */
-#undef HAVE_FUTIMENS
-
 /* Define to 1 if you have the `getdomainname' function. */
 #undef HAVE_GETDOMAINNAME
 
@@ -107,7 +115,7 @@
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
 
-/* Define if you have the iconv() function. */
+/* Define if you have the iconv() function and it works. */
 #undef HAVE_ICONV
 
 /* Define to 1 if you have the `inotify_init' function. */
@@ -151,6 +159,9 @@
 
 /* Define if SELinux is available */
 #undef HAVE_LIBSELINUX
+
+/* Define if libsystemd is available */
+#undef HAVE_LIBSYSTEMD
 
 /* Define to 1 if you have the `termcap' library (-ltermcap). */
 #undef HAVE_LIBTERMCAP
@@ -254,6 +265,9 @@
 /* Define to 1 if you have the `openat' function. */
 #undef HAVE_OPENAT
 
+/* Define to 1 if you have the `open_memstream' function. */
+#undef HAVE_OPEN_MEMSTREAM
+
 /* Define to 1 if you have the <paths.h> header file. */
 #undef HAVE_PATHS_H
 
@@ -274,6 +288,12 @@
 
 /* Define to 1 if you have the <pty.h> header file. */
 #undef HAVE_PTY_H
+
+/* Define to 1 if you have the `qsort_r' function. */
+#undef HAVE_QSORT_R
+
+/* Define if curses library has the resizeterm(). */
+#undef HAVE_RESIZETERM
 
 /* Define to 1 if you have the `rpmatch' function. */
 #undef HAVE_RPMATCH
@@ -326,6 +346,9 @@
 /* Define to 1 if you have the <slcurses.h> header file. */
 #undef HAVE_SLCURSES_H
 
+/* Add SMACK support */
+#undef HAVE_SMACK
+
 /* Define to 1 if you have the `srandom' function. */
 #undef HAVE_SRANDOM
 
@@ -367,6 +390,9 @@
 
 /* Define to 1 if you have the `sysconf' function. */
 #undef HAVE_SYSCONF
+
+/* Define to 1 if you have the `sysinfo' function. */
+#undef HAVE_SYSINFO
 
 /* Define to 1 if you have the <sys/disklabel.h> header file. */
 #undef HAVE_SYS_DISKLABEL_H
@@ -449,8 +475,14 @@
 /* Define to 1 if you have the `updwtmp' function. */
 #undef HAVE_UPDWTMP
 
+/* Define if curses library has the use_default_colors(). */
+#undef HAVE_USE_DEFAULT_COLORS
+
 /* Define to 1 if you have the `usleep' function. */
 #undef HAVE_USLEEP
+
+/* Define to 1 if you have the `utimensat' function. */
+#undef HAVE_UTIMENSAT
 
 /* Define to 1 if you want to use uuid daemon. */
 #undef HAVE_UUIDD
@@ -481,6 +513,9 @@
 
 /* libmount version string */
 #undef LIBMOUNT_VERSION
+
+/* libsmartcols version string */
+#undef LIBSMARTCOLS_VERSION
 
 /* Should login chown /dev/vcsN? */
 #undef LOGIN_CHOWN_VCS
@@ -551,9 +586,6 @@
 
 /* Fallback syscall number for unshare */
 #undef SYS_unshare
-
-/* Should uuidd support socket activation? */
-#undef USE_SOCKET_ACTIVATION
 
 /* Should sulogin use a emergency mount of /dev and /proc? */
 #undef USE_SULOGIN_EMERGENCY_MOUNT

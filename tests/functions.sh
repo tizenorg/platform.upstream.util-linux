@@ -31,8 +31,39 @@ function ts_canonicalize {
 	fi
 }
 
+function ts_report {
+	if [ "$TS_PARALLEL" == "yes" ]; then
+		echo "$TS_TITLE $1"
+	else
+		echo "$1"
+	fi
+}
+
+function ts_check_test_command {
+	if [ ! -x "$1" ]; then
+		ts_skip "${1##*/} not found"
+	fi
+}
+
+function ts_check_prog {
+	local cmd=$1
+	type "$cmd" >/dev/null 2>&1 || ts_skip "missing in PATH: $cmd"
+}
+
+function ts_check_losetup {
+	local tmp
+	ts_check_test_command "$TS_CMD_LOSETUP"
+
+	# assuming that losetup -f works ... to be checked somewhere else
+	tmp=$($TS_CMD_LOSETUP -f 2>/dev/null)
+	if test -b "$tmp"; then
+		return 0
+	fi
+	ts_skip "no loop device support"
+}
+
 function ts_skip_subtest {
-	echo " IGNORE ($1)"
+	ts_report " IGNORE ($1)"
 }
 
 function ts_skip {
@@ -50,23 +81,32 @@ function ts_skip_nonroot {
 }
 
 function ts_failed_subtest {
-	if [ x"$1" == x"" ]; then
-		echo " FAILED ($TS_NS)"
-	else
-		echo " FAILED ($1)"
+	local msg="FAILED"
+	local ret=1
+	if [ "$TS_KNOWN_FAIL" = "yes" ]; then
+		msg="KNOWN FAILED"
+		ret=0
 	fi
+
+	if [ x"$1" == x"" ]; then
+		ts_report " $msg ($TS_NS)"
+	else
+		ts_report " $msg ($1)"
+	fi
+
+	return $ret
 }
 
 function ts_failed {
 	ts_failed_subtest "$1"
-	exit 1
+	exit $?
 }
 
 function ts_ok_subtest {
 	if [ x"$1" == x"" ]; then
-		echo " OK"
+		ts_report " OK"
 	else
-		echo " OK ($1)"
+		ts_report " OK ($1)"
 	fi
 }
 
@@ -83,6 +123,24 @@ function ts_log {
 function ts_has_option {
 	NAME="$1"
 	ALL="$2"
+
+	# user may set options by env for a single test or whole component
+	# e.g. TS_OPT_ipcs_limits2_fake="yes" or TS_OPT_ipcs_fake="yes"
+	local v_test=${TS_TESTNAME//[-.]/_}
+	local v_comp=${TS_COMPONENT//[-.]/_}
+	local v_name=${NAME//[-.]/_}
+	eval local env_opt_test=\$TS_OPT_${v_comp}_${v_test}_${v_name}
+	eval local env_opt_comp=\$TS_OPT_${v_comp}_${v_name}
+	if [ "$env_opt_test" = "yes" \
+		-o "$env_opt_comp" = "yes" -a "$env_opt_test" != "no" ]; then
+		echo "yes"
+		return
+	elif [ "$env_opt_test" = "no" \
+		-o "$env_opt_comp" = "no" -a "$env_opt_test" != "yes" ]; then
+		return
+	fi
+
+	# or just check the global command line options
 	echo -n $ALL | sed 's/ //g' | awk 'BEGIN { FS="="; RS="--" } /('$NAME'$|'$NAME'=)/ { print "yes" }'
 }
 
@@ -117,7 +175,8 @@ function ts_init_core_subtest_env {
 }
 
 function ts_init_env {
-	local mydir=$(ts_abspath $(dirname $0))
+	local mydir=$(ts_abspath ${0%/*})
+	local tmp
 
 	LANG="POSIX"
 	LANGUAGE="POSIX"
@@ -162,6 +221,13 @@ function ts_init_env {
 	ts_init_core_env
 
 	TS_VERBOSE=$(ts_has_option "verbose" "$*")
+	TS_PARALLEL=$(ts_has_option "parallel" "$*")
+	TS_KNOWN_FAIL=$(ts_has_option "known-fail" "$*")
+
+	tmp=$( ts_has_option "memcheck" "$*")
+	if [ "$tmp" == "yes" -a -f /usr/bin/valgrind ]; then
+		TS_VALGRIND_CMD="/usr/bin/valgrind"
+	fi
 
 	BLKID_FILE="$TS_OUTDIR/${TS_TESTNAME}.blkidtab"
 
@@ -209,21 +275,26 @@ function ts_init_subtest {
 	[ $TS_NSUBTESTS -eq 0 ] && echo
 	TS_NSUBTESTS=$(( $TS_NSUBTESTS + 1 ))
 
-	printf "%16s: %-27s ..." "" "$TS_SUBNAME"
+	if [ "$TS_PARALLEL" == "yes" ]; then
+		TS_TITLE=$(printf "%13s: %-30s ...\n%16s: %-27s ..." "$TS_COMPONENT" "$TS_DESC" "" "$TS_SUBNAME")
+	else
+		TS_TITLE=$(printf "%16s: %-27s ..." "" "$TS_SUBNAME")
+		echo -n "$TS_TITLE"
+	fi
 }
 
 function ts_init {
-	local is_fake=$( ts_has_option "fake" "$*")
-	local is_force=$( ts_has_option "force" "$*")
-	local is_memcheck=$( ts_has_option "memcheck" "$*")
-
-	if [ "$is_memcheck" == "yes" -a -f /usr/bin/valgrind ]; then
-		TS_VALGRIND_CMD="/usr/bin/valgrind"
-	fi
-
 	ts_init_env "$*"
 
-	printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC"
+	local is_fake=$( ts_has_option "fake" "$*")
+	local is_force=$( ts_has_option "force" "$*")
+
+	if [ "$TS_PARALLEL" == "yes" ]; then
+		TS_TITLE=$(printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC")
+	else
+		TS_TITLE=$(printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC")
+		echo -n "$TS_TITLE"
+	fi
 
 	[ "$is_fake" == "yes" ] && ts_skip "fake mode"
 	[ "$TS_OPTIONAL" == "yes" -a "$is_force" != "yes" ] && ts_skip "optional"
@@ -245,10 +316,10 @@ function ts_init_suid {
 function ts_init_py {
 	LIBNAME="$1"
 
-	[ -f "$TS_TOPDIR/../py${LIBNAME}.la" ] || ts_skip "py${LIBNAME} not compiled"
+	[ -f "$top_builddir/py${LIBNAME}.la" ] || ts_skip "py${LIBNAME} not compiled"
 
-	export LD_LIBRARY_PATH="$TS_TOPDIR/../.libs"
-	export PYTHONPATH="$TS_TOPDIR/../$LIBNAME/python:$TS_TOPDIR/../.libs"
+	export LD_LIBRARY_PATH="$top_builddir/.libs"
+	export PYTHONPATH="$top_builddir/$LIBNAME/python:$top_builddir/.libs"
 
 	export PYTHON_VERSION=$(awk '/^PYTHON_VERSION/ { print $3 }' $top_builddir/Makefile)
 	export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | sed 's/\..*//')
@@ -351,7 +422,7 @@ function ts_die {
 	ts_log "$1"
 	if [ -n "$2" ] && [ -b "$2" ]; then
 		ts_device_deinit "$2"
-		ts_fstab_clean		# for sure... 
+		ts_fstab_clean		# for sure...
 	fi
 	ts_finalize
 }
@@ -364,23 +435,20 @@ function ts_image_md5sum {
 function ts_image_init {
 	local mib=${1:-"5"}	# size in MiBs
 	local img=${2:-"$TS_OUTDIR/${TS_TESTNAME}.img"}
-	
+
 	dd if=/dev/zero of="$img" bs=1M count=$mib &> /dev/null
 	echo "$img"
 	return 0
 }
 
 function ts_device_init {
-	local img=$(ts_image_init $1 $2)
-	local dev=$($TS_CMD_LOSETUP --show -f "$img")
+	local img
+	local dev
 
-	if [ -z "$dev" ]; then
-		ts_device_deinit $dev
-		return 1		# error
-	fi
+	img=$(ts_image_init $1 $2)
+	dev=$($TS_CMD_LOSETUP --show -f "$img")
 
 	echo $dev
-	return 0			# succes
 }
 
 function ts_device_deinit {
@@ -426,6 +494,30 @@ function ts_device_has {
 function ts_device_has_uuid {
 	ts_uuid_by_devname "$1" | egrep -q '^[0-9a-z]{8}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{12}$'
 	return $?
+}
+
+function ts_mount {
+	local out
+	local result
+	local msg
+	local fs
+	local fs_exp=$1
+	shift
+
+	out=$($TS_CMD_MOUNT "$@" 2>&1)
+	result=$?
+	echo -n "$out" >> $TS_OUTPUT
+
+	if [ $result != 0 ] \
+		&& msg=$(echo "$out" | grep -m1 "unknown filesystem type")
+	then
+		# skip only if reported fs correctly and if it's not available
+		fs=$(echo "$msg" | sed -n "s/.*type '\(.*\)'$/\1/p")
+		[ "$fs" = "fs_exp" ] \
+		 && grep -qe "[[:space:]]${fs}$" /proc/filesystems &>/dev/null \
+		 || ts_skip "$msg"
+	fi
+	return $result
 }
 
 function ts_is_mounted {
@@ -492,21 +584,52 @@ function ts_fdisk_clean {
 }
 
 function ts_scsi_debug_init {
+	local devname
+	TS_DEVICE="none"
 
-	modprobe --dry-run --quiet scsi_debug
-	[ "$?" == 0 ] || ts_skip "missing scsi_debug module"
+	# dry run is not realy reliable, real modprobe may still fail
+	modprobe --dry-run --quiet scsi_debug &>/dev/null \
+		|| ts_skip "missing scsi_debug module (dry-run)"
 
-	rmmod scsi_debug &> /dev/null
-	modprobe scsi_debug $*
-	[ "$?" == 0 ] || ts_die "Cannot init device"
+	# skip if still in use or removal of modules not supported at all
+	modprobe -r scsi_debug &>/dev/null \
+		|| ts_skip "cannot remove scsi_debug module (rmmod)"
 
-	DEVNAME=$(grep --with-filename scsi_debug /sys/block/*/device/model | awk -F '/' '{print $4}')
-	[ "x${DEVNAME}" == "x" ] && ts_die "Cannot find device"
+	modprobe -b scsi_debug $* &>/dev/null \
+		|| ts_skip "cannot load scsi_debug module (modprobe)"
 
-	DEVICE="/dev/${DEVNAME}"
+	# it might be still not loaded, modprobe.conf or whatever
+	lsmod | grep -q "^scsi_debug " \
+		|| ts_skip "scsi_debug module not loaded (lsmod)"
+
+	devname=$(grep --with-filename scsi_debug /sys/block/*/device/model | awk -F '/' '{print $4}')
+	[ "x${devname}" == "x" ] && ts_die "cannot find scsi_debug device"
 
 	sleep 1
 	udevadm settle
 
-	echo $DEVICE
+	TS_DEVICE="/dev/${devname}"
+}
+
+function ts_resolve_host {
+	local host="$1"
+	local tmp
+
+	# currently we just resolve default records (might be "A", ipv4 only)
+	if type "dig" >/dev/null 2>&1; then
+		tmp=$(dig "$host" +short 2>/dev/null) || return 1
+	elif type "nslookup" >/dev/null 2>&1; then
+		tmp=$(nslookup "$host" 2>/dev/null) || return 1
+		tmp=$(echo "$tmp"| grep -A1 "^Name:"| grep "^Address:"| cut -d" " -f2)
+	elif type "host" >/dev/null 2>&1; then
+		tmp=$(host "$host" 2>/dev/null) || return 1
+		tmp=$(echo "$tmp" | grep " has address " | cut -d " " -f4)
+	elif type "getent" >/dev/null 2>&1; then
+		tmp=$(getent ahosts "$host" 2>/dev/null) || return 1
+		tmp=$(echo "$tmp" | cut -d " " -f 1 | sort -u)
+	fi
+
+	# we return 1 if tmp is empty
+	test -n "$tmp" || return 1
+	echo "$tmp" | sort -R | head -n 1
 }

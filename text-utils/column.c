@@ -376,7 +376,13 @@ static int input(FILE *fp, int *maxlength, wchar_t ***list, int *entries)
 	if (!local_list)
 		local_list = xcalloc(maxentry, sizeof(wchar_t *));
 
-	while (fgetws(buf, MAXLINELEN, fp)) {
+	while (1) {
+		if (fgetws(buf, MAXLINELEN, fp) == NULL) {
+			if (feof(fp))
+				break;
+			else
+				err(EXIT_FAILURE, _("read failed"));
+		}
 		for (p = buf; *p && iswspace(*p); ++p)
 			;
 		if (!*p)
@@ -421,8 +427,10 @@ static wchar_t *mbs_to_wcs(const char *s)
 		return NULL;
 	wcs = xmalloc((n + 1) * sizeof(wchar_t));
 	n = mbstowcs(wcs, s, n + 1);
-	if (n < 0)
+	if (n < 0) {
+		free(wcs);
 		return NULL;
+	}
 	return wcs;
 }
 #endif

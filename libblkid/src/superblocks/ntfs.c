@@ -91,7 +91,7 @@ static int probe_ntfs(blkid_probe pr, const struct blkid_idmag *mag)
 
 	ns = blkid_probe_get_sb(pr, mag, struct ntfs_super_block);
 	if (!ns)
-		return -1;
+		return errno ? -errno : 1;
 
 	/*
 	 * Check bios parameters block
@@ -149,7 +149,7 @@ static int probe_ntfs(blkid_probe pr, const struct blkid_idmag *mag)
 	off = le64_to_cpu(ns->mft_cluster_location) * sector_size *
 		sectors_per_cluster;
 
-	DBG(LOWPROBE, blkid_debug("NTFS: sector_size=%d, mft_record_size=%d, "
+	DBG(LOWPROBE, ul_debug("NTFS: sector_size=%d, mft_record_size=%d, "
 			"sectors_per_cluster=%d, nr_clusters=%ju "
 			"cluster_offset=%jd",
 			(int) sector_size, mft_record_size,
@@ -158,7 +158,7 @@ static int probe_ntfs(blkid_probe pr, const struct blkid_idmag *mag)
 
 	buf_mft = blkid_probe_get_buffer(pr, off, mft_record_size);
 	if (!buf_mft)
-		return 1;
+		return errno ? -errno : 1;
 
 	if (memcmp(buf_mft, "FILE", 4))
 		return 1;
@@ -167,7 +167,7 @@ static int probe_ntfs(blkid_probe pr, const struct blkid_idmag *mag)
 
 	buf_mft = blkid_probe_get_buffer(pr, off, mft_record_size);
 	if (!buf_mft)
-		return 1;
+		return errno ? -errno : 1;
 
 	if (memcmp(buf_mft, "FILE", 4))
 		return 1;

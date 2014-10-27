@@ -18,6 +18,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <uuid.h>
+#include <libsmartcols.h>
 
 #include "fdiskP.h"
 
@@ -67,13 +68,20 @@ struct gpt_guid {
 /*
  * Attribute bits
  */
-struct gpt_attr {
-	uint64_t            required_to_function:1;
-	uint64_t            no_blockio_protocol:1;
-	uint64_t            legacy_bios_bootable:1;
-	uint64_t            reserved:45;
-	uint64_t            guid_secific:16;
-}  __attribute__ ((packed));
+enum {
+	/* UEFI specific */
+	GPT_ATTRBIT_REQ      = 0,
+	GPT_ATTRBIT_NOBLOCK  = 1,
+	GPT_ATTRBIT_LEGACY   = 2,
+
+	/* GUID specific (range 48..64)*/
+	GPT_ATTRBIT_GUID_FIRST	= 48,
+	GPT_ATTRBIT_GUID_COUNT	= 16
+};
+
+#define GPT_ATTRSTR_REQ		"RequiredPartiton"
+#define GPT_ATTRSTR_NOBLOCK	"NoBlockIOProtocol"
+#define GPT_ATTRSTR_LEGACY	"LegacyBIOSBootable"
 
 /* The GPT Partition entry array contains an array of GPT entries. */
 struct gpt_entry {
@@ -81,7 +89,7 @@ struct gpt_entry {
 	struct gpt_guid     partition_guid;
 	uint64_t            lba_start;
 	uint64_t            lba_end;
-	struct gpt_attr     attr;
+	uint64_t            attrs;
 	uint16_t            name[GPT_PART_NAME_LEN];
 }  __attribute__ ((packed));
 
@@ -145,7 +153,7 @@ static struct fdisk_parttype gpt_parttypes[] =
 	DEF_GUID("D3BFE2DE-3DAF-11DF-BA40-E3A556D89593", N_("Intel Fast Flash")),
 
 	/* Hah!IdontneedEFI */
-	DEF_GUID("21686148-6449-6E6F-744E-656564454649", N_("BIOS boot partition")),
+	DEF_GUID("21686148-6449-6E6F-744E-656564454649", N_("BIOS boot")),
 
 	/* Windows */
 	DEF_GUID("E3C9E316-0B5C-4DB8-817D-F92DF00215AE", N_("Microsoft reserved")),
@@ -154,17 +162,23 @@ static struct fdisk_parttype gpt_parttypes[] =
 	DEF_GUID("AF9B60A0-1431-4F62-BC68-3311714A69AD", N_("Microsoft LDM data")),
 	DEF_GUID("DE94BBA4-06D1-4D40-A16A-BFD50179D6AC", N_("Windows recovery environment")),
 	DEF_GUID("37AFFC90-EF7D-4E96-91C3-2D7AE055B174", N_("IBM General Parallel Fs")),
+	DEF_GUID("E75CAF8F-F680-4CEE-AFA3-B001E56EFC2D", N_("Microsoft Storage Spaces")),
 
 	/* HP-UX */
-	DEF_GUID("75894C1E-3AEB-11D3-B7C1-7B03A0000000", N_("HP-UX data partition")),
-	DEF_GUID("E2A1E728-32E3-11D6-A682-7B03A0000000", N_("HP-UX service partition")),
+	DEF_GUID("75894C1E-3AEB-11D3-B7C1-7B03A0000000", N_("HP-UX data")),
+	DEF_GUID("E2A1E728-32E3-11D6-A682-7B03A0000000", N_("HP-UX service")),
 
-	/* Linux */
-	DEF_GUID("0FC63DAF-8483-4772-8E79-3D69D8477DE4", N_("Linux filesystem")),
-	DEF_GUID("A19D880F-05FC-4D3B-A006-743F0F84911E", N_("Linux RAID")),
+	/* Linux (http://www.freedesktop.org/wiki/Specifications/DiscoverablePartitionsSpec) */
 	DEF_GUID("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F", N_("Linux swap")),
-	DEF_GUID("E6D6D379-F507-44C2-A23C-238F2A3DF928", N_("Linux LVM")),
+	DEF_GUID("0FC63DAF-8483-4772-8E79-3D69D8477DE4", N_("Linux filesystem")),
+	DEF_GUID("3B8F8425-20E0-4F3B-907F-1A25A76F98E8", N_("Linux server data")),
+	DEF_GUID("44479540-F297-41B2-9AF7-D131D5F0458A", N_("Linux root (x86)")),
+	DEF_GUID("4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709", N_("Linux root (x86-64)")),
 	DEF_GUID("8DA63339-0007-60C0-C436-083AC8230908", N_("Linux reserved")),
+	DEF_GUID("933AC7E1-2EB4-4F13-B844-0E14E2AEF915", N_("Linux home")),
+	DEF_GUID("A19D880F-05FC-4D3B-A006-743F0F84911E", N_("Linux RAID")),
+	DEF_GUID("BC13C2FF-59E6-4262-A352-B275FD6F7172", N_("Linux extended boot")),
+	DEF_GUID("E6D6D379-F507-44C2-A23C-238F2A3DF928", N_("Linux LVM")),
 
 	/* FreeBSD */
 	DEF_GUID("516E7CB4-6ECF-11D6-8FF8-00022D09712B", N_("FreeBSD data")),
@@ -239,7 +253,6 @@ struct fdisk_gpt_label {
 };
 
 static void gpt_deinit(struct fdisk_label *lb);
-static struct fdisk_parttype *gpt_get_partition_type(struct fdisk_context *cxt, size_t i);
 
 static inline struct fdisk_gpt_label *self_label(struct fdisk_context *cxt)
 {
@@ -257,9 +270,8 @@ static uint64_t gpt_partition_size(const struct gpt_entry *e)
 	return start > end ? 0 : end - start + 1ULL;
 }
 
-#ifdef CONFIG_LIBFDISK_DEBUG
 /* prints UUID in the real byte order! */
-static void dbgprint_uuid(const char *mesg, struct gpt_guid *guid)
+static void gpt_debug_uuid(const char *mesg, struct gpt_guid *guid)
 {
 	const unsigned char *uuid = (unsigned char *) guid;
 
@@ -272,7 +284,6 @@ static void dbgprint_uuid(const char *mesg, struct gpt_guid *guid)
 		uuid[8], uuid[9],
 		uuid[10], uuid[11], uuid[12], uuid[13], uuid[14],uuid[15]);
 }
-#endif
 
 /*
  * UUID is traditionally 16 byte big-endian array, except Intel EFI
@@ -293,7 +304,7 @@ static int string_to_guid(const char *in, struct gpt_guid *guid)
 	return 0;
 }
 
-static char *guid_to_string(struct gpt_guid *guid, char *out)
+static char *guid_to_string(const struct gpt_guid *guid, char *out)
 {
 	struct gpt_guid u = *guid;	/* LE */
 
@@ -302,6 +313,20 @@ static char *guid_to_string(struct gpt_guid *guid, char *out)
 
 	return out;
 }
+
+static struct fdisk_parttype *gpt_partition_parttype(
+		struct fdisk_context *cxt,
+		const struct gpt_entry *e)
+{
+	struct fdisk_parttype *t;
+	char str[37];
+
+	guid_to_string(&e->type, str);
+	t = fdisk_get_parttype_from_string(cxt, str);
+	return t ? : fdisk_new_unknown_parttype(0, str);
+}
+
+
 
 static const char *gpt_get_header_revstr(struct gpt_header *header)
 {
@@ -336,11 +361,14 @@ static inline int partition_unused(const struct gpt_entry *e)
 static int gpt_mknew_pmbr(struct fdisk_context *cxt)
 {
 	struct gpt_legacy_mbr *pmbr = NULL;
+	int rc;
 
 	if (!cxt || !cxt->firstsector)
 		return -ENOSYS;
 
-	fdisk_zeroize_firstsector(cxt);
+	rc = fdisk_init_firstsector_buffer(cxt);
+	if (rc)
+		return rc;
 
 	pmbr = (struct gpt_legacy_mbr *) cxt->firstsector;
 
@@ -410,6 +438,62 @@ static int gpt_mknew_header_from_bkp(struct fdisk_context *cxt,
 	return 0;
 }
 
+static struct gpt_header *gpt_copy_header(struct fdisk_context *cxt,
+			   struct gpt_header *src)
+{
+	struct gpt_header *res;
+
+	if (!cxt || !src)
+		return NULL;
+
+	res = calloc(1, sizeof(*res));
+	if (!res) {
+		fdisk_warn(cxt, _("failed to allocate GPT header"));
+		return NULL;
+	}
+
+	res->my_lba                 = src->alternative_lba;
+	res->alternative_lba        = src->my_lba;
+
+	res->signature              = src->signature;
+	res->revision               = src->revision;
+	res->size                   = src->size;
+	res->npartition_entries     = src->npartition_entries;
+	res->sizeof_partition_entry = src->sizeof_partition_entry;
+	res->first_usable_lba       = src->first_usable_lba;
+	res->last_usable_lba        = src->last_usable_lba;
+
+	memcpy(&res->disk_guid, &src->disk_guid, sizeof(src->disk_guid));
+
+
+	if (res->my_lba == GPT_PRIMARY_PARTITION_TABLE_LBA)
+		res->partition_entry_lba = cpu_to_le64(2);
+	else {
+		uint64_t esz = le32_to_cpu(src->npartition_entries) * sizeof(struct gpt_entry);
+		uint64_t esects = (esz + cxt->sector_size - 1) / cxt->sector_size;
+
+		res->partition_entry_lba = cpu_to_le64(cxt->total_sectors - 1 - esects);
+	}
+
+	return res;
+}
+
+static void count_first_last_lba(struct fdisk_context *cxt,
+				 uint64_t *first, uint64_t *last)
+{
+	uint64_t esz = 0;
+
+	assert(cxt);
+
+	esz = sizeof(struct gpt_entry) * GPT_NPARTITIONS / cxt->sector_size;
+	*last = cxt->total_sectors - 2 - esz;
+	*first = esz + 2;
+
+	if (*first < cxt->first_lba && cxt->first_lba < *last)
+		/* Align according to topology */
+		*first = cxt->first_lba;
+}
+
 /*
  * Builds a clean new GPT header (currently under revision 1.0).
  *
@@ -421,31 +505,23 @@ static int gpt_mknew_header_from_bkp(struct fdisk_context *cxt,
 static int gpt_mknew_header(struct fdisk_context *cxt,
 			    struct gpt_header *header, uint64_t lba)
 {
-	uint64_t esz = 0, first, last;
+	uint64_t first, last;
 
 	if (!cxt || !header)
 		return -ENOSYS;
-
-	esz = sizeof(struct gpt_entry) * GPT_NPARTITIONS / cxt->sector_size;
 
 	header->signature = cpu_to_le64(GPT_HEADER_SIGNATURE);
 	header->revision  = cpu_to_le32(GPT_HEADER_REVISION_V1_00);
 	header->size      = cpu_to_le32(sizeof(struct gpt_header));
 
 	/*
-	 * 128 partitions is the default. It can go behond this, however,
+	 * 128 partitions are the default. It can go beyond that, but
 	 * we're creating a de facto header here, so no funny business.
 	 */
 	header->npartition_entries     = cpu_to_le32(GPT_NPARTITIONS);
 	header->sizeof_partition_entry = cpu_to_le32(sizeof(struct gpt_entry));
 
-	last = cxt->total_sectors - 2 - esz;
-	first = esz + 2;
-
-	if (first < cxt->first_lba && cxt->first_lba < last)
-		/* Align according to topology */
-		first = cxt->first_lba;
-
+	count_first_last_lba(cxt, &first, &last);
 	header->first_usable_lba = cpu_to_le64(first);
 	header->last_usable_lba  = cpu_to_le64(last);
 
@@ -532,6 +608,7 @@ done:
 static uint64_t last_lba(struct fdisk_context *cxt)
 {
 	struct stat s;
+	uint64_t sectors = 0;
 
 	memset(&s, 0, sizeof(s));
 	if (fstat(cxt->dev_fd, &s) == -1) {
@@ -540,13 +617,15 @@ static uint64_t last_lba(struct fdisk_context *cxt)
 	}
 
 	if (S_ISBLK(s.st_mode))
-		return cxt->total_sectors - 1;
-	else if (S_ISREG(s.st_mode)) {
-		uint64_t sectors = s.st_size >> cxt->sector_size;
-		return (sectors / cxt->sector_size) - 1ULL;
-	} else
+		sectors = cxt->total_sectors - 1;
+	else if (S_ISREG(s.st_mode))
+		sectors = ((uint64_t) s.st_size /
+			   (uint64_t) cxt->sector_size) - 1ULL;
+	else
 		fdisk_warnx(cxt, _("gpt: cannot handle files with mode %o"), s.st_mode);
-	return 0;
+
+	DBG(LABEL, ul_debug("GPT last LBA: %ju", sectors));
+	return sectors;
 }
 
 static ssize_t read_lba(struct fdisk_context *cxt, uint64_t lba,
@@ -693,20 +772,20 @@ static int gpt_check_lba_sanity(struct fdisk_context *cxt, struct gpt_header *he
 
 	/* check if first and last usable LBA make sense */
 	if (lu < fu) {
-		DBG(LABEL, dbgprint("error: header last LBA is before first LBA"));
+		DBG(LABEL, ul_debug("error: header last LBA is before first LBA"));
 		goto done;
 	}
 
 	/* check if first and last usable LBAs with the disk's last LBA */
 	if (fu > lastlba || lu > lastlba) {
-		DBG(LABEL, dbgprint("error: header LBAs are after the disk's last LBA"));
+		DBG(LABEL, ul_debug("error: header LBAs are after the disk's last LBA"));
 		goto done;
 	}
 
 	/* the header has to be outside usable range */
 	if (fu < GPT_PRIMARY_PARTITION_TABLE_LBA &&
 	    GPT_PRIMARY_PARTITION_TABLE_LBA < lu) {
-		DBG(LABEL, dbgprint("error: header outside of usable range"));
+		DBG(LABEL, ul_debug("error: header outside of usable range"));
 		goto done;
 	}
 
@@ -776,10 +855,13 @@ static struct gpt_header *gpt_read_header(struct fdisk_context *cxt,
 	else
 		free(ents);
 
+	DBG(LABEL, ul_debug("found valid GPT Header on LBA %ju", lba));
 	return header;
 invalid:
 	free(header);
 	free(ents);
+
+	DBG(LABEL, ul_debug("read GPT Header on LBA %ju failed", lba));
 	return NULL;
 }
 
@@ -877,7 +959,7 @@ static uint32_t partition_start_after_end(struct gpt_header *header, struct gpt_
 }
 
 /*
- * Check if partition e1 overlaps with partition e2
+ * Check if partition e1 overlaps with partition e2.
  */
 static inline int partition_overlap(struct gpt_entry *e1, struct gpt_entry *e2)
 {
@@ -890,7 +972,7 @@ static inline int partition_overlap(struct gpt_entry *e1, struct gpt_entry *e2)
 }
 
 /*
- * Find any paritions that overlap.
+ * Find any partitions that overlap.
  */
 static uint32_t partition_check_overlaps(struct gpt_header *header, struct gpt_entry *e)
 {
@@ -902,7 +984,7 @@ static uint32_t partition_check_overlaps(struct gpt_header *header, struct gpt_e
 			    partition_unused(&e[j]))
 				continue;
 			if (partition_overlap(&e[i], &e[j])) {
-				DBG(LABEL, dbgprint("GPT partitions overlap detected [%u vs. %u]", i, j));
+				DBG(LABEL, ul_debug("GPT partitions overlap detected [%u vs. %u]", i, j));
 				return i + 1;
 			}
 		}
@@ -1091,37 +1173,55 @@ static int gpt_probe_label(struct fdisk_context *cxt)
 
 	gpt = self_label(cxt);
 
+	/* TODO: it would be nice to support scenario when GPT headers are OK,
+	 *       but PMBR is corrupt */
 	mbr_type = valid_pmbr(cxt);
 	if (!mbr_type)
 		goto failed;
 
-	DBG(LABEL, dbgprint("found a %s MBR", mbr_type == GPT_MBR_PROTECTIVE ?
+	DBG(LABEL, ul_debug("found a %s MBR", mbr_type == GPT_MBR_PROTECTIVE ?
 			    "protective" : "hybrid"));
 
 	/* primary header */
 	gpt->pheader = gpt_read_header(cxt, GPT_PRIMARY_PARTITION_TABLE_LBA,
 				       &gpt->ents);
 
-	/*
-	 * TODO: If the primary GPT is corrupt, we must check the last LBA of the
-	 * device to see if it has a valid GPT Header and point to a valid GPT
-	 * Partition Entry Array.
-	 * If it points to a valid GPT Partition Entry Array, then software should
-	 * restore the primary GPT if allowed by platform policy settings.
-	 *
-	 * For now we just abort GPT probing!
-	 */
-	if (!gpt->pheader || !gpt->ents)
+	if (gpt->pheader)
+		/* primary OK, try backup from alternative LBA */
+		gpt->bheader = gpt_read_header(cxt,
+					le64_to_cpu(gpt->pheader->alternative_lba),
+					NULL);
+	else
+		/* primary corrupted -- try last LBA */
+		gpt->bheader = gpt_read_header(cxt, last_lba(cxt), &gpt->ents);
+
+	if (!gpt->pheader && !gpt->bheader)
 		goto failed;
 
-	/* OK, probing passed, now initialize backup header and fdisk variables. */
-	gpt->bheader = gpt_read_header(cxt, last_lba(cxt), NULL);
+	/* primary OK, backup corrupted -- recovery */
+	if (gpt->pheader && !gpt->bheader) {
+		fdisk_warnx(cxt, _("The backup GPT table is corrupt, but the "
+				  "primary appears OK, so that will be used."));
+		gpt->bheader = gpt_copy_header(cxt, gpt->pheader);
+		if (!gpt->bheader)
+			goto failed;
+		gpt_recompute_crc(gpt->bheader, gpt->ents);
+
+	/* primary corrupted, backup OK -- recovery */
+	} else if (!gpt->pheader && gpt->bheader) {
+		fdisk_warnx(cxt, _("The primary GPT table is corrupt, but the "
+				  "backup appears OK, so that will be used."));
+		gpt->pheader = gpt_copy_header(cxt, gpt->bheader);
+		if (!gpt->pheader)
+			goto failed;
+		gpt_recompute_crc(gpt->pheader, gpt->ents);
+	}
 
 	cxt->label->nparts_max = le32_to_cpu(gpt->pheader->npartition_entries);
 	cxt->label->nparts_cur = partitions_in_use(gpt->pheader, gpt->ents);
 	return 1;
 failed:
-	DBG(LABEL, dbgprint("GPT probe failed"));
+	DBG(LABEL, ul_debug("GPT probe failed"));
 	gpt_deinit(cxt->label);
 	return 0;
 }
@@ -1168,114 +1268,137 @@ static char *encode_to_utf8(unsigned char *src, size_t count)
 	return dest;
 }
 
-/*
- * List label partitions.
- * This function must currently exist to comply with standard fdisk
- * requirements, but once partition semantics are added to the fdisk
- * API it can be removed for custom implementation (see gpt_label struct).
- */
-static int gpt_list_disklabel(struct fdisk_context *cxt)
+static int gpt_entry_attrs_to_string(struct gpt_entry *e, char **res)
 {
-	int rc, trunc = TT_FL_TRUNC;
-	uint32_t i;
+	unsigned int n, count = 0;
+	size_t l;
+	char *bits, *p;
+	uint64_t attrs;
+
+	assert(e);
+	assert(res);
+
+	*res = NULL;
+	attrs = le64_to_cpu(e->attrs);
+	if (!attrs)
+		return 0;	/* no attributes at all */
+
+	bits = (char *) &attrs;
+
+	/* Note that sizeof() is correct here, we need separators between
+	 * the strings so also count \0 is correct */
+	*res = calloc(1, sizeof(GPT_ATTRSTR_NOBLOCK) +
+			 sizeof(GPT_ATTRSTR_REQ) +
+			 sizeof(GPT_ATTRSTR_LEGACY) +
+			 sizeof("GUID:") + (GPT_ATTRBIT_GUID_COUNT * 3));
+	if (!*res)
+		return -errno;
+
+	p = *res;
+	if (isset(bits, GPT_ATTRBIT_REQ)) {
+		memcpy(p, GPT_ATTRSTR_REQ, (l = sizeof(GPT_ATTRSTR_REQ)));
+		p += l - 1;
+	}
+	if (isset(bits, GPT_ATTRBIT_NOBLOCK)) {
+		if (p > *res)
+			*p++ = ' ';
+		memcpy(p, GPT_ATTRSTR_NOBLOCK, (l = sizeof(GPT_ATTRSTR_NOBLOCK)));
+		p += l - 1;
+	}
+	if (isset(bits, GPT_ATTRBIT_LEGACY)) {
+		if (p > *res)
+			*p++ = ' ';
+		memcpy(p, GPT_ATTRSTR_LEGACY, (l = sizeof(GPT_ATTRSTR_LEGACY)));
+		p += l - 1;
+	}
+
+	for (n = GPT_ATTRBIT_GUID_FIRST;
+	     n < GPT_ATTRBIT_GUID_FIRST + GPT_ATTRBIT_GUID_COUNT; n++) {
+
+		if (!isset(bits, n))
+			continue;
+		if (!count) {
+			if (p > *res)
+				*p++ = ' ';
+			p += sprintf(p, "GUID:%u", n);
+		} else
+			p += sprintf(p, ",%u", n);
+		count++;
+	}
+
+	return 0;
+}
+
+static int gpt_get_partition(struct fdisk_context *cxt, size_t n,
+			     struct fdisk_partition *pa)
+{
 	struct fdisk_gpt_label *gpt;
-	struct gpt_header *h;
-	uint64_t fu;
-	uint64_t lu;
-	struct tt *tb = NULL;
+	struct gpt_entry *e;
+	char u_str[37];
+	int rc = 0;
 
 	assert(cxt);
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, GPT));
 
 	gpt = self_label(cxt);
-	h = gpt->pheader;
-	fu = le64_to_cpu(gpt->pheader->first_usable_lba);
-	lu = le64_to_cpu(gpt->pheader->last_usable_lba);
 
-	tb = tt_new_table(TT_FL_FREEDATA);
-	if (!tb)
-		return -ENOMEM;
+	if ((uint32_t) n >= le32_to_cpu(gpt->pheader->npartition_entries))
+		return -EINVAL;
 
-	/* don't trunc anything in expert mode */
-	if (fdisk_context_display_details(cxt)) {
-		trunc = 0;
-		fdisk_colon(cxt, _("First LBA: %ju"), h->first_usable_lba);
-		fdisk_colon(cxt, _("Last LBA: %ju"), h->last_usable_lba);
-		fdisk_colon(cxt, _("Alternative LBA: %ju"), h->alternative_lba);
-		fdisk_colon(cxt, _("Partitions entries LBA: %ju"), h->partition_entry_lba);
-		fdisk_colon(cxt, _("Allocated partition entries: %ju"), (uintmax_t) h->npartition_entries);
-	}
-	tt_define_column(tb, _("Device"), 0.1, 0);
-	tt_define_column(tb, _("Start"),   12, TT_FL_RIGHT);
-	tt_define_column(tb, _("End"),     12, TT_FL_RIGHT);
-	tt_define_column(tb, _("Size"),     6, TT_FL_RIGHT);
-	tt_define_column(tb, _("Type"),   0.1, trunc);
+	gpt = self_label(cxt);
+	e = &gpt->ents[n];
 
-	if (fdisk_context_display_details(cxt)) {
-		tt_define_column(tb, _("UUID"),  36, 0);
-		tt_define_column(tb, _("Name"), 0.2, trunc);
-	}
+	pa->used = !partition_unused(e) || gpt_partition_start(e);
+	if (!pa->used)
+		return 0;
 
-	for (i = 0; i < le32_to_cpu(h->npartition_entries); i++) {
-		struct gpt_entry *e = &gpt->ents[i];
-		char *sizestr = NULL, *p;
-		uint64_t start = gpt_partition_start(e);
-		uint64_t size = gpt_partition_size(e);
-		struct fdisk_parttype *t;
-		struct tt_line *ln;
-		char u_str[37];
+	pa->start = gpt_partition_start(e);
+	pa->end = gpt_partition_end(e);
+	pa->size = gpt_partition_size(e);
+	pa->type = gpt_partition_parttype(cxt, e);
 
-		if (partition_unused(&gpt->ents[i]) || start == 0)
-			continue;
-		/* the partition has to inside usable range */
-		if (start < fu || start + size - 1 > lu)
-			continue;
-		ln = tt_add_line(tb, NULL);
-		if (!ln)
-			continue;
-
-		if (fdisk_context_display_details(cxt) &&
-		    asprintf(&p, "%ju", size * cxt->sector_size) > 0)
-			sizestr = p;
-		else
-			sizestr = size_to_human_string(SIZE_SUFFIX_1LETTER,
-					       size * cxt->sector_size);
-		t = fdisk_get_partition_type(cxt, i);
-
-		/* basic columns */
-		p = fdisk_partname(cxt->dev_path, i + 1);
-		if (p)
-			tt_line_set_data(ln, 0, p);
-		if (asprintf(&p, "%ju", start) > 0)
-			tt_line_set_data(ln, 1, p);
-		if (asprintf(&p, "%ju", gpt_partition_end(e)) > 0)
-			tt_line_set_data(ln, 2, p);
-		if (sizestr)
-			tt_line_set_data(ln, 3, sizestr);
-		if (t && t->name)
-			tt_line_set_data(ln, 4, strdup(t->name));
-
-		/* expert menu column(s) */
-		if (fdisk_context_display_details(cxt)) {
-			char *name = encode_to_utf8(
-					(unsigned char *)e->name,
-					sizeof(e->name));
-
-			if (guid_to_string(&e->partition_guid, u_str))
-				tt_line_set_data(ln, 5, strdup(u_str));
-			if (name)
-				tt_line_set_data(ln, 6, name);
+	if (guid_to_string(&e->partition_guid, u_str)) {
+		pa->uuid = strdup(u_str);
+		if (!pa->uuid) {
+			rc = -errno;
+			goto done;
 		}
+	} else
+		pa->uuid = NULL;
 
-		fdisk_warn_alignment(cxt, start, i);
-		fdisk_free_parttype(t);
+	rc = gpt_entry_attrs_to_string(e, &pa->attrs);
+	if (rc)
+		goto done;
+
+	pa->name = encode_to_utf8((unsigned char *)e->name, sizeof(e->name));
+	return 0;
+done:
+	fdisk_reset_partition(pa);
+	return rc;
+}
+
+
+/*
+ * List label partitions.
+ */
+static int gpt_list_disklabel(struct fdisk_context *cxt)
+{
+	assert(cxt);
+	assert(cxt->label);
+	assert(fdisk_is_disklabel(cxt, GPT));
+
+	if (fdisk_context_display_details(cxt)) {
+		struct gpt_header *h = self_label(cxt)->pheader;
+
+		fdisk_info(cxt, _("First LBA: %ju"), h->first_usable_lba);
+		fdisk_info(cxt, _("Last LBA: %ju"), h->last_usable_lba);
+		fdisk_info(cxt, _("Alternative LBA: %ju"), h->alternative_lba);
+		fdisk_info(cxt, _("Partitions entries LBA: %ju"), h->partition_entry_lba);
+		fdisk_info(cxt, _("Allocated partition entries: %u"), h->npartition_entries);
 	}
 
-	rc = fdisk_print_table(cxt, tb);
-	tt_free_table(tb);
-
-	return rc;
+	return 0;
 }
 
 /*
@@ -1373,16 +1496,14 @@ fail:
 static int gpt_write_disklabel(struct fdisk_context *cxt)
 {
 	struct fdisk_gpt_label *gpt;
+	int mbr_type;
 
 	assert(cxt);
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, GPT));
 
 	gpt = self_label(cxt);
-
-	/* we do not want to mess up hybrid MBRs by creating a valid pmbr */
-	if (valid_pmbr(cxt) == GPT_MBR_HYBRID)
-		goto err0;
+	mbr_type = valid_pmbr(cxt);
 
 	/* check that disk is big enough to handle the backup header */
 	if (le64_to_cpu(gpt->pheader->alternative_lba) > cxt->total_sectors)
@@ -1419,17 +1540,21 @@ static int gpt_write_disklabel(struct fdisk_context *cxt)
 		goto err1;
 	if (gpt_write_header(cxt, gpt->pheader, GPT_PRIMARY_PARTITION_TABLE_LBA) != 0)
 		goto err1;
-	if (gpt_write_pmbr(cxt) != 0)
+
+	if (mbr_type == GPT_MBR_HYBRID)
+		fdisk_warnx(cxt, _("The device contains hybrid MBR -- writing GPT only. "
+				   "You have to sync the MBR manually."));
+	else if (gpt_write_pmbr(cxt) != 0)
 		goto err1;
 
-	DBG(LABEL, dbgprint("GPT write success"));
+	DBG(LABEL, ul_debug("GPT write success"));
 	return 0;
 err0:
-	DBG(LABEL, dbgprint("GPT write failed: incorrect input"));
+	DBG(LABEL, ul_debug("GPT write failed: incorrect input"));
 	errno = EINVAL;
 	return -EINVAL;
 err1:
-	DBG(LABEL, dbgprint("GPT write failed: %m"));
+	DBG(LABEL, ul_debug("GPT write failed: %m"));
 	return -errno;
 }
 
@@ -1526,6 +1651,7 @@ static int gpt_verify_disklabel(struct fdisk_context *cxt)
 	if (!nerror) { /* yay :-) */
 		uint32_t nsegments = 0;
 		uint64_t free_sectors = 0, largest_segment = 0;
+		char *strsz = NULL;
 
 		fdisk_info(cxt, _("No errors detected."));
 		fdisk_info(cxt, _("Header version: %s"), gpt_get_header_revstr(gpt->pheader));
@@ -1535,11 +1661,17 @@ static int gpt_verify_disklabel(struct fdisk_context *cxt)
 
 		free_sectors = get_free_sectors(cxt, gpt->pheader, gpt->ents,
 						&nsegments, &largest_segment);
+		if (largest_segment)
+			strsz = size_to_human_string(SIZE_SUFFIX_SPACE | SIZE_SUFFIX_3LETTER,
+					largest_segment * cxt->sector_size);
+
 		fdisk_info(cxt,
-			   P_("A total of %ju free sectors is available in %d segment.",
-			      "A total of %ju free sectors is available in %d segments "
-			      "(the largest is %ju).", nsegments),
-			   free_sectors, nsegments, largest_segment);
+			   P_("A total of %ju free sectors is available in %u segment.",
+			      "A total of %ju free sectors is available in %u segments "
+			      "(the largest is %s).", nsegments),
+			   free_sectors, nsegments, strsz);
+		free(strsz);
+
 	} else
 		fdisk_warnx(cxt,
 			P_("%d error detected.", "%d errors detected.", nerror),
@@ -1581,7 +1713,7 @@ static int gpt_delete_partition(struct fdisk_context *cxt,
 static void gpt_entry_set_type(struct gpt_entry *e, struct gpt_guid *uuid)
 {
 	e->type = *uuid;
-	DBG(LABEL, dbgprint_uuid("new type", &(e->type)));
+	DBG(LABEL, gpt_debug_uuid("new type", &(e->type)));
 }
 
 /*
@@ -1600,6 +1732,9 @@ static int gpt_create_new_partition(struct fdisk_context *cxt,
 	assert(cxt);
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, GPT));
+
+	DBG(LABEL, ul_debug("GPT new partition: partno=%zu, start=%ju, end=%ju",
+				partnum, fsect, lsect));
 
 	gpt = self_label(cxt);
 
@@ -1634,8 +1769,7 @@ static int gpt_create_new_partition(struct fdisk_context *cxt,
 /* Performs logical checks to add a new partition entry */
 static int gpt_add_partition(
 		struct fdisk_context *cxt,
-		size_t partnum,
-		struct fdisk_parttype *t)
+		struct fdisk_partition *pa)
 {
 	uint64_t user_f, user_l;	/* user input ranges for first and last sectors */
 	uint64_t disk_f, disk_l;	/* first and last available sector ranges on device*/
@@ -1645,6 +1779,7 @@ static int gpt_add_partition(
 	struct gpt_header *pheader;
 	struct gpt_entry *ents;
 	struct fdisk_ask *ask = NULL;
+	size_t partnum;
 	int rc;
 
 	assert(cxt);
@@ -1652,28 +1787,32 @@ static int gpt_add_partition(
 	assert(fdisk_is_disklabel(cxt, GPT));
 
 	gpt = self_label(cxt);
-
-	if (partnum >= cxt->label->nparts_max)
-		return -EINVAL;
-
 	pheader = gpt->pheader;
 	ents = gpt->ents;
 
+	rc = fdisk_partition_next_partno(pa, cxt, &partnum);
+	if (rc) {
+		DBG(LABEL, ul_debug("GPT failed to get next partno"));
+		return rc;
+	}
 	if (!partition_unused(&ents[partnum])) {
-		fdisk_warnx(cxt, _("Partition %zd is already defined.  "
+		fdisk_warnx(cxt, _("Partition %zu is already defined.  "
 			           "Delete it before re-adding it."), partnum +1);
-		return -EINVAL;
+		return -ERANGE;
 	}
 	if (le32_to_cpu(pheader->npartition_entries) ==
 			partitions_in_use(pheader, ents)) {
 		fdisk_warnx(cxt, _("All partitions are already in use."));
-		return -EINVAL;
+		return -ENOSPC;
 	}
-
 	if (!get_free_sectors(cxt, pheader, ents, NULL, NULL)) {
 		fdisk_warnx(cxt, _("No free sectors available."));
 		return -ENOSPC;
 	}
+
+	string_to_guid(pa && pa->type && pa->type->typestr ?
+				pa->type->typestr:
+				GPT_DEFAULT_ENTRY_TYPE, &typeid);
 
 	disk_f = find_first_available(pheader, ents, 0);
 	disk_l = find_last_free_sector(pheader, ents);
@@ -1685,66 +1824,101 @@ static int gpt_add_partition(
 	/* align the default in range <dflt_f,dflt_l>*/
 	dflt_f = fdisk_align_lba_in_range(cxt, dflt_f, dflt_f, dflt_l);
 
-	string_to_guid(t && t->typestr ? t->typestr : GPT_DEFAULT_ENTRY_TYPE, &typeid);
-
-	/* get user input for first and last sectors of the new partition */
-	for (;;) {
-		if (!ask)
-			ask = fdisk_new_ask();
-		else
-			fdisk_reset_ask(ask);
-
-		/* First sector */
-		fdisk_ask_set_query(ask, _("First sector"));
-		fdisk_ask_set_type(ask, FDISK_ASKTYPE_NUMBER);
-		fdisk_ask_number_set_low(ask,     disk_f);	/* minimal */
-		fdisk_ask_number_set_default(ask, dflt_f);	/* default */
-		fdisk_ask_number_set_high(ask,    disk_l);	/* maximal */
-
-		rc = fdisk_do_ask(cxt, ask);
-		if (rc)
-			goto done;
-
-		user_f = fdisk_ask_number_get_result(ask);
-		if (user_f != find_first_available(pheader, ents, user_f)) {
-			fdisk_warnx(cxt, _("Sector %ju already used."), user_f);
-			continue;
+	/* first sector */
+	if (pa && pa->start) {
+		if (pa->start != find_first_available(pheader, ents, pa->start)) {
+			fdisk_warnx(cxt, _("Sector %ju already used."), pa->start);
+			return -ERANGE;
 		}
+		user_f = pa->start;
+	} else if (pa && pa->start_follow_default) {
+		user_f = dflt_f;
+	} else {
+		/*  ask by dialog */
+		for (;;) {
+			if (!ask)
+				ask = fdisk_new_ask();
+			else
+				fdisk_reset_ask(ask);
 
-		fdisk_reset_ask(ask);
+			/* First sector */
+			fdisk_ask_set_query(ask, _("First sector"));
+			fdisk_ask_set_type(ask, FDISK_ASKTYPE_NUMBER);
+			fdisk_ask_number_set_low(ask,     disk_f);	/* minimal */
+			fdisk_ask_number_set_default(ask, dflt_f);	/* default */
+			fdisk_ask_number_set_high(ask,    disk_l);	/* maximal */
 
-		/* Last sector */
-		dflt_l = find_last_free(pheader, ents, user_f);
+			rc = fdisk_do_ask(cxt, ask);
+			if (rc)
+				goto done;
 
-		fdisk_ask_set_query(ask, _("Last sector, +sectors or +size{K,M,G,T,P}"));
-		fdisk_ask_set_type(ask, FDISK_ASKTYPE_OFFSET);
-		fdisk_ask_number_set_low(ask,     user_f);	/* minimal */
-		fdisk_ask_number_set_default(ask, dflt_l);	/* default */
-		fdisk_ask_number_set_high(ask,    dflt_l);	/* maximal */
-		fdisk_ask_number_set_base(ask,    user_f);	/* base for relative input */
-		fdisk_ask_number_set_unit(ask,    cxt->sector_size);
-
-		rc = fdisk_do_ask(cxt, ask);
-		if (rc)
-			goto done;
-
-		user_l = fdisk_ask_number_get_result(ask);
-		if (fdisk_ask_number_is_relative(ask))
-			user_l = fdisk_align_lba_in_range(cxt, user_l, user_f, dflt_l) - 1;
-		if (user_l > user_f && user_l <= disk_l)
+			user_f = fdisk_ask_number_get_result(ask);
+			if (user_f != find_first_available(pheader, ents, user_f)) {
+				fdisk_warnx(cxt, _("Sector %ju already used."), user_f);
+				continue;
+			}
 			break;
+		}
 	}
 
-	if (gpt_create_new_partition(cxt, partnum,
-				     user_f, user_l, &typeid, ents) != 0)
-		fdisk_warnx(cxt, _("Could not create partition %zd"), partnum + 1);
-	else {
+
+	/* Last sector */
+	dflt_l = find_last_free(pheader, ents, user_f);
+
+	if (pa && pa->size) {
+		user_l = user_f + pa->size;
+		user_l = fdisk_align_lba_in_range(cxt, user_l, user_f, dflt_l) - 1;
+
+		/* no space for anything useful, use all space
+		if (user_l + (cxt->grain / cxt->sector_size) > dflt_l)
+			user_l = dflt_l;
+		*/
+
+	} else if (pa && pa->end_follow_default) {
+		user_l = dflt_l;
+	} else {
+		for (;;) {
+			if (!ask)
+				ask = fdisk_new_ask();
+			else
+				fdisk_reset_ask(ask);
+
+			fdisk_ask_set_query(ask, _("Last sector, +sectors or +size{K,M,G,T,P}"));
+			fdisk_ask_set_type(ask, FDISK_ASKTYPE_OFFSET);
+			fdisk_ask_number_set_low(ask,     user_f);	/* minimal */
+			fdisk_ask_number_set_default(ask, dflt_l);	/* default */
+			fdisk_ask_number_set_high(ask,    dflt_l);	/* maximal */
+			fdisk_ask_number_set_base(ask,    user_f);	/* base for relative input */
+			fdisk_ask_number_set_unit(ask,    cxt->sector_size);
+
+			rc = fdisk_do_ask(cxt, ask);
+			if (rc)
+				goto done;
+
+			user_l = fdisk_ask_number_get_result(ask);
+			if (fdisk_ask_number_is_relative(ask)) {
+				user_l = fdisk_align_lba_in_range(cxt, user_l, user_f, dflt_l) - 1;
+
+				/* no space for anything useful, use all space
+				if (user_l + (cxt->grain / cxt->sector_size) > dflt_l)
+					user_l = dflt_l;
+				*/
+			} if (user_l > user_f && user_l <= disk_l)
+				break;
+		}
+	}
+
+	if ((rc = gpt_create_new_partition(cxt, partnum,
+				     user_f, user_l, &typeid, ents) != 0)) {
+		fdisk_warnx(cxt, _("Could not create partition %zu"), partnum + 1);
+		goto done;
+	} else {
 		struct fdisk_parttype *t;
 
 		cxt->label->nparts_cur++;
 		fdisk_label_set_changed(cxt->label, 1);
 
-		t = gpt_get_partition_type(cxt, partnum);
+		t = gpt_partition_parttype(cxt, &ents[partnum]);
 		fdisk_info_new_partition(cxt, partnum + 1, user_f, user_l, t);
 		fdisk_free_parttype(t);
 	}
@@ -1888,33 +2062,6 @@ static int gpt_set_disklabel_id(struct fdisk_context *cxt)
 	return 0;
 }
 
-
-static struct fdisk_parttype *gpt_get_partition_type(
-		struct fdisk_context *cxt,
-		size_t i)
-{
-	struct fdisk_parttype *t;
-	char str[37];
-	struct fdisk_gpt_label *gpt;
-
-	assert(cxt);
-	assert(cxt->label);
-	assert(fdisk_is_disklabel(cxt, GPT));
-
-	gpt = self_label(cxt);
-
-	if ((uint32_t) i >= le32_to_cpu(gpt->pheader->npartition_entries))
-		return NULL;
-
-	guid_to_string(&gpt->ents[i].type, str);
-	t = fdisk_get_parttype_from_string(cxt, str);
-	if (!t)
-		t = fdisk_new_unknown_parttype(0, str);
-
-	return t;
-}
-
-
 static int gpt_set_partition_type(
 		struct fdisk_context *cxt,
 		size_t i,
@@ -1940,10 +2087,7 @@ static int gpt_set_partition_type(
 	return 0;
 }
 
-static int gpt_get_partition_status(
-		struct fdisk_context *cxt,
-		size_t i,
-		int *status)
+static int gpt_part_is_used(struct fdisk_context *cxt, size_t i)
 {
 	struct fdisk_gpt_label *gpt;
 	struct gpt_entry *e;
@@ -1954,16 +2098,11 @@ static int gpt_get_partition_status(
 
 	gpt = self_label(cxt);
 
-	if (!status || (uint32_t) i >= le32_to_cpu(gpt->pheader->npartition_entries))
-		return -EINVAL;
-
+	if ((uint32_t) i >= le32_to_cpu(gpt->pheader->npartition_entries))
+		return 0;
 	e = &gpt->ents[i];
-	*status = FDISK_PARTSTAT_NONE;
 
-	if (!partition_unused(e) || gpt_partition_start(e))
-		*status = FDISK_PARTSTAT_USED;
-
-	return 0;
+	return !partition_unused(e) || gpt_partition_start(e);
 }
 
 int fdisk_gpt_partition_set_uuid(struct fdisk_context *cxt, size_t i)
@@ -1978,7 +2117,7 @@ int fdisk_gpt_partition_set_uuid(struct fdisk_context *cxt, size_t i)
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, GPT));
 
-	DBG(LABEL, dbgprint("UUID change requested partno=%zd", i));
+	DBG(LABEL, ul_debug("UUID change requested partno=%zu", i));
 
 	gpt = self_label(cxt);
 
@@ -2024,7 +2163,7 @@ int fdisk_gpt_partition_set_name(struct fdisk_context *cxt, size_t i)
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, GPT));
 
-	DBG(LABEL, dbgprint("NAME change requested partno=%zd", i));
+	DBG(LABEL, ul_debug("NAME change requested partno=%zu", i));
 
 	gpt = self_label(cxt);
 
@@ -2061,7 +2200,166 @@ int fdisk_gpt_partition_set_name(struct fdisk_context *cxt, size_t i)
 	return 0;
 }
 
+int fdisk_gpt_is_hybrid(struct fdisk_context *cxt)
+{
+	assert(cxt);
+	return valid_pmbr(cxt) == GPT_MBR_HYBRID;
+}
 
+static int gpt_toggle_partition_flag(
+		struct fdisk_context *cxt,
+		size_t i,
+		unsigned long flag)
+{
+	struct fdisk_gpt_label *gpt;
+	uint64_t attrs, tmp;
+	char *bits;
+	const char *name = NULL;
+	int bit = -1, rc;
+
+	assert(cxt);
+	assert(cxt->label);
+	assert(fdisk_is_disklabel(cxt, GPT));
+
+	DBG(LABEL, ul_debug("GPT entry attribute change requested partno=%zu", i));
+	gpt = self_label(cxt);
+
+	if ((uint32_t) i >= le32_to_cpu(gpt->pheader->npartition_entries))
+		return -EINVAL;
+
+	attrs = le64_to_cpu(gpt->ents[i].attrs);
+	bits = (char *) &attrs;
+
+	switch (flag) {
+	case GPT_FLAG_REQUIRED:
+		bit = GPT_ATTRBIT_REQ;
+		name = GPT_ATTRSTR_REQ;
+		break;
+	case GPT_FLAG_NOBLOCK:
+		bit = GPT_ATTRBIT_NOBLOCK;
+		name = GPT_ATTRSTR_NOBLOCK;
+		break;
+	case GPT_FLAG_LEGACYBOOT:
+		bit = GPT_ATTRBIT_LEGACY;
+		name = GPT_ATTRSTR_LEGACY;
+		break;
+	case GPT_FLAG_GUIDSPECIFIC:
+		rc = fdisk_ask_number(cxt, 48, 48, 63, _("Enter GUID specific bit"), &tmp);
+		if (rc)
+			return rc;
+		bit = tmp;
+		break;
+	default:
+		/* already specified PT_FLAG_GUIDSPECIFIC bit */
+		if (flag >= 48 && flag <= 63) {
+			bit = flag;
+			flag = GPT_FLAG_GUIDSPECIFIC;
+		}
+		break;
+	}
+
+	if (bit < 0) {
+		fdisk_warnx(cxt, _("failed to toggle unsupported bit %lu"), flag);
+		return -EINVAL;
+	}
+
+	if (!isset(bits, bit))
+		setbit(bits, bit);
+	else
+		clrbit(bits, bit);
+
+	gpt->ents[i].attrs = cpu_to_le64(attrs);
+
+	if (flag == GPT_FLAG_GUIDSPECIFIC)
+		fdisk_sinfo(cxt, FDISK_INFO_SUCCESS,
+			isset(bits, bit) ?
+			_("The GUID specific bit %d on partition %zu is enabled now.") :
+			_("The GUID specific bit %d on partition %zu is disabled now."),
+			bit, i + 1);
+	else
+		fdisk_sinfo(cxt, FDISK_INFO_SUCCESS,
+			isset(bits, bit) ?
+			_("The %s flag on partition %zu is enabled now.") :
+			_("The %s flag on partition %zu is disabled now."),
+			name, i + 1);
+
+	gpt_recompute_crc(gpt->pheader, gpt->ents);
+	gpt_recompute_crc(gpt->bheader, gpt->ents);
+	fdisk_label_set_changed(cxt->label, 1);
+	return 0;
+}
+
+static int gpt_entry_cmp_start(const void *a, const void *b)
+{
+	struct gpt_entry *ae = (struct gpt_entry *) a,
+			 *be = (struct gpt_entry *) b;
+	int au = partition_unused(ae),
+	    bu = partition_unused(be);
+
+	if (au && bu)
+		return 0;
+	if (au)
+		return 1;
+	if (bu)
+		return -1;
+
+	return gpt_partition_start(ae) - gpt_partition_start(be);
+}
+
+/* sort partition by start sector */
+static int gpt_reorder(struct fdisk_context *cxt)
+{
+	struct fdisk_gpt_label *gpt;
+	size_t nparts;
+
+	assert(cxt);
+	assert(cxt->label);
+	assert(fdisk_is_disklabel(cxt, GPT));
+
+	gpt = self_label(cxt);
+	nparts = le32_to_cpu(gpt->pheader->npartition_entries);
+
+	qsort(gpt->ents, nparts, sizeof(struct gpt_entry),
+			gpt_entry_cmp_start);
+
+	gpt_recompute_crc(gpt->pheader, gpt->ents);
+	gpt_recompute_crc(gpt->bheader, gpt->ents);
+	fdisk_label_set_changed(cxt->label, 1);
+
+	fdisk_sinfo(cxt, FDISK_INFO_SUCCESS, _("Done."));
+	return 0;
+}
+
+static int gpt_reset_alignment(struct fdisk_context *cxt)
+{
+	struct fdisk_gpt_label *gpt;
+	struct gpt_header *h;
+
+	assert(cxt);
+	assert(cxt->label);
+	assert(fdisk_is_disklabel(cxt, GPT));
+
+	gpt = self_label(cxt);
+	h = gpt ? gpt->pheader : NULL;
+
+	if (h) {
+		/* always follow existing table */
+		cxt->first_lba = h->first_usable_lba;
+		cxt->last_lba  = h->last_usable_lba;
+	} else {
+		/* estimate ranges for GPT */
+		uint64_t first, last;
+
+		count_first_last_lba(cxt, &first, &last);
+
+		if (cxt->first_lba < first)
+			cxt->first_lba = first;
+		if (cxt->last_lba > last)
+			cxt->last_lba = last;
+	}
+
+	return 0;
+}
 /*
  * Deinitialize fdisk-specific variables
  */
@@ -2089,17 +2387,39 @@ static const struct fdisk_label_operations gpt_operations =
 	.create		= gpt_create_disklabel,
 	.list		= gpt_list_disklabel,
 	.locate		= gpt_locate_disklabel,
+	.reorder	= gpt_reorder,
 	.get_id		= gpt_get_disklabel_id,
 	.set_id		= gpt_set_disklabel_id,
 
-	.part_add	= gpt_add_partition,
+	.get_part	= gpt_get_partition,
+	.add_part	= gpt_add_partition,
+
 	.part_delete	= gpt_delete_partition,
-	.part_get_type	= gpt_get_partition_type,
+
+	.part_is_used	= gpt_part_is_used,
 	.part_set_type	= gpt_set_partition_type,
+	.part_toggle_flag = gpt_toggle_partition_flag,
 
-	.part_get_status = gpt_get_partition_status,
+	.deinit		= gpt_deinit,
 
-	.deinit		= gpt_deinit
+	.reset_alignment = gpt_reset_alignment
+};
+
+static const struct fdisk_column gpt_columns[] =
+{
+	/* basic */
+	{ FDISK_COL_DEVICE,	N_("Device"),	 10,	0 },
+	{ FDISK_COL_START,	N_("Start"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_END,	N_("End"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_SECTORS,	N_("Sectors"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_CYLINDERS,	N_("Cylinders"),  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_SIZE,	N_("Size"),	  5,	SCOLS_FL_RIGHT, FDISK_COLFL_EYECANDY },
+	{ FDISK_COL_TYPE,	N_("Type"),	0.1,	SCOLS_FL_TRUNC, FDISK_COLFL_EYECANDY },
+	/* expert */
+	{ FDISK_COL_TYPEID,	N_("Type-UUID"), 36,	0,           FDISK_COLFL_DETAIL },
+	{ FDISK_COL_UUID,	N_("UUID"),	 36,	0,           FDISK_COLFL_DETAIL },
+	{ FDISK_COL_NAME,	N_("Name"),	0.2,	SCOLS_FL_TRUNC, FDISK_COLFL_DETAIL },
+	{ FDISK_COL_ATTR,	N_("Attrs"),	  0,	0,           FDISK_COLFL_DETAIL }
 };
 
 /*
@@ -2123,6 +2443,9 @@ struct fdisk_label *fdisk_new_gpt_label(struct fdisk_context *cxt)
 	lb->op = &gpt_operations;
 	lb->parttypes = gpt_parttypes;
 	lb->nparttypes = ARRAY_SIZE(gpt_parttypes);
+
+	lb->columns = gpt_columns;
+	lb->ncolumns = ARRAY_SIZE(gpt_columns);
 
 	return lb;
 }

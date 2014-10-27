@@ -12,6 +12,8 @@
 #include <unistd.h>		/* write */
 #include <sys/ioctl.h>		/* ioctl */
 
+#include <libsmartcols.h>
+
 #include "nls.h"
 #include "blkdev.h"
 #include "bitops.h"
@@ -193,13 +195,17 @@ static int sun_create_disklabel(struct fdisk_context *cxt)
 	unsigned int ndiv;
 	struct fdisk_sun_label *sun;		/* libfdisk sun handler */
 	struct sun_disklabel *sunlabel;	/* on disk data */
+	int rc = 0;
 
 	assert(cxt);
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, SUN));
 
 	/* map first sector to header */
-	fdisk_zeroize_firstsector(cxt);
+	rc = fdisk_init_firstsector_buffer(cxt);
+	if (rc)
+		return rc;
+
 	sun = (struct fdisk_sun_label *) cxt->label;
 	sun->header = (struct sun_disklabel *) cxt->firstsector;
 
@@ -361,6 +367,7 @@ static void fetch_sun(struct fdisk_context *cxt,
 	}
 }
 
+#ifdef HAVE_QSORT_R
 static int verify_sun_cmp(int *a, int *b, void *data)
 {
     unsigned int *verify_sun_starts = (unsigned int *) data;
@@ -373,27 +380,26 @@ static int verify_sun_cmp(int *a, int *b, void *data)
 	    return 1;
     return -1;
 }
+#endif
 
 static int sun_verify_disklabel(struct fdisk_context *cxt)
 {
     uint32_t starts[SUN_MAXPARTITIONS], lens[SUN_MAXPARTITIONS], start, stop;
     uint32_t i,j,k,starto,endo;
+#ifdef HAVE_QSORT_R
     int array[SUN_MAXPARTITIONS];
     unsigned int *verify_sun_starts;
-
+#endif
     assert(cxt);
     assert(cxt->label);
     assert(fdisk_is_disklabel(cxt, SUN));
-
-    verify_sun_starts = starts;
 
     fetch_sun(cxt, starts, lens, &start, &stop);
 
     for (k = 0; k < 7; k++) {
 	for (i = 0; i < SUN_MAXPARTITIONS; i++) {
-	    if (k && (lens[i] % (cxt->geom.heads * cxt->geom.sectors))) {
-	        fdisk_warnx(cxt, _("Partition %d doesn't end on cylinder boundary."), i+1);
-	    }
+	    if (k && (lens[i] % (cxt->geom.heads * cxt->geom.sectors)))
+	        fdisk_warnx(cxt, _("Partition %u doesn't end on cylinder boundary."), i+1);
 	    if (lens[i]) {
 	        for (j = 0; j < i; j++)
 	            if (lens[j]) {
@@ -412,8 +418,8 @@ static int sun_verify_disklabel(struct fdisk_context *cxt)
 	                        endo = starts[i]+lens[i];
 	                        if (starts[j]+lens[j] < endo)
 					endo = starts[j]+lens[j];
-	                        fdisk_warnx(cxt, _("Partition %d overlaps with others in "
-				       "sectors %d-%d."), i+1, starto, endo);
+	                        fdisk_warnx(cxt, _("Partition %u overlaps with others in "
+				       "sectors %u-%u."), i+1, starto, endo);
 	                    }
 	                }
 	            }
@@ -421,12 +427,15 @@ static int sun_verify_disklabel(struct fdisk_context *cxt)
 	}
     }
 
+#ifdef HAVE_QSORT_R
     for (i = 0; i < SUN_MAXPARTITIONS; i++) {
         if (lens[i])
             array[i] = i;
         else
             array[i] = -1;
     }
+    verify_sun_starts = starts;
+
     qsort_r(array,ARRAY_SIZE(array),sizeof(array[0]),
 	  (int (*)(const void *,const void *,void *)) verify_sun_cmp,
 	  verify_sun_starts);
@@ -437,38 +446,60 @@ static int sun_verify_disklabel(struct fdisk_context *cxt)
     }
     stop = cxt->geom.cylinders * cxt->geom.heads * cxt->geom.sectors;
     if (starts[array[0]])
-        fdisk_warnx(cxt, _("Unused gap - sectors 0-%d."), starts[array[0]]);
+        fdisk_warnx(cxt, _("Unused gap - sectors 0-%u."), starts[array[0]]);
     for (i = 0; i < 7 && array[i+1] != -1; i++) {
-        fdisk_warnx(cxt, _("Unused gap - sectors %d-%d."),
+        fdisk_warnx(cxt, _("Unused gap - sectors %u-%u."),
 	       (starts[array[i]] + lens[array[i]]),
 	       starts[array[i+1]]);
     }
     start = (starts[array[i]] + lens[array[i]]);
     if (start < stop)
-        fdisk_warnx(cxt, _("Unused gap - sectors %d-%d."), start, stop);
+        fdisk_warnx(cxt, _("Unused gap - sectors %u-%u."), start, stop);
+#endif
     return 0;
+}
+
+
+static int is_free_sector(struct fdisk_context *cxt,
+		sector_t s, uint32_t starts[], uint32_t lens[])
+{
+	size_t i;
+
+	for (i = 0; i < cxt->label->nparts_max; i++) {
+		if (lens[i] && starts[i] <= s
+		    && starts[i] + lens[i] > s)
+			return 0;
+	}
+	return 1;
 }
 
 static int sun_add_partition(
 		struct fdisk_context *cxt,
-		size_t n,
-		struct fdisk_parttype *t)
+		struct fdisk_partition *pa)
 {
 	struct sun_disklabel *sunlabel = self_disklabel(cxt);
 	uint32_t starts[SUN_MAXPARTITIONS], lens[SUN_MAXPARTITIONS];
-	struct sun_partition *part = &sunlabel->partitions[n];
-	struct sun_info *info = &sunlabel->vtoc.infos[n];
+	struct sun_partition *part;
+	struct sun_info *info;
 	uint32_t start, stop, stop2;
-	int whole_disk = 0, sys = t ? t->type : SUN_TAG_LINUX_NATIVE;
-	struct fdisk_ask *ask;
+	int whole_disk = 0;
+	int sys = pa && pa->type ? pa->type->type : SUN_TAG_LINUX_NATIVE;
 	int rc;
+	size_t n;
 
 	char mesg[256];
 	size_t i;
 	unsigned int first, last;
 
+	rc = fdisk_partition_next_partno(pa, cxt, &n);
+	if (rc)
+		return rc;
+
+	part = &sunlabel->partitions[n];
+	info = &sunlabel->vtoc.infos[n];
+
 	if (part->num_sectors && be16_to_cpu(info->id) != SUN_TAG_UNASSIGNED) {
-		fdisk_info(cxt, _("Partition %zd is already defined.  Delete "
+		fdisk_info(cxt, _("Partition %zu is already defined.  Delete "
 			"it before re-adding it."), n + 1);
 		return -EINVAL;
 	}
@@ -484,130 +515,151 @@ static int sun_add_partition(
 			return -EINVAL;
 		}
 	}
-	snprintf(mesg, sizeof(mesg), _("First %s"),
-			fdisk_context_get_unit(cxt, SINGULAR));
-	for (;;) {
-		ask = fdisk_new_ask();
-		if (!ask)
-			return -ENOMEM;
 
-		fdisk_ask_set_query(ask, mesg);
-		fdisk_ask_set_type(ask, FDISK_ASKTYPE_NUMBER);
+	if (pa && pa->start_follow_default)
+		first = start;
+	else if (pa && pa->start) {
+		first = pa->start;
 
-		if (whole_disk) {
-			fdisk_ask_number_set_low(ask,     0);	/* minimal */
-			fdisk_ask_number_set_default(ask, 0);	/* default */
-			fdisk_ask_number_set_high(ask,    0);	/* maximal */
-		} else {
-			fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, start));	/* minimal */
-			fdisk_ask_number_set_default(ask, fdisk_scround(cxt, start));	/* default */
-			fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop));	/* maximal */
-		}
-		rc = fdisk_do_ask(cxt, ask);
-		first = fdisk_ask_number_get_result(ask);
-		fdisk_free_ask(ask);
+		if (!whole_disk && !is_free_sector(cxt, first, starts, lens))
+			return -ERANGE;
+	} else {
+		struct fdisk_ask *ask;
 
-		if (rc)
-			return rc;
+		snprintf(mesg, sizeof(mesg), _("First %s"),
+				fdisk_context_get_unit(cxt, SINGULAR));
+		for (;;) {
+			ask = fdisk_new_ask();
+			if (!ask)
+				return -ENOMEM;
 
-		if (fdisk_context_use_cylinders(cxt))
-			first *= fdisk_context_get_units_per_sector(cxt);
-		else {
-			/* Starting sector has to be properly aligned */
-			int cs = cxt->geom.heads * cxt->geom.sectors;
-			int x = first % cs;
+			fdisk_ask_set_query(ask, mesg);
+			fdisk_ask_set_type(ask, FDISK_ASKTYPE_NUMBER);
 
-			if (x) {
-				fdisk_info(cxt, _("Aligning the first sector from %u to %u "
-						  "to be on cylinder boundary."),
-						first, first + cs - x);
-				first += cs - x;
+			if (whole_disk) {
+				fdisk_ask_number_set_low(ask,     0);	/* minimal */
+				fdisk_ask_number_set_default(ask, 0);	/* default */
+				fdisk_ask_number_set_high(ask,    0);	/* maximal */
+			} else {
+				fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, start));	/* minimal */
+				fdisk_ask_number_set_default(ask, fdisk_scround(cxt, start));	/* default */
+				fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop));	/* maximal */
 			}
-		}
-		if (n == 2 && first != 0)
-			fdisk_warnx(cxt, _("It is highly recommended that the "
-				"third partition covers the whole disk "
-				"and is of type `Whole disk'"));
-		/* ewt asks to add: "don't start a partition at cyl 0"
-		   However, edmundo@rano.demon.co.uk writes:
-		   "In addition to having a Sun partition table, to be able to
-		   boot from the disc, the first partition, /dev/sdX1, must
-		   start at cylinder 0. This means that /dev/sdX1 contains
-		   the partition table and the boot block, as these are the
-		   first two sectors of the disc. Therefore you must be
-		   careful what you use /dev/sdX1 for. In particular, you must
-		   not use a partition starting at cylinder 0 for Linux swap,
-		   as that would overwrite the partition table and the boot
-		   block. You may, however, use such a partition for a UFS
-		   or EXT2 file system, as these file systems leave the first
-		   1024 bytes undisturbed. */
-		/* On the other hand, one should not use partitions
-		   starting at block 0 in an md, or the label will
-		   be trashed. */
-		for (i = 0; i < cxt->label->nparts_max; i++)
-			if (lens[i] && starts[i] <= first
-			            && starts[i] + lens[i] > first)
+			rc = fdisk_do_ask(cxt, ask);
+			first = fdisk_ask_number_get_result(ask);
+			fdisk_free_ask(ask);
+			if (rc)
+				return rc;
+
+			if (fdisk_context_use_cylinders(cxt))
+				first *= fdisk_context_get_units_per_sector(cxt);
+
+			/* ewt asks to add: "don't start a partition at cyl 0"
+			   However, edmundo@rano.demon.co.uk writes:
+			   "In addition to having a Sun partition table, to be able to
+			   boot from the disc, the first partition, /dev/sdX1, must
+			   start at cylinder 0. This means that /dev/sdX1 contains
+			   the partition table and the boot block, as these are the
+			   first two sectors of the disc. Therefore you must be
+			   careful what you use /dev/sdX1 for. In particular, you must
+			   not use a partition starting at cylinder 0 for Linux swap,
+			   as that would overwrite the partition table and the boot
+			   block. You may, however, use such a partition for a UFS
+			   or EXT2 file system, as these file systems leave the first
+			   1024 bytes undisturbed. */
+			/* On the other hand, one should not use partitions
+			   starting at block 0 in an md, or the label will
+			   be trashed. */
+			if (!is_free_sector(cxt, first, starts,  lens) && !whole_disk) {
+				if (n == 2 && !first) {
+				    whole_disk = 1;
+				    break;
+				}
+				fdisk_warnx(cxt, _("Sector %d is already allocated"), first);
+			} else
 				break;
-		if (i < cxt->label->nparts_max && !whole_disk) {
-			if (n == 2 && !first) {
-			    whole_disk = 1;
-			    break;
-			}
-			fdisk_warnx(cxt, _("Sector %d is already allocated"), first);
-		} else
-			break;
+		}
 	}
+
+	if (n == 2 && first != 0)
+		fdisk_warnx(cxt, _("It is highly recommended that the "
+				   "third partition covers the whole disk "
+				   "and is of type `Whole disk'"));
+
+	if (!fdisk_context_use_cylinders(cxt)) {
+		/* Starting sector has to be properly aligned */
+		int cs = cxt->geom.heads * cxt->geom.sectors;
+		int x = first % cs;
+
+		if (x) {
+			fdisk_info(cxt, _("Aligning the first sector from %u to %u "
+					  "to be on cylinder boundary."),
+					first, first + cs - x);
+			first += cs - x;
+		}
+	}
+
 	stop = cxt->geom.cylinders * cxt->geom.heads * cxt->geom.sectors;	/* ancient */
 	stop2 = stop;
 	for (i = 0; i < cxt->label->nparts_max; i++) {
 		if (starts[i] > first && starts[i] < stop)
 			stop = starts[i];
 	}
-	snprintf(mesg, sizeof(mesg),
-		 _("Last %s or +%s or +size{K,M,G,T,P}"),
-		 fdisk_context_get_unit(cxt, SINGULAR),
-		 fdisk_context_get_unit(cxt, PLURAL));
 
-	ask = fdisk_new_ask();
-	if (!ask)
-		return -ENOMEM;
+	/* last */
+	if (pa && pa->end_follow_default)
+		last = whole_disk || (n == 2 && !first) ? stop2 : stop;
+	else if (pa && pa->size) {
+		last = pa->size;
 
-	fdisk_ask_set_query(ask, mesg);
-	fdisk_ask_set_type(ask, FDISK_ASKTYPE_OFFSET);
-
-	if (whole_disk) {
-		fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, stop2));	/* minimal */
-		fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop2));	/* default */
-		fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop2));	/* maximal */
-		fdisk_ask_number_set_base(ask,    0);
-	} else if (n == 2 && !first) {
-		fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, first));	/* minimal */
-		fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop2));	/* default */
-		fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop2));	/* maximal */
-		fdisk_ask_number_set_base(ask,	  fdisk_scround(cxt, first));
+		if (!whole_disk && last > stop)
+			return -ERANGE;
 	} else {
-		fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, first));	/* minimal */
-		fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop));	/* default */
-		fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop));	/* maximal */
-		fdisk_ask_number_set_base(ask,    fdisk_scround(cxt, first));
+		struct fdisk_ask *ask = fdisk_new_ask();
+
+		if (!ask)
+			return -ENOMEM;
+
+		snprintf(mesg, sizeof(mesg),
+			 _("Last %s or +%s or +size{K,M,G,T,P}"),
+			 fdisk_context_get_unit(cxt, SINGULAR),
+			 fdisk_context_get_unit(cxt, PLURAL));
+		fdisk_ask_set_query(ask, mesg);
+		fdisk_ask_set_type(ask, FDISK_ASKTYPE_OFFSET);
+
+		if (whole_disk) {
+			fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, stop2));	/* minimal */
+			fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop2));	/* default */
+			fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop2));	/* maximal */
+			fdisk_ask_number_set_base(ask,    0);
+		} else if (n == 2 && !first) {
+			fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, first));	/* minimal */
+			fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop2));	/* default */
+			fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop2));	/* maximal */
+			fdisk_ask_number_set_base(ask,	  fdisk_scround(cxt, first));
+		} else {
+			fdisk_ask_number_set_low(ask,     fdisk_scround(cxt, first));	/* minimal */
+			fdisk_ask_number_set_default(ask, fdisk_scround(cxt, stop));	/* default */
+			fdisk_ask_number_set_high(ask,    fdisk_scround(cxt, stop));	/* maximal */
+			fdisk_ask_number_set_base(ask,    fdisk_scround(cxt, first));
+		}
+
+		if (fdisk_context_use_cylinders(cxt))
+			fdisk_ask_number_set_unit(ask,
+				     cxt->sector_size *
+				     fdisk_context_get_units_per_sector(cxt));
+		else
+			fdisk_ask_number_set_unit(ask,	cxt->sector_size);
+
+		rc = fdisk_do_ask(cxt, ask);
+		last = fdisk_ask_number_get_result(ask);
+
+		fdisk_free_ask(ask);
+		if (rc)
+			return rc;
+		if (fdisk_context_use_cylinders(cxt))
+			last *= fdisk_context_get_units_per_sector(cxt);
 	}
-
-	if (fdisk_context_use_cylinders(cxt))
-		fdisk_ask_number_set_unit(ask,
-			     cxt->sector_size *
-			     fdisk_context_get_units_per_sector(cxt));
-	else
-		fdisk_ask_number_set_unit(ask,	cxt->sector_size);
-
-	rc = fdisk_do_ask(cxt, ask);
-	last = fdisk_ask_number_get_result(ask);
-
-	fdisk_free_ask(ask);
-	if (rc)
-		return rc;
-
-	if (fdisk_context_use_cylinders(cxt))
-		last *= fdisk_context_get_units_per_sector(cxt);
 
 	if (n == 2 && !first) {
 		if (last >= stop2) {
@@ -616,10 +668,10 @@ static int sun_add_partition(
 		} else if (last > stop) {
 		    fdisk_warnx(cxt,
    _("You haven't covered the whole disk with the 3rd partition, but your value\n"
-     "%d %s covers some other partition. Your entry has been changed\n"
-     "to %d %s"),
-			(int) fdisk_scround(cxt, last), fdisk_context_get_unit(cxt, SINGULAR),
-			(int) fdisk_scround(cxt, stop), fdisk_context_get_unit(cxt, SINGULAR));
+     "%lu %s covers some other partition. Your entry has been changed\n"
+     "to %lu %s"),
+			(unsigned long) fdisk_scround(cxt, last), fdisk_context_get_unit(cxt, SINGULAR),
+			(unsigned long) fdisk_scround(cxt, stop), fdisk_context_get_unit(cxt, SINGULAR));
 		    last = stop;
 		}
 	} else if (!whole_disk && last > stop)
@@ -669,9 +721,6 @@ static int sun_delete_partition(struct fdisk_context *cxt,
 static int sun_list_disklabel(struct fdisk_context *cxt)
 {
 	struct sun_disklabel *sunlabel;
-	struct tt *tb = NULL;
-	size_t i;
-	int rc;
 
 	assert(cxt);
 	assert(cxt->label);
@@ -680,7 +729,7 @@ static int sun_list_disklabel(struct fdisk_context *cxt)
 	sunlabel = self_disklabel(cxt);
 
 	if (fdisk_context_display_details(cxt)) {
-		fdisk_colon(cxt,
+		fdisk_info(cxt,
 		_("Label geometry: %d rpm, %d alternate and %d physical cylinders,\n"
 		  "                %d extra sects/cyl, interleave %d:1"),
 		       be16_to_cpu(sunlabel->rpm),
@@ -688,73 +737,72 @@ static int sun_list_disklabel(struct fdisk_context *cxt)
 		       be16_to_cpu(sunlabel->pcyl),
 		       be16_to_cpu(sunlabel->apc),
 		       be16_to_cpu(sunlabel->intrlv));
-		fdisk_colon(cxt, _("Label ID: %s"), sunlabel->label_id);
-		fdisk_colon(cxt, _("Volume ID: %s"),
+		fdisk_info(cxt, _("Label ID: %s"), sunlabel->label_id);
+		fdisk_info(cxt, _("Volume ID: %s"),
 		       *sunlabel->vtoc.volume_id ? sunlabel->vtoc.volume_id : _("<none>"));
 	}
 
-	tb = tt_new_table(TT_FL_FREEDATA);
-	if (!tb)
-		return -ENOMEM;
+	return 0;
+}
 
-	tt_define_column(tb, _("Device"), 0.2, 0);
-	tt_define_column(tb, _("Flag"),     2, TT_FL_RIGHT);
-	tt_define_column(tb, _("Start"),    9, TT_FL_RIGHT);
-	tt_define_column(tb, _("End"),      9, TT_FL_RIGHT);
-	/* TRANSLATORS: keep one blank space behind 'Blocks' */
-	tt_define_column(tb, _("Blocks "),  9, TT_FL_RIGHT);
-	tt_define_column(tb, _("Id"),       2, TT_FL_RIGHT);
-	tt_define_column(tb, _("System"), 0.2, TT_FL_TRUNC);
+static struct fdisk_parttype *sun_get_parttype(
+		struct fdisk_context *cxt,
+		size_t n)
+{
+	struct sun_disklabel *sunlabel = self_disklabel(cxt);
+	struct fdisk_parttype *t;
 
-	for (i = 0 ; i < cxt->label->nparts_max; i++) {
-		struct sun_partition *part = &sunlabel->partitions[i];
-		uint16_t flags = be16_to_cpu(sunlabel->vtoc.infos[i].flags);
-		uint32_t start, len;
-		struct fdisk_parttype *t;
-		struct tt_line *ln;
-		char *p;
+	if (n >= cxt->label->nparts_max)
+		return NULL;
 
-		if (!part->num_sectors)
-			continue;
-		ln = tt_add_line(tb, NULL);
-		if (!ln)
-			continue;
+	t = fdisk_get_parttype_from_code(cxt, be16_to_cpu(sunlabel->vtoc.infos[n].id));
+	return t ? : fdisk_new_unknown_parttype(be16_to_cpu(sunlabel->vtoc.infos[n].id), NULL);
+}
 
-		start = be32_to_cpu(part->start_cylinder)
-				* cxt->geom.heads
-				* cxt->geom.sectors;
 
-		len = be32_to_cpu(part->num_sectors);
-		t = fdisk_get_partition_type(cxt, i);
+static int sun_get_partition(struct fdisk_context *cxt, size_t n,
+			      struct fdisk_partition *pa)
+{
+	struct sun_disklabel *sunlabel;
+	struct sun_partition *part;
+	uint16_t flags;
+	uint32_t start, len;
 
-		p = fdisk_partname(cxt->dev_path, i + 1);
-		if (p)
-			tt_line_set_data(ln, 0, p);	/* devname */
-		if ((flags & SUN_FLAG_UNMNT || flags & SUN_FLAG_RONLY)
-		    && asprintf(&p, "%c%c",
+	assert(cxt);
+	assert(cxt->label);
+	assert(fdisk_is_disklabel(cxt, SUN));
+
+	if (n >= cxt->label->nparts_max)
+		return -EINVAL;
+
+	sunlabel = self_disklabel(cxt);
+	part = &sunlabel->partitions[n];
+
+	pa->used = part->num_sectors ? 1 : 0;
+	if (!pa->used)
+		return 0;
+
+	flags = be16_to_cpu(sunlabel->vtoc.infos[n].flags);
+	start = be32_to_cpu(part->start_cylinder)
+			* cxt->geom.heads * cxt->geom.sectors;
+	len = be32_to_cpu(part->num_sectors);
+
+	pa->type = sun_get_parttype(cxt, n);
+	if (pa->type && pa->type->type == SUN_TAG_WHOLEDISK)
+		pa->wholedisk = 1;
+
+	if (flags & SUN_FLAG_UNMNT || flags & SUN_FLAG_RONLY) {
+		if (asprintf(&pa->attrs, "%c%c",
 				flags & SUN_FLAG_UNMNT ? 'u' : ' ',
-				flags & SUN_FLAG_RONLY ? 'r' : ' ') > 0)
-			tt_line_set_data(ln, 1, p);	/* flags */
-		if (asprintf(&p, "%ju", (uintmax_t) fdisk_scround(cxt, start)) > 0)
-			tt_line_set_data(ln, 2, p);	/* start */
-		if (asprintf(&p, "%ju",	(uintmax_t) fdisk_scround(cxt, start + len)) > 0)
-			tt_line_set_data(ln, 3, p);	/* end */
-		if (asprintf(&p, "%lu%c",
-				(unsigned long) len / 2,
-				len & 1 ? '+' : ' ') > 0)
-			tt_line_set_data(ln, 4, p);	/* blocks + flag */
-		if (asprintf(&p, "%2x", t->type) > 0)
-			tt_line_set_data(ln, 5, p);	/* type ID */
-		if (t->name)
-			tt_line_set_data(ln, 6, strdup(t->name)); /* type Name */
-
-		fdisk_free_parttype(t);
+				flags & SUN_FLAG_RONLY ? 'r' : ' ') < 0)
+			return -ENOMEM;
 	}
 
-	rc = fdisk_print_table(cxt, tb);
-	tt_free_table(tb);
+	pa->start = start;
+	pa->end = start + len - (len ? 1 : 0);
+	pa->size = len;
 
-	return rc;
+	return 0;
 }
 
 
@@ -868,26 +916,6 @@ static int sun_write_disklabel(struct fdisk_context *cxt)
 	return 0;
 }
 
-static struct fdisk_parttype *sun_get_parttype(
-		struct fdisk_context *cxt,
-		size_t n)
-{
-	struct sun_disklabel *sunlabel = self_disklabel(cxt);
-	struct fdisk_parttype *t;
-
-	assert(cxt);
-	assert(cxt->label);
-	assert(fdisk_is_disklabel(cxt, SUN));
-
-	if (n >= cxt->label->nparts_max)
-		return NULL;
-
-	t = fdisk_get_parttype_from_code(cxt, be16_to_cpu(sunlabel->vtoc.infos[n].id));
-	if (!t)
-		t = fdisk_new_unknown_parttype(be16_to_cpu(sunlabel->vtoc.infos[n].id), NULL);
-	return t;
-}
-
 static int sun_set_parttype(
 		struct fdisk_context *cxt,
 		size_t i,
@@ -949,10 +977,9 @@ static int sun_reset_alignment(struct fdisk_context *cxt __attribute__((__unused
 }
 
 
-static int sun_get_partition_status(
+static int sun_partition_is_used(
 		struct fdisk_context *cxt,
-		size_t i,
-		int *status)
+		size_t i)
 {
 	struct sun_disklabel *sunlabel;
 
@@ -960,18 +987,26 @@ static int sun_get_partition_status(
 	assert(cxt->label);
 	assert(fdisk_is_disklabel(cxt, SUN));
 
-	if (!status || i >= cxt->label->nparts_max)
-		return -EINVAL;
+	if (i >= cxt->label->nparts_max)
+		return 0;
 
 	sunlabel = self_disklabel(cxt);
-	*status = FDISK_PARTSTAT_NONE;
-
-	if (sunlabel->partitions[i].num_sectors)
-		*status = FDISK_PARTSTAT_USED;
-
-	return 0;
+	return sunlabel->partitions[i].num_sectors ? 1 : 0;
 }
 
+
+static const struct fdisk_column sun_columns[] =
+{
+	{ FDISK_COL_DEVICE,	N_("Device"),	 10,	0 },
+	{ FDISK_COL_START,	N_("Start"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_END,	N_("End"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_SECTORS,	N_("Sectors"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_CYLINDERS,	N_("Cylinders"),  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_SIZE,	N_("Size"),	  5,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_TYPEID,	N_("Id"),	  2,	SCOLS_FL_RIGHT },
+	{ FDISK_COL_TYPE,	N_("Type"),	0.1,	SCOLS_FL_TRUNC },
+	{ FDISK_COL_ATTR,	N_("Flags"),	  0,	SCOLS_FL_RIGHT }
+};
 
 const struct fdisk_label_operations sun_operations =
 {
@@ -980,12 +1015,14 @@ const struct fdisk_label_operations sun_operations =
 	.verify		= sun_verify_disklabel,
 	.create		= sun_create_disklabel,
 	.list		= sun_list_disklabel,
-	.part_add	= sun_add_partition,
+
+	.get_part	= sun_get_partition,
+	.add_part	= sun_add_partition,
+
 	.part_delete	= sun_delete_partition,
-	.part_get_type	= sun_get_parttype,
 	.part_set_type	= sun_set_parttype,
 
-	.part_get_status = sun_get_partition_status,
+	.part_is_used	= sun_partition_is_used,
 	.part_toggle_flag = sun_toggle_partition_flag,
 
 	.reset_alignment = sun_reset_alignment,
@@ -1012,7 +1049,8 @@ struct fdisk_label *fdisk_new_sun_label(struct fdisk_context *cxt)
 	lb->op = &sun_operations;
 	lb->parttypes = sun_parttypes;
 	lb->nparttypes = ARRAY_SIZE(sun_parttypes);
-
+	lb->columns = sun_columns;
+	lb->ncolumns = ARRAY_SIZE(sun_columns);
 	lb->flags |= FDISK_LABEL_FL_REQUIRE_GEOMETRY;
 
 	return lb;

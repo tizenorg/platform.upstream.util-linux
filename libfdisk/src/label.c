@@ -18,10 +18,10 @@ int fdisk_probe_labels(struct fdisk_context *cxt)
 		if (!lb->op->probe)
 			continue;
 		if (lb->disabled) {
-			DBG(LABEL, dbgprint("%s disabled -- ignore", lb->name));
+			DBG(CXT, ul_debugobj(cxt, "%s: disabled -- ignore", lb->name));
 			continue;
 		}
-		DBG(LABEL, dbgprint("probing for %s", lb->name));
+		DBG(CXT, ul_debugobj(cxt, "probing for %s", lb->name));
 
 		cxt->label = lb;
 		rc = lb->op->probe(cxt);
@@ -37,7 +37,7 @@ int fdisk_probe_labels(struct fdisk_context *cxt)
 		return 0;
 	}
 
-	DBG(LABEL, dbgprint("no label found"));
+	DBG(CXT, ul_debugobj(cxt, "no label found"));
 	return 1; /* not found */
 }
 
@@ -75,11 +75,10 @@ int fdisk_dev_is_disklabel(struct fdisk_context *cxt, enum fdisk_labeltype l)
  */
 int fdisk_write_disklabel(struct fdisk_context *cxt)
 {
-	if (!cxt || !cxt->label)
+	if (!cxt || !cxt->label || cxt->readonly)
 		return -EINVAL;
 	if (!cxt->label->op->write)
 		return -ENOSYS;
-
 	return cxt->label->op->write(cxt);
 }
 
@@ -108,12 +107,82 @@ int fdisk_missing_geometry(struct fdisk_context *cxt)
 }
 
 /**
+ * fdisk_get_columns:
+ * @cxt: fdisk context
+ * @all: 1 or 0
+ * @cols: returns allocated array with FDISK_COL_* IDs
+ * @ncols: returns number of items in cols
+ *
+ * This function returns the default or all columns for the current label.  The
+ * library uses the columns for list operations (see fdisk_list_disklabel() and
+ * fdisk_list_partitions()). Note that the set of the default columns depends
+ * on fdisk_context_enable_details() function. If the details are eanable then
+ * this function usually returns more columns.
+ *
+ * Returns 0 on success, otherwise, a corresponding error.
+ */
+int fdisk_get_columns(struct fdisk_context *cxt, int all, int **cols, size_t *ncols)
+{
+	size_t i, n;
+	int *c;
+
+	assert(cxt);
+
+	if (!cxt->label)
+		return -EINVAL;
+	if (!cxt->label->columns || !cxt->label->ncolumns)
+		return -ENOSYS;
+	c = calloc(cxt->label->ncolumns, sizeof(int));
+	if (!c)
+		return -ENOMEM;
+	for (n = 0, i = 0; i < cxt->label->ncolumns; i++) {
+		int id = cxt->label->columns[i].id;
+
+		if (!all &&
+		    ((fdisk_context_display_details(cxt) &&
+				(cxt->label->columns[i].flags & FDISK_COLFL_EYECANDY))
+		     || (!fdisk_context_display_details(cxt) &&
+				(cxt->label->columns[i].flags & FDISK_COLFL_DETAIL))
+		     || (id == FDISK_COL_SECTORS &&
+			         fdisk_context_use_cylinders(cxt))
+		     || (id == FDISK_COL_CYLINDERS &&
+			         !fdisk_context_use_cylinders(cxt))))
+			continue;
+
+		c[n++] = id;
+	}
+	if (cols)
+		*cols = c;
+	else
+		free(c);
+	if (ncols)
+		*ncols = n;
+	return 0;
+}
+
+const struct fdisk_column *fdisk_label_get_column(
+					struct fdisk_label *lb, int id)
+{
+	size_t i;
+
+	assert(lb);
+	assert(id > 0);
+
+	for (i = 0; i < lb->ncolumns; i++) {
+		if (lb->columns[i].id == id)
+			return &lb->columns[i];
+	}
+
+	return NULL;
+}
+
+/**
  * fdisk_verify_disklabel:
  * @cxt: fdisk context
  *
  * Verifies the partition table.
  *
- * Returns 0.
+ * Returns: 0 on success, otherwise, a corresponding error.
  */
 int fdisk_verify_disklabel(struct fdisk_context *cxt)
 {
@@ -127,11 +196,16 @@ int fdisk_verify_disklabel(struct fdisk_context *cxt)
 	return cxt->label->op->verify(cxt);
 }
 
+
+
 /**
  * fdisk_list_disklabel:
  * @cxt: fdisk context
  *
- * Lists in-memory partition table
+ * Lists details about disklabel, but no partitions.
+ *
+ * This function uses libfdisk ASK interface to print data. The details about
+ * partitions table are printed by FDISK_ASKTYPE_INFO.
  *
  * Returns 0 on success, otherwise, a corresponding error.
  */
@@ -143,62 +217,6 @@ int fdisk_list_disklabel(struct fdisk_context *cxt)
 		return -ENOSYS;
 
 	return cxt->label->op->list(cxt);
-}
-
-/**
- * fdisk_add_partition:
- * @cxt: fdisk context
- * @t: partition type to create or NULL for label-specific default
- *
- * Creates a new partition with type @parttype.
- *
- * Returns 0.
- */
-int fdisk_add_partition(struct fdisk_context *cxt,
-			struct fdisk_parttype *t)
-{
-	size_t partnum = 0;
-
-	assert(cxt);
-	assert(cxt->label);
-
-	if (!cxt || !cxt->label)
-		return -EINVAL;
-	if (!cxt->label->op->part_add)
-		return -ENOSYS;
-	if (fdisk_missing_geometry(cxt))
-		return -EINVAL;
-
-	if (!(cxt->label->flags & FDISK_LABEL_FL_ADDPART_NOPARTNO)) {
-		int rc = fdisk_ask_partnum(cxt, &partnum, 1);
-		if (rc)
-			return rc;
-	}
-
-	DBG(LABEL, dbgprint("adding new partition number %zd", partnum));
-	cxt->label->op->part_add(cxt, partnum, t);
-	return 0;
-}
-
-/**
- * fdisk_delete_partition:
- * @cxt: fdisk context
- * @partnum: partition number to delete
- *
- * Deletes a @partnum partition.
- *
- * Returns 0 on success, otherwise, a corresponding error.
- */
-int fdisk_delete_partition(struct fdisk_context *cxt, size_t partnum)
-{
-	if (!cxt || !cxt->label)
-		return -EINVAL;
-	if (!cxt->label->op->part_delete)
-		return -ENOSYS;
-
-	DBG(LABEL, dbgprint("deleting %s partition number %zd",
-				cxt->label->name, partnum));
-	return cxt->label->op->part_delete(cxt, partnum);
 }
 
 /**
@@ -243,7 +261,7 @@ int fdisk_create_disklabel(struct fdisk_context *cxt, const char *name)
 	if (haslabel && !cxt->parent)
 		fdisk_reset_device_properties(cxt);
 
-	DBG(LABEL, dbgprint("create a new %s label", lb->name));
+	DBG(CXT, ul_debugobj(cxt, "create a new %s label", lb->name));
 	return cxt->label->op->create(cxt);
 }
 
@@ -256,7 +274,7 @@ int fdisk_locate_disklabel(struct fdisk_context *cxt, int n, const char **name,
 	if (!cxt->label->op->locate)
 		return -ENOSYS;
 
-	DBG(LABEL, dbgprint("locating %d chunk of %s.", n, cxt->label->name));
+	DBG(CXT, ul_debugobj(cxt, "locating %d chunk of %s.", n, cxt->label->name));
 	return cxt->label->op->locate(cxt, n, name, offset, size);
 }
 
@@ -275,7 +293,7 @@ int fdisk_get_disklabel_id(struct fdisk_context *cxt, char **id)
 	if (!cxt->label->op->get_id)
 		return -ENOSYS;
 
-	DBG(LABEL, dbgprint("asking for disk %s ID", cxt->label->name));
+	DBG(CXT, ul_debugobj(cxt, "asking for disk %s ID", cxt->label->name));
 	return cxt->label->op->get_id(cxt, id);
 }
 
@@ -292,25 +310,8 @@ int fdisk_set_disklabel_id(struct fdisk_context *cxt)
 	if (!cxt->label->op->set_id)
 		return -ENOSYS;
 
-	DBG(LABEL, dbgprint("setting %s disk ID", cxt->label->name));
+	DBG(CXT, ul_debugobj(cxt, "setting %s disk ID", cxt->label->name));
 	return cxt->label->op->set_id(cxt);
-}
-
-/**
- * fdisk_get_partition_type:
- * @cxt: fdisk context
- * @partnum: partition number
- *
- * Returns partition type or NULL upon failure.
- */
-struct fdisk_parttype *fdisk_get_partition_type(struct fdisk_context *cxt,
-						size_t partnum)
-{
-	if (!cxt || !cxt->label || !cxt->label->op->part_get_type)
-		return NULL;
-
-	DBG(LABEL, dbgprint("partition: %zd: get type", partnum));
-	return cxt->label->op->part_get_type(cxt, partnum);
 }
 
 /**
@@ -330,7 +331,7 @@ int fdisk_set_partition_type(struct fdisk_context *cxt,
 	if (!cxt->label->op->part_set_type)
 		return -ENOSYS;
 
-	DBG(LABEL, dbgprint("partition: %zd: set type", partnum));
+	DBG(CXT, ul_debugobj(cxt, "partition: %zd: set type", partnum));
 	return cxt->label->op->part_set_type(cxt, partnum, t);
 }
 
@@ -346,48 +347,6 @@ size_t fdisk_get_nparttypes(struct fdisk_context *cxt)
 		return 0;
 
 	return cxt->label->nparttypes;
-}
-
-/**
- * fdisk_partition_is_used:
- * @cxt: fdisk context
- * @partnum: partition number
- * @status: returns FDISK_PARTSTAT_* flags
- *
- * Returns 0 on success, otherwise, a corresponding error.
- */
-int fdisk_partition_get_status(struct fdisk_context *cxt,
-			       size_t partnum,
-			       int *status)
-{
-	int rc;
-
-	if (!cxt || !cxt->label)
-		return -EINVAL;
-	if (!cxt->label->op->part_get_status)
-		return -ENOSYS;
-
-	rc = cxt->label->op->part_get_status(cxt, partnum, status);
-
-	DBG(LABEL, dbgprint("partition: %zd: status: 0x%04x [rc=%d]", partnum, *status, rc));
-	return rc;
-}
-
-/**
- * @cxt: fdisk context
- * @partnum: partition number
- *
- * Returns: 1 on success if partition used otherwise 0.
- */
-int fdisk_partition_is_used(struct fdisk_context *cxt, size_t partnum)
-{
-	int status, rc;
-
-	rc = fdisk_partition_get_status(cxt, partnum, &status);
-	if (rc)
-		return 0;
-
-	return status & FDISK_PARTSTAT_USED;
 }
 
 /**
@@ -411,10 +370,27 @@ int fdisk_partition_toggle_flag(struct fdisk_context *cxt,
 
 	rc = cxt->label->op->part_toggle_flag(cxt, partnum, flag);
 
-	DBG(LABEL, dbgprint("partition: %zd: toggle: 0x%04lx [rc=%d]", partnum, flag, rc));
+	DBG(CXT, ul_debugobj(cxt, "partition: %zd: toggle: 0x%04lx [rc=%d]", partnum, flag, rc));
 	return rc;
 }
 
+/**
+ * fdisk_reorder_partitions
+ * @cxt: fdisk context
+ *
+ * Sort partitions according to the partition start sector.
+ *
+ * Returns 0 on success, otherwise, a corresponding error.
+ */
+int fdisk_reorder_partitions(struct fdisk_context *cxt)
+{
+	if (!cxt || !cxt->label)
+		return -EINVAL;
+	if (!cxt->label->op->reorder)
+		return -ENOSYS;
+
+	return cxt->label->op->reorder(cxt);
+}
 
 /*
  * Resets the current used label driver to initial state
@@ -444,7 +420,7 @@ void fdisk_label_set_disabled(struct fdisk_label *lb, int disabled)
 {
 	assert(lb);
 
-	DBG(LABEL, dbgprint("%s label %s",
+	DBG(LABEL, ul_debug("%s label %s",
 				lb->name,
 				disabled ? "DISABLED" : "ENABLED"));
 	lb->disabled = disabled ? 1 : 0;

@@ -12,17 +12,20 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-TS_TOPDIR="$(dirname $0)/../.."
-TS_DESC="Year 1234567890123456789"
+TS_TOPDIR="${0%/*}/../.."
+TS_DESC="Year 2147483646"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
 
+ts_check_test_command "$TS_CMD_CAL"
+
 set -o pipefail
+export TERM=linux
 
 USETERM=$( ts_has_option "useterm" "$*" )
-MYMONTH="12 1234567890123456789"
-MYYEAR="1234567890123456789"
+MYMONTH="12 2147483646"
+MYYEAR="2147483646"
 
 [ "$USETERM" == "yes" ] && TS_VERBOSE="yes"
 ts_log ""
@@ -91,5 +94,6 @@ ts_log "Julian - Sunday-based year"
 if [ "$USETERM" == "yes" ]; then
 	$TS_CMD_CAL -1sj $MYYEAR
 fi
+$TS_CMD_CAL -1sj $MYYEAR >> $TS_OUTPUT
 
 ts_finalize

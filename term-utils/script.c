@@ -36,6 +36,9 @@
  * - added Native Language Support
  *
  * 2000-07-30 Per Andreas Buer <per@linpro.no> - added "q"-option
+ *
+ * 2014-05-30 Csaba Kos <csaba.kos@gmail.com>
+ * - fixed a rare deadlock after child termination
  */
 
 /*
@@ -58,10 +61,14 @@
 #include <limits.h>
 #include <locale.h>
 #include <stddef.h>
+#include <sys/wait.h>
+#include <poll.h>
 
 #include "closestream.h"
 #include "nls.h"
 #include "c.h"
+#include "ttyutils.h"
+#include "all-io.h"
 
 #if defined(HAVE_LIBUTIL) && defined(HAVE_PTY_H)
 # include <pty.h>
@@ -73,6 +80,7 @@
 
 #define DEFAULT_OUTPUT "typescript"
 
+void sig_finish(int);
 void finish(int);
 void done(void);
 void fail(void);
@@ -81,11 +89,12 @@ void fixtty(void);
 void getmaster(void);
 void getslave(void);
 void doinput(void);
-void dooutput(FILE *timingfd);
+void dooutput(void);
 void doshell(void);
 
 char	*shell;
 FILE	*fscript;
+FILE	*timingfd;
 int	master = -1;
 int	slave;
 pid_t	child;
@@ -107,6 +116,9 @@ int	fflg = 0;
 int	qflg = 0;
 int	tflg = 0;
 int	forceflg = 0;
+int	isterm;
+
+sigset_t block_mask, unblock_mask;
 
 int die;
 int resized;
@@ -156,10 +168,8 @@ usage(FILE *out)
 
 int
 main(int argc, char **argv) {
-	sigset_t block_mask, unblock_mask;
 	struct sigaction sa;
 	int ch;
-	FILE *timingfd = NULL;
 
 	enum { FORCE_OPTION = CHAR_MAX + 1 };
 
@@ -203,9 +213,8 @@ main(int argc, char **argv) {
 			qflg = 1;
 			break;
 		case 't':
-			if (optarg)
-				if ((timingfd = fopen(optarg, "w")) == NULL)
-					err(EXIT_FAILURE, _("cannot open %s"), optarg);
+			if (optarg && !(timingfd = fopen(optarg, "w")))
+				err(EXIT_FAILURE, _("cannot open %s"), optarg);
 			tflg = 1;
 			break;
 		case 'V':
@@ -229,6 +238,7 @@ main(int argc, char **argv) {
 		fname = DEFAULT_OUTPUT;
 		die_if_link(fname);
 	}
+
 	if ((fscript = fopen(fname, aflg ? "a" : "w")) == NULL) {
 		warn(_("cannot open %s"), fname);
 		fail();
@@ -249,7 +259,7 @@ main(int argc, char **argv) {
 	/* setup SIGCHLD handler */
 	sigemptyset(&sa.sa_mask);
 	sa.sa_flags = 0;
-	sa.sa_handler = finish;
+	sa.sa_handler = sig_finish;
 	sigaction(SIGCHLD, &sa, NULL);
 
 	/* init mask for SIGCHLD */
@@ -274,11 +284,9 @@ main(int argc, char **argv) {
 			warn(_("fork failed"));
 			fail();
 		}
-		if (child) {
-			if (!timingfd)
-				timingfd = fdopen(STDERR_FILENO, "w");
-			dooutput(timingfd);
-		} else
+		if (child)
+			dooutput();
+		else
 			doshell();
 	} else {
 		sa.sa_handler = resize;
@@ -286,56 +294,126 @@ main(int argc, char **argv) {
 	}
 	doinput();
 
-	if (close_stream(timingfd) != 0)
-		errx(EXIT_FAILURE, _("write error"));
 	return EXIT_SUCCESS;
+}
+
+static void wait_for_empty_fd(int fd)
+{
+	struct pollfd fds[] = {
+		{ .fd = fd, .events = POLLIN }
+	};
+
+	while (die == 0 && poll(fds, 1, 100) == 1);
 }
 
 void
 doinput(void) {
-	ssize_t cc;
+	int errsv = 0;
+	ssize_t cc = 0;
 	char ibuf[BUFSIZ];
+	fd_set readfds;
 
-	if (close_stream(fscript) != 0)
-		errx(EXIT_FAILURE, _("write error"));
+	/* close things irrelevant for this process */
+	if (fscript)
+		fclose(fscript);
+	if (timingfd)
+		fclose(timingfd);
+	fscript = timingfd = NULL;
+
+	FD_ZERO(&readfds);
+
+	/* block SIGCHLD */
+	sigprocmask(SIG_SETMASK, &block_mask, &unblock_mask);
 
 	while (die == 0) {
-		if ((cc = read(STDIN_FILENO, ibuf, BUFSIZ)) > 0) {
-			ssize_t wrt = write(master, ibuf, cc);
-			if (wrt < 0) {
-				warn (_("write failed"));
-				fail();
+		FD_SET(STDIN_FILENO, &readfds);
+
+		errno = 0;
+		/* wait for input or signal (including SIGCHLD) */
+		if ((cc = pselect(STDIN_FILENO + 1, &readfds, NULL, NULL, NULL,
+			&unblock_mask)) > 0) {
+
+			if ((cc = read(STDIN_FILENO, ibuf, BUFSIZ)) > 0) {
+				if (write_all(master, ibuf, cc)) {
+					warn (_("write failed"));
+					fail();
+				}
 			}
 		}
-		else if (cc < 0 && errno == EINTR && resized)
+
+		if (cc < 0 && errno == EINTR && resized)
+		{
+			/* transmit window change information to the child */
+			if (isterm) {
+				ioctl(STDIN_FILENO, TIOCGWINSZ, (char *)&win);
+				ioctl(slave, TIOCSWINSZ, (char *)&win);
+			}
 			resized = 0;
-		else
+
+		} else if (cc <= 0 && errno != EINTR) {
+			errsv = errno;
 			break;
+		}
 	}
 
+	/* unblock SIGCHLD */
+	sigprocmask(SIG_SETMASK, &unblock_mask, NULL);
+
+	/* To be sure that we don't miss any data */
+	wait_for_empty_fd(slave);
+	wait_for_empty_fd(master);
+
+	if (die == 0 && cc == 0 && errsv == 0) {
+		/*
+		 * Forward EOF from stdin (detected by read() above) to slave
+		 * (shell) to correctly terminate the session. It seems we have
+		 * to wait for empty terminal FDs otherwise EOF maybe ignored
+		 * (why?) and typescript is incomplete.      -- kzak Dec-2013
+		 *
+		 * We usually use this when stdin is not a tty, for example:
+		 * echo "ps" | script
+		 */
+		int c = DEF_EOF;
+
+		if (write_all(master, &c, 1)) {
+			warn (_("write failed"));
+			fail();
+		}
+
+		/* wait for "exit" message from shell before we print "Script
+		 * done" in done() */
+		wait_for_empty_fd(master);
+	}
+
+	if (!die)
+		finish(1);	/* wait for children */
 	done();
 }
 
-#include <sys/wait.h>
-
 void
-finish(int dummy __attribute__ ((__unused__))) {
+finish(int wait) {
 	int status;
 	pid_t pid;
+	int errsv = errno;
+	int options = wait ? 0 : WNOHANG;
 
-	while ((pid = wait3(&status, WNOHANG, 0)) > 0)
+	while ((pid = wait3(&status, options, 0)) > 0)
 		if (pid == child) {
 			childstatus = status;
 			die = 1;
 		}
+
+	errno = errsv;
+}
+
+void
+sig_finish(int dummy __attribute__ ((__unused__))) {
+	finish(0);
 }
 
 void
 resize(int dummy __attribute__ ((__unused__))) {
 	resized = 1;
-	/* transmit window change information to the child */
-	ioctl(STDIN_FILENO, TIOCGWINSZ, (char *)&win);
-	ioctl(slave, TIOCSWINSZ, (char *)&win);
 }
 
 /*
@@ -348,69 +426,80 @@ my_strftime(char *buf, size_t len, const char *fmt, const struct tm *tm) {
 }
 
 void
-dooutput(FILE *timingfd) {
+dooutput(void) {
 	ssize_t cc;
-	time_t tvec;
 	char obuf[BUFSIZ];
 	struct timeval tv;
 	double oldtime=time(NULL), newtime;
-	int flgs = 0;
-	ssize_t wrt;
-	ssize_t fwrt;
+	int errsv = 0;
+	fd_set readfds;
 
 	close(STDIN_FILENO);
 #ifdef HAVE_LIBUTIL
 	close(slave);
 #endif
-	tvec = time((time_t *)NULL);
-	my_strftime(obuf, sizeof obuf, "%c\n", localtime(&tvec));
-	fprintf(fscript, _("Script started on %s"), obuf);
+	if (tflg && !timingfd)
+		timingfd = fdopen(STDERR_FILENO, "w");
+
+	if (!qflg) {
+		time_t tvec = time((time_t *)NULL);
+		my_strftime(obuf, sizeof obuf, "%c\n", localtime(&tvec));
+		fprintf(fscript, _("Script started on %s"), obuf);
+	}
+
+	FD_ZERO(&readfds);
 
 	do {
-		if (die && flgs == 0) {
-			/* ..child is dead, but it doesn't mean that there is
-			 * nothing in buffers.
-			 */
-			flgs = fcntl(master, F_GETFL, 0);
-			if (fcntl(master, F_SETFL, (flgs | O_NONBLOCK)) == -1)
+		if (die || errsv == EINTR) {
+			struct pollfd fds[] = {{ .fd = master, .events = POLLIN }};
+			if (poll(fds, 1, 50) <= 0)
 				break;
 		}
+
+		/* block SIGCHLD */
+		sigprocmask(SIG_SETMASK, &block_mask, &unblock_mask);
+
+		FD_SET(master, &readfds);
+		errno = 0;
+
+		/* wait for input or signal (including SIGCHLD) */
+		if ((cc = pselect(master+1, &readfds, NULL, NULL, NULL,
+			&unblock_mask)) > 0) {
+
+			cc = read(master, obuf, sizeof (obuf));
+		}
+		errsv = errno;
+
+		/* unblock SIGCHLD */
+		sigprocmask(SIG_SETMASK, &unblock_mask, NULL);
+
 		if (tflg)
 			gettimeofday(&tv, NULL);
 
-		errno = 0;
-		cc = read(master, obuf, sizeof (obuf));
-
-		if (die && errno == EINTR && cc <= 0)
-			/* read() has been interrupted by SIGCHLD, try it again
-			 * with O_NONBLOCK
-			 */
-			continue;
+		if (errsv == EINTR && cc <= 0)
+			continue;	/* try it again */
 		if (cc <= 0)
 			break;
-		if (tflg) {
+		if (tflg && timingfd) {
 			newtime = tv.tv_sec + (double) tv.tv_usec / 1000000;
 			fprintf(timingfd, "%f %zd\n", newtime - oldtime, cc);
 			oldtime = newtime;
 		}
-		wrt = write(STDOUT_FILENO, obuf, cc);
-		if (wrt < 0) {
-			warn (_("write failed"));
-			fail();
-		}
-		fwrt = fwrite(obuf, 1, cc, fscript);
-		if (fwrt < cc) {
+		if (fwrite_all(obuf, 1, cc, fscript)) {
 			warn (_("cannot write script file"));
 			fail();
 		}
-		if (fflg)
+		if (fflg) {
 			fflush(fscript);
+			if (tflg && timingfd)
+				fflush(timingfd);
+		}
+		if (write_all(STDOUT_FILENO, obuf, cc)) {
+			warn (_("write failed"));
+			fail();
+		}
 	} while(1);
 
-	if (flgs)
-		fcntl(master, F_SETFL, flgs);
-	if (close_stream(timingfd) != 0)
-		errx(EXIT_FAILURE, _("write error"));
 	done();
 }
 
@@ -419,9 +508,15 @@ doshell(void) {
 	char *shname;
 
 	getslave();
+
+	/* close things irrelevant for this process */
 	close(master);
-	if (close_stream(fscript) != 0)
-		errx(EXIT_FAILURE, _("write error"));
+	if (fscript)
+		fclose(fscript);
+	if (timingfd)
+		fclose(timingfd);
+	fscript = timingfd = NULL;
+
 	dup2(slave, STDIN_FILENO);
 	dup2(slave, STDOUT_FILENO);
 	dup2(slave, STDERR_FILENO);
@@ -438,7 +533,7 @@ doshell(void) {
 	/*
 	 * When invoked from within /etc/csh.login, script spawns a csh shell
 	 * that spawns programs that cannot be killed with a SIGTERM. This is
-	 * because csh has a documented behaviour wherein it disables all
+	 * because csh has a documented behavior wherein it disables all
 	 * signals when processing the /etc/csh.* files.
 	 *
 	 * Let's restore the default behavior.
@@ -464,6 +559,9 @@ void
 fixtty(void) {
 	struct termios rtt;
 
+	if (!isterm)
+		return;
+
 	rtt = tt;
 	cfmakeraw(&rtt);
 	rtt.c_lflag &= ~ECHO;
@@ -482,25 +580,35 @@ done(void) {
 	time_t tvec;
 
 	if (subchild) {
-		if (!qflg) {
-			char buf[BUFSIZ];
-			tvec = time((time_t *)NULL);
-			my_strftime(buf, sizeof buf, "%c\n", localtime(&tvec));
-			fprintf(fscript, _("\nScript done on %s"), buf);
+		/* output process */
+		if (fscript) {
+			if (!qflg) {
+				char buf[BUFSIZ];
+				tvec = time((time_t *)NULL);
+				my_strftime(buf, sizeof buf, "%c\n", localtime(&tvec));
+				fprintf(fscript, _("\nScript done on %s"), buf);
+			}
+			if (close_stream(fscript) != 0)
+				errx(EXIT_FAILURE, _("write error"));
+			fscript = NULL;
 		}
-		if (close_stream(fscript) != 0)
+		if (timingfd && close_stream(timingfd) != 0)
 			errx(EXIT_FAILURE, _("write error"));
-		close(master);
+		timingfd = NULL;
 
+		close(master);
 		master = -1;
 	} else {
-		tcsetattr(STDIN_FILENO, TCSADRAIN, &tt);
+		/* input process */
+		if (isterm)
+			tcsetattr(STDIN_FILENO, TCSADRAIN, &tt);
 		if (!qflg)
 			printf(_("Script done, file is %s\n"), fname);
 #ifdef HAVE_LIBUTEMPTER
 		if (master >= 0)
 			utempter_remove_record(master);
 #endif
+		kill(child, SIGTERM);	/* make sure we don't create orphans */
 	}
 
 	if(eflg) {
@@ -515,15 +623,27 @@ done(void) {
 void
 getmaster(void) {
 #if defined(HAVE_LIBUTIL) && defined(HAVE_PTY_H)
-	tcgetattr(STDIN_FILENO, &tt);
-	ioctl(STDIN_FILENO, TIOCGWINSZ, (char *)&win);
-	if (openpty(&master, &slave, NULL, &tt, &win) < 0) {
+	int rc;
+
+	isterm = isatty(STDIN_FILENO);
+
+	if (isterm) {
+		if (tcgetattr(STDIN_FILENO, &tt) != 0)
+			err(EXIT_FAILURE, _("failed to get terminal attributes"));
+		ioctl(STDIN_FILENO, TIOCGWINSZ, (char *) &win);
+		rc = openpty(&master, &slave, NULL, &tt, &win);
+	} else
+		rc = openpty(&master, &slave, NULL, NULL, NULL);
+
+	if (rc < 0) {
 		warn(_("openpty failed"));
 		fail();
 	}
 #else
 	char *pty, *bank, *cp;
 	struct stat stb;
+
+	isterm = isatty(STDIN_FILENO);
 
 	pty = &line[strlen("/dev/ptyp")];
 	for (bank = "pqrs"; *bank; bank++) {
@@ -543,9 +663,11 @@ getmaster(void) {
 				ok = access(line, R_OK|W_OK) == 0;
 				*tp = 'p';
 				if (ok) {
-					tcgetattr(STDIN_FILENO, &tt);
-					ioctl(STDIN_FILENO, TIOCGWINSZ,
-						(char *)&win);
+					if (isterm) {
+						tcgetattr(STDIN_FILENO, &tt);
+						ioctl(STDIN_FILENO, TIOCGWINSZ,
+								(char *)&win);
+					}
 					return;
 				}
 				close(master);
@@ -568,8 +690,10 @@ getslave(void) {
 		warn(_("cannot open %s"), line);
 		fail();
 	}
-	tcsetattr(slave, TCSANOW, &tt);
-	ioctl(slave, TIOCSWINSZ, (char *)&win);
+	if (isterm) {
+		tcsetattr(slave, TCSANOW, &tt);
+		ioctl(slave, TIOCSWINSZ, (char *)&win);
+	}
 #endif
 	setsid();
 	ioctl(slave, TIOCSCTTY, 0);

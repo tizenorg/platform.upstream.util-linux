@@ -46,6 +46,7 @@ usage(FILE *out)
 	fputs(_(" -t, --timing <file>     script timing output file\n"
 		" -s, --typescript <file> script terminal session output file\n"
 		" -d, --divisor <num>     speed up or slow down execution with time divisor\n"
+		" -m, --maxdelay <num>    wait at most this many seconds between updates\n"
 		" -V, --version           output version information and exit\n"
 		" -h, --help              display this help and exit\n\n"), out);
 
@@ -130,16 +131,16 @@ main(int argc, char *argv[])
 {
 	FILE *tfile, *sfile;
 	const char *sname = NULL, *tname = NULL;
-	double divi = 1;
-	int c, diviopt = FALSE, idx;
+	double divi = 1, maxdelay = 0;
+	int c, diviopt = FALSE, maxdelayopt = FALSE, idx;
 	unsigned long line;
-	size_t oldblk = 0;
 	char ch;
 
 	static const struct option longopts[] = {
 		{ "timing",	required_argument,	0, 't' },
 		{ "typescript",	required_argument,	0, 's' },
 		{ "divisor",	required_argument,	0, 'd' },
+		{ "maxdelay",	required_argument,	0, 'm' },
 		{ "version",	no_argument,		0, 'V' },
 		{ "help",	no_argument,		0, 'h' },
 		{ NULL,		0, 0, 0 }
@@ -156,7 +157,7 @@ main(int argc, char *argv[])
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((ch = getopt_long(argc, argv, "t:s:d:Vh", longopts, NULL)) != -1)
+	while ((ch = getopt_long(argc, argv, "t:s:d:m:Vh", longopts, NULL)) != -1)
 		switch(ch) {
 		case 't':
 			tname = optarg;
@@ -167,6 +168,10 @@ main(int argc, char *argv[])
 		case 'd':
 			diviopt = TRUE;
 			divi = getnum(optarg);
+			break;
+		case 'm':
+			maxdelayopt = TRUE;
+			maxdelay = getnum(optarg);
 			break;
 		case 'V':
 			printf(_("%s from %s\n"), program_invocation_short_name,
@@ -191,7 +196,8 @@ main(int argc, char *argv[])
 		sname = idx < argc ? argv[idx++] : "typescript";
 	if (!diviopt)
 		divi = idx < argc ? getnum(argv[idx]) : 1;
-
+	if (maxdelay < 0)
+		maxdelay = 0;
 	tfile = fopen(tname, "r");
 	if (!tfile)
 		err(EXIT_FAILURE, _("cannot open %s"), tname);
@@ -219,12 +225,13 @@ main(int argc, char *argv[])
 		}
 		delay /= divi;
 
+		if (maxdelayopt && delay > maxdelay)
+			delay = maxdelay;
+
 		if (delay > SCRIPT_MIN_DELAY)
 			delay_for(delay);
 
-		if (oldblk)
-			emit(sfile, sname, oldblk);
-		oldblk = blk;
+		emit(sfile, sname, blk);
 	}
 
 	fclose(sfile);

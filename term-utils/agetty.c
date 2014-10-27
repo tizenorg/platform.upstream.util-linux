@@ -10,6 +10,7 @@
  *
  * This program is freely distributable.
  */
+
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
@@ -20,6 +21,7 @@
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <stdarg.h>
 #include <ctype.h>
@@ -33,6 +35,7 @@
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <ifaddrs.h>
+#include <net/if.h>
 
 #include "strutils.h"
 #include "all-io.h"
@@ -42,12 +45,23 @@
 #include "widechar.h"
 #include "ttyutils.h"
 
+#if defined(__FreeBSD_kernel__)
+#include <pty.h>
+#include <sys/param.h>
+#endif
+
+
 #ifdef __linux__
 #  include <sys/kd.h>
 #  include <sys/param.h>
 #  define USE_SYSLOG
 #  ifndef DEFAULT_VCTERM
 #    define DEFAULT_VCTERM "linux"
+#  endif
+#  if defined (__s390__) || defined (__s390x__)
+#    define DEFAULT_TTYS0  "dumb"
+#    define DEFAULT_TTY32  "ibm327x"
+#    define DEFAULT_TTYS1  "vt220"
 #  endif
 #  ifndef DEFAULT_STERM
 #    define DEFAULT_STERM  "vt102"
@@ -67,6 +81,10 @@
 #  ifndef DEFAULT_STERM
 #    define DEFAULT_STERM  "vt100"
 #  endif
+#endif
+
+#ifdef __FreeBSD_kernel__
+#define USE_SYSLOG
 #endif
 
 /* If USE_SYSLOG is undefined all diagnostics go to /dev/console. */
@@ -134,6 +152,7 @@ struct options {
 	int nice;			/* Run login with this priority */
 	int numspeed;			/* number of baud rates to try */
 	int clocal;			/* CLOCAL_MODE_* */
+	int kbmode;			/* Keyboard mode if virtual console */
 	speed_t speeds[MAX_SPEED];	/* baud rates to be tried */
 };
 
@@ -272,13 +291,15 @@ static void log_warn (const char *, ...)
 static ssize_t append(char *dest, size_t len, const char  *sep, const char *src);
 static void check_username (const char* nm);
 static void login_options_to_argv(char *argv[], int *argc, char *str, char *username);
+static int plymouth_command(const char* arg);
 
 /* Fake hostname for ut_host specified on command line. */
 static char *fakehost;
 
 #ifdef DEBUGGING
+# include "closestream.h"
 # ifndef DEBUG_OUTPUT
-#  define DEBUG_OUTPUT "/dev/ttyp0"
+#  define DEBUG_OUTPUT "/dev/tty10"
 # endif
 # define debug(s) do { fprintf(dbf,s); fflush(dbf); } while (0)
 FILE *dbf;
@@ -316,8 +337,12 @@ int main(int argc, char **argv)
 
 #ifdef DEBUGGING
 	dbf = fopen(DEBUG_OUTPUT, "w");
-	for (int i = 1; i < argc; i++)
+	for (int i = 1; i < argc; i++) {
+		if (i > 1)
+			debug(" ");
 		debug(argv[i]);
+	}
+	debug("\n");
 #endif				/* DEBUGGING */
 
 	/* Parse command-line arguments. */
@@ -466,10 +491,8 @@ int main(int argc, char **argv)
 			log_warn(_("%s: can't change process priority: %m"),
 				options.tty);
 	}
-	if (options.osrelease)
-		free(options.osrelease);
+	free(options.osrelease);
 #ifdef DEBUGGING
-	fprintf(dbf, "read %c\n", ch);
 	if (close_stream(dbf) != 0)
 		log_err("write failed: %s", DEBUG_OUTPUT);
 #endif
@@ -559,6 +582,8 @@ static void login_options_to_argv(char *argv[], int *argc,
 		argv[i++] = replace_u(str, username);
 	*argc = i;
 }
+
+#define is_speed(str) (strlen((str)) == strspn((str), "0123456789,"))
 
 /* Parse command-line arguments. */
 static void parse_args(int argc, char **argv, struct options *op)
@@ -676,6 +701,9 @@ static void parse_args(int argc, char **argv, struct options *op)
 		case 'n':
 			op->flags |= F_NOPROMPT;
 			break;
+		case 'N':
+			op->flags |= F_NONL;
+			break;
 		case 'o':
 			op->logopt = optarg;
 			break;
@@ -738,7 +766,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 	}
 
 	/* Accept "tty", "baudrate tty", and "tty baudrate". */
-	if ('0' <= argv[optind][0] && argv[optind][0] <= '9') {
+	if (is_speed(argv[optind])) {
 		/* Assume BSD style speed. */
 		parse_speeds(op, argv[optind++]);
 		if (argc < optind + 1) {
@@ -750,7 +778,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 		op->tty = argv[optind++];
 		if (argc > optind) {
 			char *v = argv[optind++];
-			if ('0' <= *v && *v <= '9')
+			if (is_speed(v))
 				parse_speeds(op, v);
 			else
 				op->speeds[op->numspeed++] = bcode("9600");
@@ -924,7 +952,10 @@ static void update_utmp(struct options *op)
 static void open_tty(char *tty, struct termios *tp, struct options *op)
 {
 	const pid_t pid = getpid();
-	int serial, closed = 0;
+	int closed = 0;
+#ifndef KDGKBMODE
+	int serial;
+#endif
 
 	/* Set up new standard input, unless we are given an already opened port. */
 
@@ -962,12 +993,12 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 			log_err(_("/dev/%s: cannot open as standard input: %m"), tty);
 
 		/* Sanity checks... */
-		if (!isatty(fd))
-			log_err(_("/dev/%s: not a character device"), tty);
 		if (fstat(fd, &st) < 0)
 			log_err("%s: %m", buf);
 		if ((st.st_mode & S_IFMT) != S_IFCHR)
 			log_err(_("/dev/%s: not a character device"), tty);
+		if (!isatty(fd))
+			log_err(_("/dev/%s: not a tty"), tty);
 
 		if (((tid = tcgetsid(fd)) < 0) || (pid != tid)) {
 			if (ioctl(fd, TIOCSCTTY, 1) == -1)
@@ -1052,17 +1083,48 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 	if (tcgetattr(STDIN_FILENO, tp) < 0)
 		log_err(_("%s: failed to get terminal attributes: %m"), tty);
 
+#if defined (__s390__) || defined (__s390x__)
+	if (!op->term) {
+	        /*
+		 * Special terminal on first serial line on a S/390(x) which
+		 * is due legacy reasons a block terminal of type 3270 or
+		 * higher.  Whereas the second serial line on a S/390(x) is
+		 * a real character terminal which is compatible with VT220.
+		 */
+		if (strcmp(op->tty, "ttyS0") == 0)		/* linux/drivers/s390/char/con3215.c */
+			op->term = DEFAULT_TTYS0;
+		else if (strncmp(op->tty, "3270/tty", 8) == 0)	/* linux/drivers/s390/char/con3270.c */
+			op->term = DEFAULT_TTY32;
+		else if (strcmp(op->tty, "ttyS1") == 0)		/* linux/drivers/s390/char/sclp_vt220.c */
+			op->term = DEFAULT_TTYS1;
+	}
+#endif
+
+#if defined(__FreeBSD_kernel__)
+	login_tty (0);
+#endif
+
 	/*
 	 * Detect if this is a virtual console or serial/modem line.
-	 * In case of a virtual console the ioctl TIOCMGET fails and
-	 * the error number will be set to EINVAL.
+	 * In case of a virtual console the ioctl KDGKBMODE succeeds
+	 * whereas on other lines it will fails.
 	 */
-	if (ioctl(STDIN_FILENO, TIOCMGET, &serial) < 0 && (errno == EINVAL)) {
+#ifdef KDGKBMODE
+	if (ioctl(STDIN_FILENO, KDGKBMODE, &op->kbmode) == 0)
+#else
+	if (ioctl(STDIN_FILENO, TIOCMGET, &serial) < 0 && (errno == EINVAL))
+#endif
+	{
 		op->flags |= F_VCONSOLE;
 		if (!op->term)
 			op->term = DEFAULT_VCTERM;
-	} else if (!op->term)
-		op->term = DEFAULT_STERM;
+	} else {
+#ifdef K_RAW
+		op->kbmode = K_RAW;
+#endif
+		if (!op->term)
+			op->term = DEFAULT_STERM;
+	}
 
 	setenv("TERM", op->term, 1);
 }
@@ -1072,15 +1134,33 @@ static void termio_init(struct options *op, struct termios *tp)
 {
 	speed_t ispeed, ospeed;
 	struct winsize ws;
+	struct termios lock;
+#ifdef TIOCGLCKTRMIOS
+	int i =  (plymouth_command("--ping") == 0) ? 30 : 0;
+
+	while (i-- > 0) {
+		/*
+		 * Even with TTYReset=no it seems with systemd or plymouth
+		 * the termios flags become changed from under the first
+		 * agetty on a serial system console as the flags are locked.
+		 */
+		memset(&lock, 0, sizeof(struct termios));
+		if (ioctl(STDIN_FILENO, TIOCGLCKTRMIOS, &lock) < 0)
+			break;
+		if (!lock.c_iflag && !lock.c_oflag && !lock.c_cflag && !lock.c_lflag)
+			break;
+		debug("termios locked\n");
+		if (i == 15 && plymouth_command("quit") != 0)
+			break;
+		sleep(1);
+	}
+	memset(&lock, 0, sizeof(struct termios));
+	ioctl(STDIN_FILENO, TIOCSLCKTRMIOS, &lock);
+#endif
 
 	if (op->flags & F_VCONSOLE) {
 #if defined(IUTF8) && defined(KDGKBMODE)
-		int mode;
-
-		/* Detect mode of current keyboard setup, e.g. for UTF-8 */
-		if (ioctl(STDIN_FILENO, KDGKBMODE, &mode) < 0)
-			mode = K_RAW;
-		switch(mode) {
+		switch(op->kbmode) {
 		case K_UNICODE:
 			setlocale(LC_CTYPE, "C.UTF-8");
 			op->flags |= F_UTF8;
@@ -1135,9 +1215,6 @@ static void termio_init(struct options *op, struct termios *tp)
 	 * reads will be done in raw mode anyway. Errors will be dealt with
 	 * later on.
 	 */
-
-	 /* Flush input and output queues, important for modems! */
-	tcflush(STDIN_FILENO, TCIOFLUSH);
 
 #ifdef IUTF8
 	tp->c_iflag = tp->c_iflag & IUTF8;
@@ -1198,8 +1275,11 @@ static void termio_init(struct options *op, struct termios *tp)
 	if (op->flags & F_RTSCTS)
 		tp->c_cflag |= CRTSCTS;
 #endif
+	 /* Flush input and output queues, important for modems! */
+	tcflush(STDIN_FILENO, TCIOFLUSH);
 
-	tcsetattr(STDIN_FILENO, TCSANOW, tp);
+	if (tcsetattr(STDIN_FILENO, TCSANOW, tp))
+		log_warn(_("setting terminal attributes failed: %m"));
 
 	/* Go to blocking input even in local mode. */
 	fcntl(STDIN_FILENO, F_SETFL,
@@ -1220,6 +1300,10 @@ static void reset_vc(const struct options *op, struct termios *tp)
 
 	if (tcsetattr(STDIN_FILENO, TCSADRAIN, tp))
 		log_warn(_("setting terminal attributes failed: %m"));
+
+	/* Go to blocking input even in local mode. */
+	fcntl(STDIN_FILENO, F_SETFL,
+	      fcntl(STDIN_FILENO, F_GETFL, 0) & ~O_NONBLOCK);
 }
 
 /* Extract baud rate from modem status message. */
@@ -1383,8 +1467,7 @@ static char *read_os_release(struct options *op, const char *varname)
 			}
 			break;
 		}
-		if (ret)
-			free(ret);
+		free(ret);
 		ret = strdup(p);
 		if (!ret)
 			log_err(_("failed to allocate memory: %m"));
@@ -1573,7 +1656,7 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 				/* The terminal could be open with O_NONBLOCK when
 				 * -L (force CLOCAL) is specified...  */
 				if (errno == EINTR || errno == EAGAIN) {
-					usleep(250000);
+					xusleep(250000);
 					continue;
 				}
 				switch (errno) {
@@ -1806,10 +1889,12 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_(" -H, --host <hostname>      specify login host\n"), out);
 	fputs(_(" -i, --noissue              do not display issue file\n"), out);
 	fputs(_(" -I, --init-string <string> set init string\n"), out);
+	fputs(_(" -J  --noclear              do not clear the screen before prompt\n"), out);
 	fputs(_(" -l, --login-program <file> specify login program\n"), out);
 	fputs(_(" -L, --local-line[=<mode>]  control the local line flag\n"), out);
 	fputs(_(" -m, --extract-baud         extract baud rate during connect\n"), out);
 	fputs(_(" -n, --skip-login           do not prompt for login\n"), out);
+	fputs(_(" -N  --nonewline            do not print a newline before issue\n"), out);
 	fputs(_(" -o, --login-options <opts> options that are passed to login\n"), out);
 	fputs(_(" -p, --login-pause          wait for any key before the login\n"), out);
 	fputs(_(" -r, --chroot <dir>         change root to the directory\n"), out);
@@ -1818,13 +1903,14 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_(" -t, --timeout <number>     login process timeout\n"), out);
 	fputs(_(" -U, --detect-case          detect uppercase terminal\n"), out);
 	fputs(_(" -w, --wait-cr              wait carriage-return\n"), out);
-	fputs(_("     --noclear              do not clear the screen before prompt\n"), out);
 	fputs(_("     --nohints              do not print hints\n"), out);
-	fputs(_("     --nonewline            do not print a newline before issue\n"), out);
 	fputs(_("     --nohostname           no hostname at all will be shown\n"), out);
 	fputs(_("     --long-hostname        show full qualified hostname\n"), out);
 	fputs(_("     --erase-chars <string> additional backspace chars\n"), out);
 	fputs(_("     --kill-chars <string>  additional kill chars\n"), out);
+	fputs(_("     --chdir <directory>    chdir before the login\n"), out);
+	fputs(_("     --delay <number>       sleep seconds before prompt\n"), out);
+	fputs(_("     --nice <number>        run login with this priority\n"), out);
 	fputs(_("     --help                 display this help and exit\n"), out);
 	fputs(_("     --version              output version information and exit\n"), out);
 	fprintf(out, USAGE_MAN_TAIL("agetty(8)"));
@@ -1901,41 +1987,70 @@ static void log_warn(const char *fmt, ...)
 	va_end(ap);
 }
 
-static void output_iface_ip(struct ifaddrs *addrs, const char *iface, sa_family_t family)
+static void print_addr(sa_family_t family, void *addr)
 {
-	if (!iface)
-		return;
+	char buff[INET6_ADDRSTRLEN + 1];
 
-	if (addrs->ifa_name
-	    && strcmp(addrs->ifa_name, iface) == 0
-	    && addrs->ifa_addr
-	    && addrs->ifa_addr->sa_family == family) {
-
-		void *addr = NULL;
-		char buff[INET6_ADDRSTRLEN + 1];
-
-		switch (addrs->ifa_addr->sa_family) {
-		case AF_INET:
-			addr = &((struct sockaddr_in *)	addrs->ifa_addr)->sin_addr;
-			break;
-		case AF_INET6:
-			addr = &((struct sockaddr_in6 *) addrs->ifa_addr)->sin6_addr;
-			break;
-		}
-		if (addr) {
-			inet_ntop(addrs->ifa_addr->sa_family, addr, buff, sizeof(buff));
-			printf("%s", buff);
-		}
-
-	} else if (addrs->ifa_next)
-		output_iface_ip(addrs->ifa_next, iface, family);
+	inet_ntop(family, addr, buff, sizeof(buff));
+	printf("%s", buff);
 }
 
-static void output_ip(sa_family_t family)
+/*
+ * Prints IP for the specified interface (@iface), if the interface is not
+ * specified then prints the "best" one (UP, RUNNING, non-LOOPBACK). If not
+ * found the "best" interface then prints at least host IP.
+ */
+static void output_iface_ip(struct ifaddrs *addrs,
+			    const char *iface,
+			    sa_family_t family)
 {
-	char *host;
+	struct ifaddrs *p;
 	struct addrinfo hints, *info = NULL;
+	char *host = NULL;
+	void *addr = NULL;
 
+	if (!addrs)
+		return;
+
+	for (p = addrs; p; p = p->ifa_next) {
+
+		if (!p->ifa_name ||
+		    !p->ifa_addr ||
+		    p->ifa_addr->sa_family != family)
+			continue;
+
+		if (iface) {
+			/* Filter out by interface name */
+		       if (strcmp(p->ifa_name, iface) != 0)
+				continue;
+		} else {
+			/* Select the "best" interface */
+			if ((p->ifa_flags & IFF_LOOPBACK) ||
+			    !(p->ifa_flags & IFF_UP) ||
+			    !(p->ifa_flags & IFF_RUNNING))
+				continue;
+		}
+
+		addr = NULL;
+		switch (p->ifa_addr->sa_family) {
+		case AF_INET:
+			addr = &((struct sockaddr_in *)	p->ifa_addr)->sin_addr;
+			break;
+		case AF_INET6:
+			addr = &((struct sockaddr_in6 *) p->ifa_addr)->sin6_addr;
+			break;
+		}
+
+		if (addr) {
+			print_addr(family, addr);
+			return;
+		}
+	}
+
+	if (iface)
+		return;
+
+	/* Hmm.. not found the best interface, print host IP at least */
 	memset(&hints, 0, sizeof(hints));
 	hints.ai_family = family;
 	if (family == AF_INET6)
@@ -1943,9 +2058,6 @@ static void output_ip(sa_family_t family)
 
 	host = xgethostname();
 	if (host && getaddrinfo(host, NULL, &hints, &info) == 0 && info) {
-
-		void *addr = NULL;
-
 		switch (info->ai_family) {
 		case AF_INET:
 			addr = &((struct sockaddr_in *) info->ai_addr)->sin_addr;
@@ -1954,12 +2066,8 @@ static void output_ip(sa_family_t family)
 			addr = &((struct sockaddr_in6 *) info->ai_addr)->sin6_addr;
 			break;
 		}
-		if (addr) {
-			char buff[INET6_ADDRSTRLEN + 1];
-
-			inet_ntop(info->ai_family, (void *) addr, buff, sizeof(buff));
-			printf("%s", buff);
-		}
+		if (addr)
+			print_addr(family, addr);
 
 		freeaddrinfo(info);
 	}
@@ -2124,17 +2232,18 @@ static void output_special_char(unsigned char c, struct options *op,
 	case '6':
 	{
 		sa_family_t family = c == '4' ? AF_INET : AF_INET6;
+		struct ifaddrs *addrs = NULL;
 		char iface[128];
 
-		if (get_escape_argument(fp, iface, sizeof(iface))) {	/* interface IP */
-			struct ifaddrs *addrs;
-			int status = getifaddrs(&addrs);
-			if (status != 0)
-				break;
+		if (getifaddrs(&addrs))
+			break;
+
+		if (get_escape_argument(fp, iface, sizeof(iface)))
 			output_iface_ip(addrs, iface, family);
-			freeifaddrs(addrs);
-		} else							/* host IP */
-			output_ip(family);
+		else
+			output_iface_ip(addrs, NULL, family);
+
+		freeifaddrs(addrs);
 		break;
 	}
 	default:
@@ -2241,3 +2350,33 @@ err:
 	log_err(_("checkname failed: %m"));
 }
 
+/*
+ * For the case plymouth is found on this system
+ */
+static int plymouth_command(const char* arg)
+{
+	const char *cmd = "/usr/bin/plymouth";
+	static int has_plymouth = 1;
+	pid_t pid;
+
+	if (!has_plymouth)
+		return 127;
+
+	pid = fork();
+	if (!pid) {
+		int fd = open("/dev/null", O_RDWR);
+		dup2(fd, 0);
+		dup2(fd, 1);
+		dup2(fd, 2);
+		close(fd);
+		execl(cmd, cmd, arg, (char *) NULL);
+		exit(127);
+	} else if (pid > 0) {
+		int status;
+		waitpid(pid, &status, 0);
+		if (status == 127)
+			has_plymouth = 0;
+		return status;
+	}
+	return 1;
+}

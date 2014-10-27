@@ -19,7 +19,7 @@
  * Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
  *	         2001, 2002, 2003, 2004, 2005 by  Theodore Ts'o.
  *
- * Copyright (C) 2009, 2012 Karel Zak <kzak@redhat.com>
+ * Copyright (C) 2009-2014 Karel Zak <kzak@redhat.com>
  *
  * This file may be redistributed under the terms of the GNU Public
  * License.
@@ -53,6 +53,7 @@
 #include "exitcodes.h"
 #include "c.h"
 #include "closestream.h"
+#include "fileutils.h"
 
 #define XALLOC_EXIT_CODE	FSCK_EX_ERROR
 #include "xalloc.h"
@@ -63,6 +64,8 @@
 
 #define MAX_DEVICES 32
 #define MAX_ARGS 32
+
+#define FSCK_RUNTIME_DIRNAME	"/run/fsck"
 
 static const char *ignored_types[] = {
 	"ignore",
@@ -78,10 +81,7 @@ static const char *really_wanted[] = {
 	"ext4",
 	"ext4dev",
 	"jfs",
-	"reiserfs",
-	"xiafs",
-	"xfs",
-	NULL
+	"reiserfs"
 };
 
 /*
@@ -102,7 +102,10 @@ struct fsck_fs_data
 struct fsck_instance {
 	int	pid;
 	int	flags;		/* FLAG_{DONE|PROGRESS} */
-	int	lock;		/* flock()ed whole disk file descriptor or -1 */
+
+	int	lock;		/* flock()ed lockpath file descriptor or -1 */
+	char	*lockpath;	/* /run/fsck/<diskname>.lock or NULL */
+
 	int	exit_status;
 	struct timeval start_time;
 	struct timeval end_time;
@@ -165,6 +168,19 @@ static int string_to_int(const char *s)
 		return -1;
 	else
 		return (int) l;
+}
+
+/* Do we really really want to check this fs? */
+static int fs_check_required(const char *type)
+{
+	size_t i;
+
+	for(i = 0; i < ARRAY_SIZE(really_wanted); i++) {
+		if (strcmp(type, really_wanted[i]) == 0)
+			return 1;
+	}
+
+	return 0;
 }
 
 static int is_mounted(struct libmnt_fs *fs)
@@ -316,19 +332,40 @@ static int is_irrotational_disk(dev_t disk)
 static void lock_disk(struct fsck_instance *inst)
 {
 	dev_t disk = fs_get_disk(inst->fs, 1);
-	char *diskname;
+	char *diskpath = NULL, *diskname;
+
+	inst->lock = -1;
 
 	if (!disk || is_irrotational_disk(disk))
-		return;
+		goto done;
 
-	diskname = blkid_devno_to_devname(disk);
+	diskpath = blkid_devno_to_devname(disk);
+	if (!diskpath)
+		goto done;
+
+	if (access(FSCK_RUNTIME_DIRNAME, F_OK) != 0) {
+		int rc = mkdir(FSCK_RUNTIME_DIRNAME,
+				    S_IWUSR|
+				    S_IRUSR|S_IRGRP|S_IROTH|
+				    S_IXUSR|S_IXGRP|S_IXOTH);
+		if (rc && errno != EEXIST) {
+			warn(_("cannot create directory %s"),
+					FSCK_RUNTIME_DIRNAME);
+			goto done;
+		}
+	}
+
+	diskname = stripoff_last_component(diskpath);
 	if (!diskname)
-		return;
+		diskname = diskpath;
+
+	xasprintf(&inst->lockpath, FSCK_RUNTIME_DIRNAME "/%s.lock", diskname);
 
 	if (verbose)
-		printf(_("Locking disk %s ... "), diskname);
+		printf(_("Locking disk by %s ... "), inst->lockpath);
 
-	inst->lock = open(diskname, O_CLOEXEC | O_RDONLY);
+	inst->lock = open(inst->lockpath, O_RDONLY|O_CREAT|O_CLOEXEC,
+				    S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 	if (inst->lock >= 0) {
 		int rc = -1;
 
@@ -348,21 +385,31 @@ static void lock_disk(struct fsck_instance *inst)
 		/* TRANSLATORS: These are followups to "Locking disk...". */
 		printf("%s.\n", inst->lock >= 0 ? _("succeeded") : _("failed"));
 
-	free(diskname);
+
+done:
+	if (inst->lock < 0) {
+		free(inst->lockpath);
+		inst->lockpath = NULL;
+	}
+	free(diskpath);
 	return;
 }
 
 static void unlock_disk(struct fsck_instance *inst)
 {
-	if (inst->lock >= 0) {
-		/* explicitly unlock, don't rely on close(), maybe some library
-		 * (e.g. liblkid) has still open the device.
-		 */
-		flock(inst->lock, LOCK_UN);
-		close(inst->lock);
+	if (inst->lock < 0)
+		return;
 
-		inst->lock = -1;
-	}
+	if (verbose)
+		printf(_("Unlocking %s.\n"), inst->lockpath);
+
+	close(inst->lock);			/* unlock */
+	unlink(inst->lockpath);
+
+	free(inst->lockpath);
+
+	inst->lock = -1;
+	inst->lockpath = NULL;
 }
 
 static void free_instance(struct fsck_instance *i)
@@ -370,6 +417,7 @@ static void free_instance(struct fsck_instance *i)
 	if (lockdisk)
 		unlock_disk(i);
 	free(i->prog);
+	free(i->lockpath);
 	mnt_unref_fs(i->fs);
 	free(i);
 	return;
@@ -549,17 +597,17 @@ static void print_stats(struct fsck_instance *inst)
  * Execute a particular fsck program, and link it into the list of
  * child processes we are waiting for.
  */
-static int execute(const char *type, struct libmnt_fs *fs, int interactive)
+static int execute(const char *progname, const char *progpath,
+		   const char *type, struct libmnt_fs *fs, int interactive)
 {
-	char *s, *argv[80], prog[80];
+	char *argv[80];
 	int  argc, i;
 	struct fsck_instance *inst, *p;
 	pid_t	pid;
 
 	inst = xcalloc(1, sizeof(*inst));
 
-	sprintf(prog, "fsck.%s", type);
-	argv[0] = xstrdup(prog);
+	argv[0] = xstrdup(progname);
 	argc = 1;
 
 	for (i=0; i <num_args; i++)
@@ -586,19 +634,12 @@ static int execute(const char *type, struct libmnt_fs *fs, int interactive)
 	argv[argc++] = xstrdup(fs_get_device(fs));
 	argv[argc] = 0;
 
-	s = find_fsck(prog);
-	if (s == NULL) {
-		warnx(_("%s: not found"), prog);
-		free_instance(inst);
-		return ENOENT;
-	}
-
 	if (verbose || noexecute) {
 		const char *tgt = mnt_fs_get_target(fs);
 
 		if (!tgt)
 			tgt = fs_get_device(fs);
-		printf("[%s (%d) -- %s] ", s, num_running, tgt);
+		printf("[%s (%d) -- %s] ", progpath, num_running, tgt);
 		for (i=0; i < argc; i++)
 			printf("%s ", argv[i]);
 		printf("\n");
@@ -621,15 +662,15 @@ static int execute(const char *type, struct libmnt_fs *fs, int interactive)
 	} else if (pid == 0) {
 		if (!interactive)
 			close(0);
-		execv(s, argv);
-		err(FSCK_EX_ERROR, _("%s: execute failed"), s);
+		execv(progpath, argv);
+		err(FSCK_EX_ERROR, _("%s: execute failed"), progpath);
 	}
 
 	for (i=0; i < argc; i++)
 		free(argv[i]);
 
 	inst->pid = pid;
-	inst->prog = xstrdup(prog);
+	inst->prog = xstrdup(progname);
 	inst->type = xstrdup(type);
 	gettimeofday(&inst->start_time, NULL);
 	inst->next = NULL;
@@ -670,7 +711,7 @@ static int kill_all(int signum)
  */
 static struct fsck_instance *wait_one(int flags)
 {
-	int	status;
+	int	status = 0;
 	int	sig;
 	struct fsck_instance *inst, *inst2, *prev;
 	pid_t	pid;
@@ -826,6 +867,7 @@ static int wait_many(int flags)
  */
 static int fsck_device(struct libmnt_fs *fs, int interactive)
 {
+	char progname[80], *progpath;
 	const char *type;
 	int retval;
 
@@ -842,15 +884,27 @@ static int fsck_device(struct libmnt_fs *fs, int interactive)
 	else
 		type = DEFAULT_FSTYPE;
 
+	sprintf(progname, "fsck.%s", type);
+	progpath = find_fsck(progname);
+	if (progpath == NULL) {
+		if (fs_check_required(type)) {
+			retval = ENOENT;
+			goto err;
+		}
+		return 0;
+	}
+
 	num_running++;
-	retval = execute(type, fs, interactive);
+	retval = execute(progname, progpath, type, fs, interactive);
 	if (retval) {
-		warnx(_("error %d while executing fsck.%s for %s"),
-			retval, type, fs_get_device(fs));
 		num_running--;
-		return FSCK_EX_ERROR;
+		goto err;
 	}
 	return 0;
+err:
+	warnx(_("error %d (%m) while executing fsck.%s for %s"),
+			retval, type, fs_get_device(fs));
+	return FSCK_EX_ERROR;
 }
 
 
@@ -1018,8 +1072,7 @@ static int fs_ignored_type(struct libmnt_fs *fs)
 /* Check if we should ignore this filesystem. */
 static int ignore(struct libmnt_fs *fs)
 {
-	const char **ip, *type;
-	int wanted = 0;
+	const char *type;
 
 	/*
 	 * If the pass number is 0, ignore it.
@@ -1074,16 +1127,11 @@ static int ignore(struct libmnt_fs *fs)
 	if (fs_ignored_type(fs))
 		return 1;
 
-	/* Do we really really want to check this fs? */
-	for(ip = really_wanted; *ip; ip++)
-		if (strcmp(type, *ip) == 0) {
-			wanted = 1;
-			break;
-		}
+
 
 	/* See if the <fsck.fs> program is available. */
 	if (find_fsck(type) == NULL) {
-		if (wanted)
+		if (fs_check_required(type))
 			warnx(_("cannot check %s: fsck.%s not found"),
 				fs_get_device(fs), type);
 		return 1;
@@ -1561,7 +1609,6 @@ int main(int argc, char *argv[])
 			fs = add_dummy_fs(devices[i]);
 		else if (fs_ignored_type(fs))
 			continue;
-
 		if (ignore_mounted && is_mounted(fs))
 			continue;
 		status |= fsck_device(fs, interactive);

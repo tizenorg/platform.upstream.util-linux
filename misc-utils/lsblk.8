@@ -11,8 +11,10 @@ lsblk \- list block devices
 lists information about all available or the specified block devices.  The
 .B lsblk
 command reads the
-.I sysfs
-filesystem to gather information.
+.B sysfs
+filesystem and
+.B udev db
+to gather information.
 .PP
 The command prints all block devices (except RAM disks) in a tree-like format
 by default.  Use
@@ -28,6 +30,15 @@ outputs in your scripts.  Always explicitly define expected columns by using
 .B \-\-output
 .I columns-list
 in environments where a stable output is required.
+.PP
+Note that
+.B lsblk
+might be executed in time when
+.B udev
+does not have all information about recently added or modified devices yet. In this
+case it is recommended to use
+.B "udevadm settle"
+before lsblk to synchronize with udev.
 .SH OPTIONS
 .TP
 .BR \-a , " \-\-all"
@@ -83,6 +94,9 @@ to get a list of all supported columns.
 The default list of columns may be extended if \fIlist\fP is
 specified in the format \fI+list\fP (e.g. \fBlsblk -o +UUID\fP).
 .TP
+.BR \-O , " \-\-output-all "
+Output all available columns.
+.TP
 .BR \-P , " \-\-pairs"
 Produce output in the form of key="value" pairs.
 All potentially unsafe characters are hex-escaped (\\x<code>).
@@ -107,6 +121,9 @@ This option is equivalent to
 .TP
 .BR \-V , " \-\-version"
 Display version information and exit.
+.TP
+.BR \-x , " \-\-sort " \fIcolumn\fP
+Sort output lines by output \fIcolumn\fP.
 .SH NOTES
 For partitions, some information (e.g. queue attributes) is inherited from the
 parent device.
