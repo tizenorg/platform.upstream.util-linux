@@ -80,7 +80,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -a, --all               unmount all filesystems\n"), out);
-	fputs(_(" -A, --all-targets       unmount all mountpoins for the given device in the\n"
+	fputs(_(" -A, --all-targets       unmount all mountpoints for the given device in the\n"
 	        "                           current namespace\n"), out);
 	fputs(_(" -c, --no-canonicalize   don't canonicalize paths\n"), out);
 	fputs(_(" -d, --detach-loop       if mounted loop device, also free this loop device\n"), out);
@@ -281,10 +281,12 @@ static int umount_all(struct libmnt_context *cxt)
 			if (mnt_context_is_verbose(cxt))
 				printf(_("%-25s: ignored\n"), tgt);
 		} else {
-			rc |= mk_exit_code(cxt, mntrc);
+			int xrc = mk_exit_code(cxt, mntrc);
 
-			if (mnt_context_is_verbose(cxt))
+			if (xrc == MOUNT_EX_SUCCESS
+			    && mnt_context_is_verbose(cxt))
 				printf("%-25s: successfully unmounted\n", tgt);
+			rc |= xrc;
 		}
 	}
 
@@ -627,15 +629,17 @@ int main(int argc, char **argv)
 			rc += umount_recursive(cxt, *argv++);
 	} else {
 		while (argc--) {
-			char *path = *argv++;
+			char *path = *argv;
 
-			if (mnt_context_is_restricted(cxt))
+			if (mnt_context_is_restricted(cxt)
+			    && !mnt_tag_is_valid(path))
 				path = sanitize_path(path);
 
 			rc += umount_one(cxt, path);
 
-			if (mnt_context_is_restricted(cxt))
+			if (path != *argv)
 				free(path);
+			argv++;
 		}
 	}
 

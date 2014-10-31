@@ -102,6 +102,30 @@ static int init_propagation(struct libmnt_context *cxt)
 	return 0;
 }
 
+#if defined(HAVE_LIBSELINUX) || defined(HAVE_SMACK)
+struct libmnt_optname {
+	const char *name;
+	size_t namesz;
+};
+
+#define DEF_OPTNAME(n)		{ .name = n, .namesz = sizeof(n) - 1 }
+#define DEF_OPTNAME_LAST	{ .name = NULL }
+
+static int is_option(const char *name, size_t namesz,
+		     const struct libmnt_optname *names)
+{
+	const struct libmnt_optname *p;
+
+	for (p = names; p && p->name; p++) {
+		if (p->namesz == namesz
+		    && strncmp(name, p->name, namesz) == 0)
+			return 1;
+	}
+
+	return 0;
+}
+#endif /* HAVE_LIBSELINUX || HAVE_SMACK */
+
 /*
  * this has to be called after mnt_context_evaluate_permissions()
  */
@@ -114,6 +138,25 @@ static int fix_optstr(struct libmnt_context *cxt)
 	struct libmnt_fs *fs;
 #ifdef HAVE_LIBSELINUX
 	int se_fix = 0, se_rem = 0;
+	static const struct libmnt_optname selinux_options[] = {
+		DEF_OPTNAME("context"),
+		DEF_OPTNAME("fscontext"),
+		DEF_OPTNAME("defcontext"),
+		DEF_OPTNAME("rootcontext"),
+		DEF_OPTNAME("seclabel"),
+		DEF_OPTNAME_LAST
+	};
+#endif
+#ifdef HAVE_SMACK
+	int sm_rem = 0;
+	static const struct libmnt_optname smack_options[] = {
+		DEF_OPTNAME("smackfsdef"),
+		DEF_OPTNAME("smackfsfloor"),
+		DEF_OPTNAME("smackfshat"),
+		DEF_OPTNAME("smackfsroot"),
+		DEF_OPTNAME("smackfstransmute"),
+		DEF_OPTNAME_LAST
+	};
 #endif
 	assert(cxt);
 	assert(cxt->fs);
@@ -169,7 +212,6 @@ static int fix_optstr(struct libmnt_context *cxt)
 		free(fs->user_optstr);
 		fs->user_optstr = NULL;
 	}
-
 	if (cxt->mountflags & MS_PROPAGATION) {
 		rc = init_propagation(cxt);
 		if (rc)
@@ -199,12 +241,14 @@ static int fix_optstr(struct libmnt_context *cxt)
 
 	if (!se_rem) {
 		/* de-duplicate SELinux options */
-		mnt_optstr_deduplicate_option(&fs->fs_optstr, "context");
-		mnt_optstr_deduplicate_option(&fs->fs_optstr, "fscontext");
-		mnt_optstr_deduplicate_option(&fs->fs_optstr, "defcontext");
-		mnt_optstr_deduplicate_option(&fs->fs_optstr, "rootcontext");
-		mnt_optstr_deduplicate_option(&fs->fs_optstr, "seclabel");
+		const struct libmnt_optname *p;
+		for (p = selinux_options; p && p->name; p++)
+			mnt_optstr_deduplicate_option(&fs->fs_optstr, p->name);
 	}
+#endif
+#ifdef HAVE_SMACK
+	if (access("/sys/fs/smackfs", F_OK) != 0)
+		sm_rem = 1;
 #endif
 	while (!mnt_optstr_next_option(&next, &name, &namesz, &val, &valsz)) {
 
@@ -213,12 +257,9 @@ static int fix_optstr(struct libmnt_context *cxt)
 		else if (namesz == 3 && !strncmp(name, "gid", 3))
 			rc = mnt_optstr_fix_gid(&fs->fs_optstr, val, valsz, &next);
 #ifdef HAVE_LIBSELINUX
-		else if ((se_rem || se_fix) &&
-			 namesz >= 7 && (!strncmp(name, "context", 7) ||
-					 !strncmp(name, "fscontext", 9) ||
-					 !strncmp(name, "defcontext", 10) ||
-					 !strncmp(name, "rootcontext", 11) ||
-					 !strncmp(name, "seclabel", 8))) {
+		else if ((se_rem || se_fix)
+			 && is_option(name, namesz, selinux_options)) {
+
 			if (se_rem) {
 				/* remove context= option */
 				next = name;
@@ -230,6 +271,15 @@ static int fix_optstr(struct libmnt_context *cxt)
 				/* translate selinux contexts */
 				rc = mnt_optstr_fix_secontext(&fs->fs_optstr,
 							val, valsz, &next);
+		}
+#endif
+#ifdef HAVE_SMACK
+		else if (sm_rem && is_option(name, namesz, smack_options)) {
+
+			next = name;
+			rc = mnt_optstr_remove_option_at(&fs->fs_optstr,
+					name,
+					val ? val + valsz : name + namesz);
 		}
 #endif
 		if (rc)

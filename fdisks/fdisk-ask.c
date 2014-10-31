@@ -66,7 +66,7 @@ static int ask_number(struct fdisk_context *cxt,
 	assert(q);
 
 	DBG(ASK, dbgprint("asking for number "
-			"['%s', <%jd,%jd>, default=%jd, range: %s]",
+			"['%s', <%ju,%ju>, default=%ju, range: %s]",
 			q, low, high, dflt, range));
 
 	if (range && dflt >= low && dflt <= high) {
@@ -74,7 +74,7 @@ static int ask_number(struct fdisk_context *cxt,
 			snprintf(prompt, sizeof(prompt), _("%s (%s, default %c): "),
 					q, range, tochar(dflt));
 		else
-			snprintf(prompt, sizeof(prompt), _("%s (%s, default %jd): "),
+			snprintf(prompt, sizeof(prompt), _("%s (%s, default %ju): "),
 					q, range, dflt);
 
 	} else if (dflt >= low && dflt <= high) {
@@ -82,13 +82,13 @@ static int ask_number(struct fdisk_context *cxt,
 			snprintf(prompt, sizeof(prompt), _("%s (%c-%c, default %c): "),
 					q, tochar(low), tochar(high), tochar(dflt));
 		else
-			snprintf(prompt, sizeof(prompt), _("%s (%jd-%jd, default %jd): "),
+			snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju, default %ju): "),
 					q, low, high, dflt);
 	} else if (inchar)
 		snprintf(prompt, sizeof(prompt), _("%s (%c-%c): "),
 				q, tochar(low), tochar(high));
 	else
-		snprintf(prompt, sizeof(prompt), _("%s (%jd-%jd): "),
+		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju): "),
 				q, low, high);
 
 	do {
@@ -136,15 +136,15 @@ static int ask_offset(struct fdisk_context *cxt,
 
 	assert(q);
 
-	DBG(ASK, dbgprint("asking for offset ['%s', <%jd,%jd>, base=%jd, default=%jd, range: %s]",
+	DBG(ASK, dbgprint("asking for offset ['%s', <%ju,%ju>, base=%ju, default=%ju, range: %s]",
 				q, low, high, base, dflt, range));
 
 	if (range && dflt >= low && dflt <= high)
-		snprintf(prompt, sizeof(prompt), _("%s (%s, default %jd): "), q, range, dflt);
+		snprintf(prompt, sizeof(prompt), _("%s (%s, default %ju): "), q, range, dflt);
 	else if (dflt >= low && dflt <= high)
-		snprintf(prompt, sizeof(prompt), _("%s (%jd-%jd, default %jd): "), q, low, high, dflt);
+		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju, default %ju): "), q, low, high, dflt);
 	else
-		snprintf(prompt, sizeof(prompt), _("%s (%jd-%jd): "), q, low, high);
+		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju): "), q, low, high);
 
 	do {
 		uint64_t num = 0;
@@ -166,7 +166,7 @@ static int ask_offset(struct fdisk_context *cxt,
 		rc = parse_size(p, &num, &pwr);
 		if (rc)
 			continue;
-		DBG(ASK, dbgprint("parsed size: %jd", num));
+		DBG(ASK, dbgprint("parsed size: %ju", num));
 		if (sig && pwr) {
 			/* +{size}{K,M,...} specified, the "num" is in bytes */
 			uint64_t unit = fdisk_ask_number_get_unit(ask);
@@ -178,7 +178,7 @@ static int ask_offset(struct fdisk_context *cxt,
 		else if (sig == '-')
 			num = base - num;
 
-		DBG(ASK, dbgprint("final offset: %jd [sig: %c, power: %d, %s]",
+		DBG(ASK, dbgprint("final offset: %ju [sig: %c, power: %d, %s]",
 				num, sig, pwr,
 				sig ? "relative" : "absolute"));
 		if (num >= low && num <= high) {
@@ -192,48 +192,19 @@ static int ask_offset(struct fdisk_context *cxt,
 	return -1;
 }
 
-static void fputs_info(struct fdisk_ask *ask, FILE *out, char *buf, size_t bufsz)
+static void fputs_info(struct fdisk_ask *ask, FILE *out)
 {
 	const char *msg;
-	unsigned int flags;
 
 	assert(ask);
 
 	msg = fdisk_ask_print_get_mesg(ask);
-	flags = fdisk_ask_get_flags(ask);
 
 	if (!msg)
 		return;
 	if (info_count == 1)
 		fputc('\n', out);
-	if (flags == 0 || !colors_wanted())
-		goto simple;
-
-	if (flags & FDISK_INFO_COLON) {
-		size_t sz;
-		char *sep = _(": ");
-		char *p = strstr(msg, sep);
-
-		if (!p)
-			goto simple;
-
-		sz = strlen(sep);
-		strncpy(buf, msg, bufsz);
-		buf[p - msg + sz] = '\0';
-
-		color_enable(UL_COLOR_BROWN);
-		fputs(buf, out);
-		color_disable();
-		fputs(p + sz, out);
-
-	} else if (flags & FDISK_INFO_SUCCESS) {
-		color_enable(UL_COLOR_BOLD);
-		fputs(msg, out);
-		color_disable();
-	} else {
-simple:
-		fputs(msg, out);
-	}
+	fputs(msg, out);
 	fputc('\n', out);
 }
 
@@ -256,7 +227,7 @@ int ask_callback(struct fdisk_context *cxt, struct fdisk_ask *ask,
 		return ask_offset(cxt, ask, buf, sizeof(buf));
 	case FDISK_ASKTYPE_INFO:
 		info_count++;
-		fputs_info(ask, stdout, buf, sizeof(buf));
+		fputs_info(ask, stdout);
 		break;
 	case FDISK_ASKTYPE_WARNX:
 		color_fenable(UL_COLOR_RED, stderr);

@@ -58,6 +58,7 @@
 #include <limits.h>
 #include <locale.h>
 #include <stddef.h>
+#include <poll.h>
 
 #include "closestream.h"
 #include "nls.h"
@@ -308,7 +309,12 @@ doinput(void) {
 			}
 		}
 		else if (cc < 0 && errno == EINTR && resized)
+		{
+			/* transmit window change information to the child */
+			ioctl(STDIN_FILENO, TIOCGWINSZ, (char *)&win);
+			ioctl(slave, TIOCSWINSZ, (char *)&win);
 			resized = 0;
+		}
 		else
 			break;
 	}
@@ -322,20 +328,20 @@ void
 finish(int dummy __attribute__ ((__unused__))) {
 	int status;
 	pid_t pid;
+	int errsv = errno;
 
 	while ((pid = wait3(&status, WNOHANG, 0)) > 0)
 		if (pid == child) {
 			childstatus = status;
 			die = 1;
 		}
+
+	errno = errsv;
 }
 
 void
 resize(int dummy __attribute__ ((__unused__))) {
 	resized = 1;
-	/* transmit window change information to the child */
-	ioctl(STDIN_FILENO, TIOCGWINSZ, (char *)&win);
-	ioctl(slave, TIOCSWINSZ, (char *)&win);
 }
 
 /*
@@ -354,9 +360,9 @@ dooutput(FILE *timingfd) {
 	char obuf[BUFSIZ];
 	struct timeval tv;
 	double oldtime=time(NULL), newtime;
-	int flgs = 0;
 	ssize_t wrt;
 	ssize_t fwrt;
+	int errsv = 0;
 
 	close(STDIN_FILENO);
 #ifdef HAVE_LIBUTIL
@@ -367,25 +373,21 @@ dooutput(FILE *timingfd) {
 	fprintf(fscript, _("Script started on %s"), obuf);
 
 	do {
-		if (die && flgs == 0) {
-			/* ..child is dead, but it doesn't mean that there is
-			 * nothing in buffers.
-			 */
-			flgs = fcntl(master, F_GETFL, 0);
-			if (fcntl(master, F_SETFL, (flgs | O_NONBLOCK)) == -1)
+		if (die || errsv == EINTR) {
+			struct pollfd fds[] = {{ .fd = master, .events = POLLIN }};
+			if (poll(fds, 1, 50) <= 0)
 				break;
 		}
-		if (tflg)
-			gettimeofday(&tv, NULL);
 
 		errno = 0;
 		cc = read(master, obuf, sizeof (obuf));
+		errsv = errno;
 
-		if (die && errno == EINTR && cc <= 0)
-			/* read() has been interrupted by SIGCHLD, try it again
-			 * with O_NONBLOCK
-			 */
-			continue;
+		if (tflg)
+			gettimeofday(&tv, NULL);
+
+		if (errsv == EINTR && cc <= 0)
+			continue;	/* try it again */
 		if (cc <= 0)
 			break;
 		if (tflg) {
@@ -393,22 +395,23 @@ dooutput(FILE *timingfd) {
 			fprintf(timingfd, "%f %zd\n", newtime - oldtime, cc);
 			oldtime = newtime;
 		}
-		wrt = write(STDOUT_FILENO, obuf, cc);
-		if (wrt < 0) {
-			warn (_("write failed"));
-			fail();
-		}
 		fwrt = fwrite(obuf, 1, cc, fscript);
 		if (fwrt < cc) {
 			warn (_("cannot write script file"));
 			fail();
 		}
-		if (fflg)
+		if (fflg) {
 			fflush(fscript);
+			if (tflg)
+				fflush(timingfd);
+		}
+		wrt = write(STDOUT_FILENO, obuf, cc);
+		if (wrt < 0) {
+			warn (_("write failed"));
+			fail();
+		}
 	} while(1);
 
-	if (flgs)
-		fcntl(master, F_SETFL, flgs);
 	if (close_stream(timingfd) != 0)
 		errx(EXIT_FAILURE, _("write error"));
 	done();

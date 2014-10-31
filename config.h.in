@@ -275,6 +275,9 @@
 /* Define to 1 if you have the <pty.h> header file. */
 #undef HAVE_PTY_H
 
+/* Define to 1 if you have the `qsort_r' function. */
+#undef HAVE_QSORT_R
+
 /* Define to 1 if you have the `rpmatch' function. */
 #undef HAVE_RPMATCH
 
@@ -325,6 +328,9 @@
 
 /* Define to 1 if you have the <slcurses.h> header file. */
 #undef HAVE_SLCURSES_H
+
+/* Add SMACK support */
+#undef HAVE_SMACK
 
 /* Define to 1 if you have the `srandom' function. */
 #undef HAVE_SRANDOM

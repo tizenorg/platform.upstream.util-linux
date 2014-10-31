@@ -26,7 +26,7 @@ PACKAGE_VERSION_RELEASE=0
 
 dnl libblkid version
 LIBBLKID_VERSION="$PACKAGE_VERSION_MAJOR.$PACKAGE_VERSION_MINOR.$PACKAGE_VERSION_RELEASE"
-LIBBLKID_DATE="21-Oct-2013"
+LIBBLKID_DATE="24-Apr-2014"
 LIBBLKID_LT_MAJOR=1
 LIBBLKID_LT_MINOR=1
 LIBBLKID_LT_MICRO=0
@@ -303,6 +303,7 @@ AC_CHECK_FUNCS([ \
 	personality \
 	posix_fadvise \
 	prctl \
+	qsort_r \
 	rpmatch \
 	scandirat \
 	setresgid \
@@ -1002,6 +1003,12 @@ UL_REQUIRES_HAVE([hwclock], [io, linuxdummy], [ioperm iopl function or Linux])
 AM_CONDITIONAL([BUILD_HWCLOCK], [test "x$build_hwclock" = xyes])
 
 
+UL_BUILD_INIT([fstrim], [check])
+UL_REQUIRES_LINUX([fstrim])
+UL_REQUIRES_BUILD([fstrim], [libmount])
+AM_CONDITIONAL([BUILD_FSTRIM], [test "x$build_fstrim" = xyes])
+
+
 UL_BUILD_INIT([swapon], [check])
 UL_REQUIRES_LINUX([swapon])
 UL_REQUIRES_BUILD([swapon], [libblkid])
@@ -1405,6 +1412,15 @@ AS_IF([test "x$with_systemdsystemunitdir" != "xno"], [
 ])
 
 AM_CONDITIONAL([HAVE_SYSTEMD], [test -n "$with_systemdsystemunitdir" -a "x$with_systemdsystemunitdir" != "xno" ])
+
+
+AC_ARG_WITH([smack],
+  AS_HELP_STRING([--with-smack], [build with SMACK support]),
+  [], [with_smack=no]
+)
+AS_IF([test "x$with_smack" = xyes], [
+  AC_DEFINE([HAVE_SMACK], [1], [Add SMACK support])
+])
 
 
 AC_ARG_WITH([bashcompletiondir],

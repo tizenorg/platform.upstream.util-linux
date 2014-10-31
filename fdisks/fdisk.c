@@ -50,8 +50,8 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(USAGE_HEADER, out);
 
 	fprintf(out,
-	      _(" %1$s [options] <disk>    change partition table\n"
-	        " %1$s [options] -l <disk> list partition table(s)\n"),
+	      _(" %1$s [options] <disk>      change partition table\n"
+	        " %1$s [options] -l [<disk>] list partition table(s)\n"),
 	       program_invocation_short_name);
 
 	fputs(USAGE_OPTIONS, out);
@@ -199,10 +199,9 @@ void list_disk_geometry(struct fdisk_context *cxt)
 	char *strsz = size_to_human_string(SIZE_SUFFIX_SPACE
 					   | SIZE_SUFFIX_3LETTER, bytes);
 
-	fdisk_colon(cxt,	_("Disk %s: %s, %llu bytes, %llu sectors"),
+	fdisk_colon(cxt,	_("Disk %s: %s, %ju bytes, %ju sectors"),
 			cxt->dev_path, strsz,
-			(unsigned long long) bytes,
-			(unsigned long long) cxt->total_sectors);
+			bytes, (uintmax_t) cxt->total_sectors);
 	free(strsz);
 
 	if (fdisk_require_geometry(cxt) || fdisk_context_use_cylinders(cxt))
@@ -397,7 +396,7 @@ enum {
 
 int main(int argc, char **argv)
 {
-	int i, c, act = ACT_FDISK;
+	int rc, i, c, act = ACT_FDISK;
 	int colormode = UL_COLORMODE_AUTO;
 	struct fdisk_context *cxt;
 
@@ -532,7 +531,13 @@ int main(int argc, char **argv)
 		if (argc-optind != 1)
 			usage(stderr);
 
-		if (fdisk_context_assign_device(cxt, argv[optind], 0) != 0)
+		rc = fdisk_context_assign_device(cxt, argv[optind], 0);
+		if (rc == -EACCES) {
+			rc = fdisk_context_assign_device(cxt, argv[optind], 1);
+			if (rc == 0)
+				fdisk_warnx(cxt, _("Device open in read-only mode."));
+		}
+		if (rc)
 			err(EXIT_FAILURE, _("cannot open %s"), argv[optind]);
 
 		/* Here starts interactive mode, use fdisk_{warn,info,..} functions */

@@ -197,12 +197,14 @@ static int mount_all(struct libmnt_context *cxt)
 			if (mnt_context_is_verbose(cxt))
 				printf("%-25s: mount successfully forked\n", tgt);
 		} else {
-			mk_exit_code(cxt, mntrc);	/* to print warnings */
-
-			if (mnt_context_get_status(cxt)) {
+			if (mk_exit_code(cxt, mntrc) == MOUNT_EX_SUCCESS) {
 				nsucc++;
 
-				if (mnt_context_is_verbose(cxt))
+				/* Note that MOUNT_EX_SUCCESS return code does
+				 * not mean that FS has been really mounted
+				 * (e.g. nofail option) */
+				if (mnt_context_get_status(cxt) 
+				    && mnt_context_is_verbose(cxt))
 					printf("%-25s: successfully mounted\n", tgt);
 			} else
 				nerrs++;
@@ -429,6 +431,8 @@ try_readonly:
 				warnx(_("you must specify the filesystem type"));
 			return MOUNT_EX_USAGE;
 		case -MNT_ERR_NOSOURCE:
+			if (uflags & MNT_MS_NOFAIL)
+				return MOUNT_EX_SUCCESS;
 			if (src)
 				warnx(_("can't find %s"), src);
 			else
@@ -1030,24 +1034,41 @@ int main(int argc, char **argv)
 				 mnt_context_get_target(cxt))) {
 		/*
 		 * B) mount -L|-U|--source|--target
+		 *
+		 * non-root may specify source *or* target, but not both
 		 */
 		if (mnt_context_is_restricted(cxt) &&
 		    mnt_context_get_source(cxt) &&
 		    mnt_context_get_target(cxt))
 			exit_non_root(NULL);
 
-	} else if (argc == 1) {
+	} else if (argc == 1 && (!mnt_context_get_source(cxt) ||
+				 !mnt_context_get_target(cxt))) {
 		/*
 		 * C) mount [-L|-U|--source] <target>
+		 *    mount [--target <dir>] <source>
 		 *    mount <source|target>
 		 *
 		 * non-root may specify source *or* target, but not both
+		 *
+		 * It does not matter for libmount if we set source or target
+		 * here (the library is able to swap it), but it matters for
+		 * sanitize_paths().
 		 */
-		if (mnt_context_is_restricted(cxt) &&
-		    mnt_context_get_source(cxt))
-			exit_non_root(NULL);
+		int istag = mnt_tag_is_valid(argv[0]);
 
-		mnt_context_set_target(cxt, argv[0]);
+		if (istag && mnt_context_get_source(cxt))
+			/* -L, -U or --source together with LABEL= or UUID= */
+			errx(MOUNT_EX_USAGE, _("source specified more than once"));
+		else if (istag || mnt_context_get_target(cxt))
+			mnt_context_set_source(cxt, argv[0]);
+		else
+			mnt_context_set_target(cxt, argv[0]);
+
+		if (mnt_context_is_restricted(cxt) &&
+		    mnt_context_get_source(cxt) &&
+		    mnt_context_get_target(cxt))
+			exit_non_root(NULL);
 
 	} else if (argc == 2 && !mnt_context_get_source(cxt)
 			     && !mnt_context_get_target(cxt)) {
@@ -1056,6 +1077,7 @@ int main(int argc, char **argv)
 		 */
 		if (mnt_context_is_restricted(cxt))
 			exit_non_root(NULL);
+
 		mnt_context_set_source(cxt, argv[0]);
 		mnt_context_set_target(cxt, argv[1]);
 

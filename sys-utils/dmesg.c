@@ -639,8 +639,11 @@ static void safe_fwrite(const char *buf, size_t size, FILE *out)
 			rc = fwrite_hex(p, len, out);
 		else
 			rc = fwrite(p, 1, len, out) != len;
-		if (rc != 0)
-			err(EXIT_FAILURE, _("write failed"));
+		if (rc != 0) {
+			if (errno != EPIPE)
+				err(EXIT_FAILURE, _("write failed"));
+			exit(EXIT_SUCCESS);
+		}
 	}
 }
 
@@ -1010,6 +1013,8 @@ static int init_kmsg(struct dmesg_control *ctl)
 
 	if (!ctl->follow)
 		mode |= O_NONBLOCK;
+	else
+		setlinebuf(stdout);
 
 	ctl->kmsg = open("/dev/kmsg", mode);
 	if (ctl->kmsg < 0)
@@ -1220,10 +1225,15 @@ int main(int argc, char *argv[])
 	};
 
 	static const ul_excl_t excl[] = {	/* rows and cols in in ASCII order */
-		{ 'C','D','E','c','n' },	/* clear,off,on,read-clear,level*/
+		{ 'C','D','E','c','n','r' },	/* clear,off,on,read-clear,level,raw*/
 		{ 'H','r' },			/* human, raw */
 		{ 'L','r' },			/* color, raw */
 		{ 'S','w' },			/* syslog,follow */
+		{ 'T','r' },			/* ctime, raw */
+		{ 'd','r' },			/* delta, raw */
+		{ 'e','r' },			/* reltime, raw */
+		{ 'r','x' },			/* raw, decode */
+		{ 'r','t' },			/* notime, raw */
 		{ 0 }
 	};
 	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
@@ -1300,8 +1310,6 @@ int main(int argc, char *argv[])
 			break;
 		case 'r':
 			ctl.raw = 1;
-			ctl.time_fmt = DMESG_TIMEFTM_NONE;
-			delta = 0;
 			break;
 		case 'S':
 			ctl.method = DMESG_METHOD_SYSLOG;
@@ -1371,11 +1379,6 @@ int main(int argc, char *argv[])
 			ctl.time_fmt = DMESG_TIMEFTM_DELTA;
 		}
 
-	if (ctl.raw
-	    && (ctl.fltr_lev || ctl.fltr_fac || ctl.decode
-			     || !is_timefmt(&ctl, NONE)))
-	    errx(EXIT_FAILURE, _("--raw can't be used together with level, "
-				 "facility, decode, delta, ctime or notime options"));
 
 	ctl.color = colors_init(colormode) ? 1 : 0;
 	if (ctl.follow)
@@ -1389,6 +1392,12 @@ int main(int argc, char *argv[])
 	case SYSLOG_ACTION_READ_CLEAR:
 		if (ctl.method == DMESG_METHOD_KMSG && init_kmsg(&ctl) != 0)
 			ctl.method = DMESG_METHOD_SYSLOG;
+
+		if (ctl.raw
+		    && ctl.method != DMESG_METHOD_KMSG
+		    && (ctl.fltr_lev || ctl.fltr_fac))
+			    errx(EXIT_FAILURE, _("--raw could be used together with --level or "
+				 "--facility only when read messages from /dev/kmsg"));
 		if (ctl.pager)
 			setup_pager();
 		n = read_buffer(&ctl, &buf);

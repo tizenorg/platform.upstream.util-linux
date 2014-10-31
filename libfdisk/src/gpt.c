@@ -165,6 +165,7 @@ static struct fdisk_parttype gpt_parttypes[] =
 	DEF_GUID("0657FD6D-A4AB-43C4-84E5-0933C84B4F4F", N_("Linux swap")),
 	DEF_GUID("E6D6D379-F507-44C2-A23C-238F2A3DF928", N_("Linux LVM")),
 	DEF_GUID("8DA63339-0007-60C0-C436-083AC8230908", N_("Linux reserved")),
+	DEF_GUID("933AC7E1-2EB4-4F13-B844-0E14E2AEF915", N_("Linux /home partition")),
 
 	/* FreeBSD */
 	DEF_GUID("516E7CB4-6ECF-11D6-8FF8-00022D09712B", N_("FreeBSD data")),
@@ -408,6 +409,46 @@ static int gpt_mknew_header_from_bkp(struct fdisk_context *cxt,
 	gpt_mknew_header_common(cxt, header, lba);
 
 	return 0;
+}
+
+static struct gpt_header *gpt_copy_header(struct fdisk_context *cxt,
+			   struct gpt_header *src)
+{
+	struct gpt_header *res;
+
+	if (!cxt || !src)
+		return NULL;
+
+	res = calloc(1, sizeof(*res));
+	if (!res) {
+		fdisk_warn(cxt, _("failed to allocate GPT header"));
+		return NULL;
+	}
+
+	res->my_lba                 = src->alternative_lba;
+	res->alternative_lba        = src->my_lba;
+
+	res->signature              = src->signature;
+	res->revision               = src->revision;
+	res->size                   = src->size;
+	res->npartition_entries     = src->npartition_entries;
+	res->sizeof_partition_entry = src->sizeof_partition_entry;
+	res->first_usable_lba       = src->first_usable_lba;
+	res->last_usable_lba        = src->last_usable_lba;
+
+	memcpy(&res->disk_guid, &src->disk_guid, sizeof(src->disk_guid));
+
+
+	if (res->my_lba == GPT_PRIMARY_PARTITION_TABLE_LBA)
+		res->partition_entry_lba = cpu_to_le64(2);
+	else {
+		uint64_t esz = le32_to_cpu(src->npartition_entries) * sizeof(struct gpt_entry);
+		uint64_t esects = (esz + cxt->sector_size - 1) / cxt->sector_size;
+
+		res->partition_entry_lba = cpu_to_le64(cxt->total_sectors - 1 - esects);
+	}
+
+	return res;
 }
 
 /*
@@ -776,10 +817,13 @@ static struct gpt_header *gpt_read_header(struct fdisk_context *cxt,
 	else
 		free(ents);
 
+	DBG(LABEL, dbgprint("found valid GPT Header on LBA %ju", lba));
 	return header;
 invalid:
 	free(header);
 	free(ents);
+
+	DBG(LABEL, dbgprint("read GPT Header on LBA %ju failed", lba));
 	return NULL;
 }
 
@@ -1091,6 +1135,8 @@ static int gpt_probe_label(struct fdisk_context *cxt)
 
 	gpt = self_label(cxt);
 
+	/* TODO: it would be nice to support scenario when GPT headers are OK,
+	 *       but PMBR is corrupt */
 	mbr_type = valid_pmbr(cxt);
 	if (!mbr_type)
 		goto failed;
@@ -1102,20 +1148,36 @@ static int gpt_probe_label(struct fdisk_context *cxt)
 	gpt->pheader = gpt_read_header(cxt, GPT_PRIMARY_PARTITION_TABLE_LBA,
 				       &gpt->ents);
 
-	/*
-	 * TODO: If the primary GPT is corrupt, we must check the last LBA of the
-	 * device to see if it has a valid GPT Header and point to a valid GPT
-	 * Partition Entry Array.
-	 * If it points to a valid GPT Partition Entry Array, then software should
-	 * restore the primary GPT if allowed by platform policy settings.
-	 *
-	 * For now we just abort GPT probing!
-	 */
-	if (!gpt->pheader || !gpt->ents)
+	if (gpt->pheader)
+		/* primary OK, try backup from alternative LBA */
+		gpt->bheader = gpt_read_header(cxt,
+					le64_to_cpu(gpt->pheader->alternative_lba),
+					NULL);
+	else
+		/* primary corrupted -- try last LBA */
+		gpt->bheader = gpt_read_header(cxt, last_lba(cxt), &gpt->ents);
+
+	if (!gpt->pheader && !gpt->bheader)
 		goto failed;
 
-	/* OK, probing passed, now initialize backup header and fdisk variables. */
-	gpt->bheader = gpt_read_header(cxt, last_lba(cxt), NULL);
+	/* primary OK, backup corrupted -- recovery */
+	if (gpt->pheader && !gpt->bheader) {
+		fdisk_warnx(cxt, _("The backup GPT table is corrupt, but the "
+				  "primary appears OK, so that will be used."));
+		gpt->bheader = gpt_copy_header(cxt, gpt->pheader);
+		if (!gpt->bheader)
+			goto failed;
+		gpt_recompute_crc(gpt->bheader, gpt->ents);
+
+	/* primary corrupted, backup OK -- recovery */
+	} else if (!gpt->pheader && gpt->bheader) {
+		fdisk_warnx(cxt, _("The primary GPT table is corrupt, but the "
+				  "backup appears OK, so that will be used."));
+		gpt->pheader = gpt_copy_header(cxt, gpt->bheader);
+		if (!gpt->pheader)
+			goto failed;
+		gpt_recompute_crc(gpt->pheader, gpt->ents);
+	}
 
 	cxt->label->nparts_max = le32_to_cpu(gpt->pheader->npartition_entries);
 	cxt->label->nparts_cur = partitions_in_use(gpt->pheader, gpt->ents);

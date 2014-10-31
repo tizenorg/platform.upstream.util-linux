@@ -88,25 +88,25 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 noinst_PROGRAMS =
-usrbin_exec_PROGRAMS = $(am__EXEEXT_52) $(am__EXEEXT_53) \
-	$(am__EXEEXT_54) col$(EXEEXT) colcrt$(EXEEXT) colrm$(EXEEXT) \
+usrbin_exec_PROGRAMS = $(am__EXEEXT_53) $(am__EXEEXT_54) \
+	$(am__EXEEXT_55) col$(EXEEXT) colcrt$(EXEEXT) colrm$(EXEEXT) \
 	column$(EXEEXT) hexdump$(EXEEXT) rev$(EXEEXT) tailf$(EXEEXT) \
-	$(am__EXEEXT_55) $(am__EXEEXT_56) $(am__EXEEXT_57) \
-	script$(EXEEXT) scriptreplay$(EXEEXT) $(am__EXEEXT_58) \
-	$(am__EXEEXT_59) $(am__EXEEXT_60) $(am__EXEEXT_61) \
-	$(am__EXEEXT_62) $(am__EXEEXT_63) $(am__EXEEXT_64) \
-	$(am__EXEEXT_65) $(am__EXEEXT_66) flock$(EXEEXT) \
+	$(am__EXEEXT_56) $(am__EXEEXT_57) $(am__EXEEXT_58) \
+	script$(EXEEXT) scriptreplay$(EXEEXT) $(am__EXEEXT_59) \
+	$(am__EXEEXT_60) $(am__EXEEXT_61) $(am__EXEEXT_62) \
+	$(am__EXEEXT_63) $(am__EXEEXT_64) $(am__EXEEXT_65) \
+	$(am__EXEEXT_66) $(am__EXEEXT_67) flock$(EXEEXT) \
 	ipcmk$(EXEEXT) ipcrm$(EXEEXT) ipcs$(EXEEXT) renice$(EXEEXT) \
-	setsid$(EXEEXT) $(am__EXEEXT_67) $(am__EXEEXT_68) \
-	$(am__EXEEXT_69) $(am__EXEEXT_70) $(am__EXEEXT_71) \
-	$(am__EXEEXT_72) $(am__EXEEXT_73) $(am__EXEEXT_74) \
-	$(am__EXEEXT_75) cal$(EXEEXT) logger$(EXEEXT) look$(EXEEXT) \
+	setsid$(EXEEXT) $(am__EXEEXT_68) $(am__EXEEXT_69) \
+	$(am__EXEEXT_70) $(am__EXEEXT_71) $(am__EXEEXT_72) \
+	$(am__EXEEXT_73) $(am__EXEEXT_74) $(am__EXEEXT_75) \
+	$(am__EXEEXT_76) cal$(EXEEXT) logger$(EXEEXT) look$(EXEEXT) \
 	mcookie$(EXEEXT) namei$(EXEEXT) whereis$(EXEEXT) \
-	$(am__EXEEXT_76) $(am__EXEEXT_77) $(am__EXEEXT_78) \
+	$(am__EXEEXT_77) $(am__EXEEXT_78) $(am__EXEEXT_79) \
 	getopt$(EXEEXT) isosize$(EXEEXT)
-usrsbin_exec_PROGRAMS = $(am__EXEEXT_79) readprofile$(EXEEXT) \
-	$(am__EXEEXT_80) $(am__EXEEXT_81) $(am__EXEEXT_82) \
-	$(am__EXEEXT_83) $(am__EXEEXT_84)
+usrsbin_exec_PROGRAMS = $(am__EXEEXT_80) readprofile$(EXEEXT) \
+	$(am__EXEEXT_81) $(am__EXEEXT_82) $(am__EXEEXT_83) \
+	$(am__EXEEXT_84) $(am__EXEEXT_85)
 bin_PROGRAMS = $(am__EXEEXT_1) $(am__EXEEXT_2) $(am__EXEEXT_3) \
 	$(am__EXEEXT_4) $(am__EXEEXT_5) $(am__EXEEXT_6) \
 	$(am__EXEEXT_7) $(am__EXEEXT_8) $(am__EXEEXT_9) \
@@ -117,12 +117,12 @@ sbin_PROGRAMS = $(am__EXEEXT_28) $(am__EXEEXT_29) $(am__EXEEXT_30) \
 	$(am__EXEEXT_31) $(am__EXEEXT_32) $(am__EXEEXT_33) \
 	$(am__EXEEXT_34) $(am__EXEEXT_35) $(am__EXEEXT_36) \
 	$(am__EXEEXT_37) $(am__EXEEXT_38) $(am__EXEEXT_39) \
-	$(am__EXEEXT_40) fsck.minix$(EXEEXT) mkfs.minix$(EXEEXT) \
-	mkfs$(EXEEXT) $(am__EXEEXT_41) mkswap$(EXEEXT) \
-	$(am__EXEEXT_42) $(am__EXEEXT_43) $(am__EXEEXT_44) \
+	$(am__EXEEXT_40) $(am__EXEEXT_41) fsck.minix$(EXEEXT) \
+	mkfs.minix$(EXEEXT) mkfs$(EXEEXT) $(am__EXEEXT_42) \
+	mkswap$(EXEEXT) $(am__EXEEXT_43) $(am__EXEEXT_44) \
 	$(am__EXEEXT_45) $(am__EXEEXT_46) $(am__EXEEXT_47) \
 	$(am__EXEEXT_48) $(am__EXEEXT_49) $(am__EXEEXT_50) \
-	$(am__EXEEXT_51)
+	$(am__EXEEXT_51) $(am__EXEEXT_52)
 check_PROGRAMS = test_at$(EXEEXT) test_blkdev$(EXEEXT) \
 	test_canonicalize$(EXEEXT) test_colors$(EXEEXT) \
 	test_fileutils$(EXEEXT) test_ismounted$(EXEEXT) \
@@ -223,11 +223,12 @@ DIST_COMMON = $(srcdir)/include/Makemodule.am \
 @BUILD_LIBBLKID_TRUE@@LINUX_TRUE@	libblkid/src/topology/sysfs.c
 
 @BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_16 = libuuid.la
-@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_17 = -I$(ul_libuuid_incdir)
-@BUILD_LIBBLKID_TRUE@am__append_18 = libblkid/src/blkid.sym \
+@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_17 = libuuid.la
+@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_18 = -I$(ul_libuuid_incdir)
+@BUILD_LIBBLKID_TRUE@am__append_19 = libblkid/src/blkid.sym \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/blkid.h.in \
 @BUILD_LIBBLKID_TRUE@	libblkid/libblkid.3 libblkid/COPYING
-@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@am__append_19 = \
+@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@am__append_20 = \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	test_blkid_cache \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	test_blkid_config \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	test_blkid_dev \
@@ -240,11 +241,11 @@ DIST_COMMON = $(srcdir)/include/Makemodule.am \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	test_blkid_tag \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	test_blkid_verify
 
-@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_20 = libuuid.la
-@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_21 = $(UUID_LIBS)
-@BUILD_LIBBLKID_TRUE@am__append_22 = install-exec-hook-libblkid
-@BUILD_LIBBLKID_TRUE@am__append_23 = uninstall-hook-libblkid
-@BUILD_LIBBLKID_TRUE@am__append_24 = \
+@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_21 = libuuid.la
+@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@@BUILD_LIBUUID_TRUE@am__append_22 = $(UUID_LIBS)
+@BUILD_LIBBLKID_TRUE@am__append_23 = install-exec-hook-libblkid
+@BUILD_LIBBLKID_TRUE@am__append_24 = uninstall-hook-libblkid
+@BUILD_LIBBLKID_TRUE@am__append_25 = \
 @BUILD_LIBBLKID_TRUE@	sample-mkfs \
 @BUILD_LIBBLKID_TRUE@	sample-partitions \
 @BUILD_LIBBLKID_TRUE@	sample-superblocks \
@@ -252,16 +253,16 @@ DIST_COMMON = $(srcdir)/include/Makemodule.am \
 
 
 # Docs uses separate Makefiles
-@BUILD_LIBBLKID_TRUE@@ENABLE_GTK_DOC_TRUE@am__append_25 = libblkid/docs
-@BUILD_LIBBLKID_TRUE@am__append_26 = libblkid/blkid.pc
+@BUILD_LIBBLKID_TRUE@@ENABLE_GTK_DOC_TRUE@am__append_26 = libblkid/docs
 @BUILD_LIBBLKID_TRUE@am__append_27 = libblkid/blkid.pc
-@BUILD_LIBBLKID_TRUE@am__append_28 = libblkid/libblkid.3
-@BUILD_LIBMOUNT_TRUE@am__append_29 = libmount.la
-@BUILD_LIBMOUNT_TRUE@am__append_30 = \
-@BUILD_LIBMOUNT_TRUE@	libmount/src/libmount.sym \
-@BUILD_LIBMOUNT_TRUE@	libmount/src/libmount.h.in
-
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am__append_31 = \
+@BUILD_LIBBLKID_TRUE@am__append_28 = libblkid/blkid.pc
+@BUILD_LIBBLKID_TRUE@am__append_29 = libblkid/libblkid.3
+@BUILD_LIBMOUNT_TRUE@am__append_30 = libmount.la
+@BUILD_LIBMOUNT_TRUE@am__append_31 = libmount/src/libmount.sym \
+@BUILD_LIBMOUNT_TRUE@	libmount/src/libmount.h.in \
+@BUILD_LIBMOUNT_TRUE@	libmount/python/__init__.py \
+@BUILD_LIBMOUNT_TRUE@	libmount/COPYING
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@am__append_32 = \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_cache \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_context \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_lock \
@@ -272,447 +273,449 @@ DIST_COMMON = $(srcdir)/include/Makemodule.am \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_utils \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	test_mount_version
 
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@@HAVE_SELINUX_TRUE@am__append_32 = $(SELINUX_LIBS)
-@BUILD_LIBMOUNT_TRUE@am__append_33 = install-exec-hook-libmount
-@BUILD_LIBMOUNT_TRUE@am__append_34 = uninstall-hook-libmount
-@BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@am__append_35 = $(pylibmountexec_SCRIPTS)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@@HAVE_SELINUX_TRUE@am__append_33 = $(SELINUX_LIBS)
+@BUILD_LIBMOUNT_TRUE@am__append_34 = install-exec-hook-libmount
+@BUILD_LIBMOUNT_TRUE@am__append_35 = uninstall-hook-libmount
 @BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@am__append_36 = *.img
 
 # Docs uses separate Makefiles
 @BUILD_LIBMOUNT_TRUE@@ENABLE_GTK_DOC_TRUE@am__append_37 = libmount/docs
 @BUILD_LIBMOUNT_TRUE@am__append_38 = libmount/mount.pc
 @BUILD_LIBMOUNT_TRUE@am__append_39 = libmount/mount.pc
-@BUILD_LIBMOUNT_TRUE@am__append_40 = libmount/COPYING
-@BUILD_LIBFDISK_TRUE@am__append_41 = libfdisk.la
+@BUILD_LIBFDISK_TRUE@am__append_40 = libfdisk.la
+@BUILD_LIBBLKID_TRUE@@BUILD_LIBFDISK_TRUE@am__append_41 = libblkid.la
 @BUILD_LIBBLKID_TRUE@@BUILD_LIBFDISK_TRUE@am__append_42 = libblkid.la
 @BUILD_LIBBLKID_TRUE@@BUILD_LIBFDISK_TRUE@am__append_43 = -I$(ul_libblkid_incdir)
 @BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_44 = libuuid.la
-@BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_45 = -I$(ul_libuuid_incdir)
-@BUILD_LIBFDISK_TRUE@am__append_46 = \
+@BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_45 = libuuid.la
+@BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_46 = -I$(ul_libuuid_incdir)
+@BUILD_LIBFDISK_TRUE@am__append_47 = \
 @BUILD_LIBFDISK_TRUE@	test_fdisk_ask \
 @BUILD_LIBFDISK_TRUE@	test_fdisk_utils
 
-@BUILD_LIBBLKID_TRUE@@BUILD_LIBFDISK_TRUE@am__append_47 = libblkid.la
-@BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_48 = libuuid.la
-@BUILD_SCHEDUTILS_TRUE@am__append_49 = chrt
-@BUILD_SCHEDUTILS_TRUE@am__append_50 = schedutils/chrt.1
-@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_51 = ionice
-@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_52 = schedutils/ionice.1
-@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_53 = taskset
-@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_54 = schedutils/taskset.1
-@BUILD_LINE_TRUE@am__append_55 = line
-@BUILD_LINE_TRUE@am__append_56 = text-utils/line.1
-@BUILD_PG_TRUE@am__append_57 = pg
-@BUILD_PG_TRUE@am__append_58 = text-utils/pg.1
-@BUILD_UL_TRUE@am__append_59 = ul
-@BUILD_UL_TRUE@am__append_60 = text-utils/ul.1
-@BUILD_UL_TRUE@@HAVE_TINFO_TRUE@am__append_61 = $(TINFO_LIBS) \
+@BUILD_LIBBLKID_TRUE@@BUILD_LIBFDISK_TRUE@am__append_48 = libblkid.la
+@BUILD_LIBFDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_49 = libuuid.la
+@BUILD_SCHEDUTILS_TRUE@am__append_50 = chrt
+@BUILD_SCHEDUTILS_TRUE@am__append_51 = schedutils/chrt.1
+@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_52 = ionice
+@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_53 = schedutils/ionice.1
+@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_54 = taskset
+@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_55 = schedutils/taskset.1
+@BUILD_LINE_TRUE@am__append_56 = line
+@BUILD_LINE_TRUE@am__append_57 = text-utils/line.1
+@BUILD_PG_TRUE@am__append_58 = pg
+@BUILD_PG_TRUE@am__append_59 = text-utils/pg.1
+@BUILD_UL_TRUE@am__append_60 = ul
+@BUILD_UL_TRUE@am__append_61 = text-utils/ul.1
+@BUILD_UL_TRUE@@HAVE_TINFO_TRUE@am__append_62 = $(TINFO_LIBS) \
 @BUILD_UL_TRUE@@HAVE_TINFO_TRUE@	$(TINFO_CFLAGS)
-@BUILD_UL_TRUE@@HAVE_TINFO_FALSE@am__append_62 = $(NCURSES_CFLAGS)
-@BUILD_UL_TRUE@@HAVE_TINFO_FALSE@am__append_63 = $(NCURSES_LIBS)
-@BUILD_MORE_TRUE@am__append_64 = more
-@BUILD_MORE_TRUE@am__append_65 = text-utils/more.1
-@BUILD_MORE_TRUE@@HAVE_TINFO_TRUE@am__append_66 = $(TINFO_LIBS) \
+@BUILD_UL_TRUE@@HAVE_TINFO_FALSE@am__append_63 = $(NCURSES_CFLAGS)
+@BUILD_UL_TRUE@@HAVE_TINFO_FALSE@am__append_64 = $(NCURSES_LIBS)
+@BUILD_MORE_TRUE@am__append_65 = more
+@BUILD_MORE_TRUE@am__append_66 = text-utils/more.1
+@BUILD_MORE_TRUE@@HAVE_TINFO_TRUE@am__append_67 = $(TINFO_LIBS) \
 @BUILD_MORE_TRUE@@HAVE_TINFO_TRUE@	$(TINFO_CFLAGS)
-@BUILD_MORE_TRUE@@HAVE_TINFO_FALSE@am__append_67 = $(NCURSES_CFLAGS)
-@BUILD_MORE_TRUE@@HAVE_TINFO_FALSE@am__append_68 = $(NCURSES_LIBS)
-@BUILD_MORE_TRUE@@HAVE_TERMCAP_TRUE@am__append_69 = -ltermcap
-@BUILD_MORE_TRUE@am__append_70 = test_more
-@HAVE_UTIL_TRUE@am__append_71 = -lutil
-@HAVE_UTEMPTER_TRUE@am__append_72 = -lutempter
-@BUILD_AGETTY_TRUE@am__append_73 = agetty
-@BUILD_AGETTY_TRUE@am__append_74 = term-utils/agetty.8
-@BUILD_SETTERM_TRUE@am__append_75 = setterm
-@BUILD_SETTERM_TRUE@am__append_76 = term-utils/setterm.1
-@BUILD_SETTERM_TRUE@@HAVE_TINFO_TRUE@am__append_77 = $(TINFO_LIBS)
-@BUILD_SETTERM_TRUE@@HAVE_TINFO_TRUE@am__append_78 = $(TINFO_CFLAGS)
-@BUILD_SETTERM_TRUE@@HAVE_TINFO_FALSE@am__append_79 = $(NCURSES_LIBS)
-@BUILD_SETTERM_TRUE@@HAVE_TINFO_FALSE@am__append_80 = $(NCURSES_CFLAGS)
-@BUILD_RESET_TRUE@am__append_81 = term-utils/reset
-@BUILD_RESET_TRUE@am__append_82 = term-utils/reset.1
-@BUILD_MESG_TRUE@am__append_83 = mesg
-@BUILD_MESG_TRUE@am__append_84 = term-utils/mesg.1
-@BUILD_WALL_TRUE@am__append_85 = wall
-@BUILD_WALL_TRUE@am__append_86 = term-utils/wall.1
-@BUILD_WALL_TRUE@@MAKEINSTALL_DO_CHOWN_TRUE@@USE_TTY_GROUP_TRUE@am__append_87 = install-exec-hook-wall
-@BUILD_WRITE_TRUE@am__append_88 = write
-@BUILD_WRITE_TRUE@am__append_89 = term-utils/write.1
-@BUILD_WRITE_TRUE@@MAKEINSTALL_DO_CHOWN_TRUE@@USE_TTY_GROUP_TRUE@am__append_90 = install-exec-hook-write
-@BUILD_LAST_TRUE@am__append_91 = last
-@BUILD_LAST_TRUE@am__append_92 = \
+@BUILD_MORE_TRUE@@HAVE_TINFO_FALSE@am__append_68 = $(NCURSES_CFLAGS)
+@BUILD_MORE_TRUE@@HAVE_TINFO_FALSE@am__append_69 = $(NCURSES_LIBS)
+@BUILD_MORE_TRUE@@HAVE_TERMCAP_TRUE@am__append_70 = -ltermcap
+@BUILD_MORE_TRUE@am__append_71 = test_more
+@HAVE_UTIL_TRUE@am__append_72 = -lutil
+@HAVE_UTEMPTER_TRUE@am__append_73 = -lutempter
+@BUILD_AGETTY_TRUE@am__append_74 = agetty
+@BUILD_AGETTY_TRUE@am__append_75 = term-utils/agetty.8
+@BUILD_SETTERM_TRUE@am__append_76 = setterm
+@BUILD_SETTERM_TRUE@am__append_77 = term-utils/setterm.1
+@BUILD_SETTERM_TRUE@@HAVE_TINFO_TRUE@am__append_78 = $(TINFO_LIBS)
+@BUILD_SETTERM_TRUE@@HAVE_TINFO_TRUE@am__append_79 = $(TINFO_CFLAGS)
+@BUILD_SETTERM_TRUE@@HAVE_TINFO_FALSE@am__append_80 = $(NCURSES_LIBS)
+@BUILD_SETTERM_TRUE@@HAVE_TINFO_FALSE@am__append_81 = $(NCURSES_CFLAGS)
+@BUILD_RESET_TRUE@am__append_82 = term-utils/reset
+@BUILD_RESET_TRUE@am__append_83 = term-utils/reset.1
+@BUILD_MESG_TRUE@am__append_84 = mesg
+@BUILD_MESG_TRUE@am__append_85 = term-utils/mesg.1
+@BUILD_WALL_TRUE@am__append_86 = wall
+@BUILD_WALL_TRUE@am__append_87 = term-utils/wall.1
+@BUILD_WALL_TRUE@@MAKEINSTALL_DO_CHOWN_TRUE@@USE_TTY_GROUP_TRUE@am__append_88 = install-exec-hook-wall
+@BUILD_WRITE_TRUE@am__append_89 = write
+@BUILD_WRITE_TRUE@am__append_90 = term-utils/write.1
+@BUILD_WRITE_TRUE@@MAKEINSTALL_DO_CHOWN_TRUE@@USE_TTY_GROUP_TRUE@am__append_91 = install-exec-hook-write
+@BUILD_LAST_TRUE@am__append_92 = last
+@BUILD_LAST_TRUE@am__append_93 = \
 @BUILD_LAST_TRUE@	login-utils/last.1 \
 @BUILD_LAST_TRUE@	login-utils/lastb.1
 
-@BUILD_LAST_TRUE@am__append_93 = install-exec-hook-last
-@BUILD_DEPRECATED_LAST_TRUE@am__append_94 = last
-@BUILD_DEPRECATED_LAST_TRUE@am__append_95 = login-utils/last-deprecated.1
-@BUILD_SULOGIN_TRUE@am__append_96 = sulogin
-@BUILD_SULOGIN_TRUE@am__append_97 = login-utils/sulogin.8
-@BUILD_SULOGIN_TRUE@@HAVE_LIBCRYPT_TRUE@am__append_98 = -lcrypt
-@BUILD_SULOGIN_TRUE@@HAVE_SELINUX_TRUE@am__append_99 = -lselinux
-@BUILD_SULOGIN_TRUE@am__append_100 = test_consoles
-@BUILD_LOGIN_TRUE@am__append_101 = login
-@BUILD_LOGIN_TRUE@am__append_102 = login-utils/login.1
-@BUILD_LOGIN_TRUE@@HAVE_AUDIT_TRUE@am__append_103 = -laudit
-@BUILD_LOGIN_TRUE@@HAVE_SELINUX_TRUE@am__append_104 = -lselinux
-@BUILD_NOLOGIN_TRUE@am__append_105 = nologin
-@BUILD_NOLOGIN_TRUE@am__append_106 = login-utils/nologin.8
-@BUILD_UTMPDUMP_TRUE@am__append_107 = utmpdump
-@BUILD_UTMPDUMP_TRUE@am__append_108 = login-utils/utmpdump.1
-@BUILD_CHFN_CHSH_TRUE@am__append_109 = chfn chsh
-@BUILD_CHFN_CHSH_TRUE@am__append_110 = \
+@BUILD_LAST_TRUE@am__append_94 = install-exec-hook-last
+@BUILD_DEPRECATED_LAST_TRUE@am__append_95 = last
+@BUILD_DEPRECATED_LAST_TRUE@am__append_96 = login-utils/last-deprecated.1
+@BUILD_SULOGIN_TRUE@am__append_97 = sulogin
+@BUILD_SULOGIN_TRUE@am__append_98 = login-utils/sulogin.8
+@BUILD_SULOGIN_TRUE@@HAVE_LIBCRYPT_TRUE@am__append_99 = -lcrypt
+@BUILD_SULOGIN_TRUE@@HAVE_SELINUX_TRUE@am__append_100 = -lselinux
+@BUILD_SULOGIN_TRUE@am__append_101 = test_consoles
+@BUILD_LOGIN_TRUE@am__append_102 = login
+@BUILD_LOGIN_TRUE@am__append_103 = login-utils/login.1
+@BUILD_LOGIN_TRUE@@HAVE_AUDIT_TRUE@am__append_104 = -laudit
+@BUILD_LOGIN_TRUE@@HAVE_SELINUX_TRUE@am__append_105 = -lselinux
+@BUILD_NOLOGIN_TRUE@am__append_106 = nologin
+@BUILD_NOLOGIN_TRUE@am__append_107 = login-utils/nologin.8
+@BUILD_UTMPDUMP_TRUE@am__append_108 = utmpdump
+@BUILD_UTMPDUMP_TRUE@am__append_109 = login-utils/utmpdump.1
+@BUILD_CHFN_CHSH_TRUE@am__append_110 = chfn chsh
+@BUILD_CHFN_CHSH_TRUE@am__append_111 = \
 @BUILD_CHFN_CHSH_TRUE@	login-utils/chfn.1 \
 @BUILD_CHFN_CHSH_TRUE@	login-utils/chsh.1
 
-@BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@am__append_111 = -lpam -lpam_misc
-@BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@am__append_112 = \
+@BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@am__append_112 = -lpam -lpam_misc
+@BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@am__append_113 = \
 @BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@	login-utils/auth.c \
 @BUILD_CHFN_CHSH_TRUE@@CHFN_CHSH_PASSWORD_TRUE@	login-utils/auth.h
 
-@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_113 = $(LIBUSER_LIBS)
-@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_114 = $(LIBUSER_CFLAGS)
-@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_115 = \
+@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_114 = $(LIBUSER_LIBS)
+@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_115 = $(LIBUSER_CFLAGS)
+@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@am__append_116 = \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@	login-utils/libuser.c \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_TRUE@	login-utils/libuser.h
 
-@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@am__append_116 = \
+@BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@am__append_117 = \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@	login-utils/islocal.c \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@	login-utils/islocal.h \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@	login-utils/setpwnam.c \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_USER_FALSE@	login-utils/setpwnam.h
 
-@BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@am__append_117 = \
+@BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@am__append_118 = \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@	login-utils/selinux_utils.c \
 @BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@	login-utils/selinux_utils.h
 
-@BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@am__append_118 = -lselinux
-@BUILD_SU_TRUE@am__append_119 = su
-@BUILD_SU_TRUE@am__append_120 = login-utils/su.1
-@BUILD_RUNUSER_TRUE@am__append_121 = runuser
-@BUILD_RUNUSER_TRUE@am__append_122 = login-utils/runuser.1
-@BUILD_NEWGRP_TRUE@am__append_123 = newgrp
-@BUILD_NEWGRP_TRUE@am__append_124 = login-utils/newgrp.1
-@BUILD_NEWGRP_TRUE@@HAVE_LIBCRYPT_TRUE@am__append_125 = -lcrypt
-@BUILD_VIPW_TRUE@am__append_126 = vipw
-@BUILD_VIPW_TRUE@am__append_127 = \
+@BUILD_CHFN_CHSH_TRUE@@HAVE_SELINUX_TRUE@am__append_119 = -lselinux
+@BUILD_SU_TRUE@am__append_120 = su
+@BUILD_SU_TRUE@am__append_121 = login-utils/su.1
+@BUILD_RUNUSER_TRUE@am__append_122 = runuser
+@BUILD_RUNUSER_TRUE@am__append_123 = login-utils/runuser.1
+@BUILD_NEWGRP_TRUE@am__append_124 = newgrp
+@BUILD_NEWGRP_TRUE@am__append_125 = login-utils/newgrp.1
+@BUILD_NEWGRP_TRUE@@HAVE_LIBCRYPT_TRUE@am__append_126 = -lcrypt
+@BUILD_VIPW_TRUE@am__append_127 = vipw
+@BUILD_VIPW_TRUE@am__append_128 = \
 @BUILD_VIPW_TRUE@	login-utils/vigr.8 \
 @BUILD_VIPW_TRUE@	login-utils/vipw.8
 
-@BUILD_VIPW_TRUE@@HAVE_SELINUX_TRUE@am__append_128 = -lselinux
-@BUILD_VIPW_TRUE@am__append_129 = install-exec-hook-vipw
+@BUILD_VIPW_TRUE@@HAVE_SELINUX_TRUE@am__append_129 = -lselinux
+@BUILD_VIPW_TRUE@am__append_130 = install-exec-hook-vipw
 
 #
 # mount
 #
-@BUILD_DEPRECATED_MOUNT_TRUE@am__append_130 = mount
-@BUILD_DEPRECATED_MOUNT_TRUE@am__append_131 =  \
+@BUILD_DEPRECATED_MOUNT_TRUE@am__append_131 = mount
+@BUILD_DEPRECATED_MOUNT_TRUE@am__append_132 =  \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/mount.8 \
 @BUILD_DEPRECATED_MOUNT_TRUE@	mount-deprecated/umount.8
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_SELINUX_TRUE@am__append_132 = $(SELINUX_LIBS)
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_133 = mount.static
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_SELINUX_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_134 = $(SELINUX_LIBS_STATIC)
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_SELINUX_TRUE@am__append_133 = $(SELINUX_LIBS)
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_134 = mount.static
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_SELINUX_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_135 = $(SELINUX_LIBS_STATIC)
 
 #
 # umount
 #
-@BUILD_DEPRECATED_MOUNT_TRUE@am__append_135 = umount
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am__append_136 = umount.static
-@BUILD_DEPRECATED_MOUNT_TRUE@@MAKEINSTALL_DO_SETUID_TRUE@am__append_137 = install-exec-hook-mount
-@BUILD_TUNELP_TRUE@am__append_138 = tunelp
-@BUILD_TUNELP_TRUE@am__append_139 = sys-utils/tunelp.8
-@BUILD_CYTUNE_TRUE@am__append_140 = cytune
-@BUILD_CYTUNE_TRUE@am__append_141 = sys-utils/cytune.8
+@BUILD_DEPRECATED_MOUNT_TRUE@am__append_136 = umount
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am__append_137 = umount.static
+@BUILD_DEPRECATED_MOUNT_TRUE@@MAKEINSTALL_DO_SETUID_TRUE@am__append_138 = install-exec-hook-mount
+@BUILD_TUNELP_TRUE@am__append_139 = tunelp
+@BUILD_TUNELP_TRUE@am__append_140 = sys-utils/tunelp.8
+@BUILD_CYTUNE_TRUE@am__append_141 = cytune
+@BUILD_CYTUNE_TRUE@am__append_142 = sys-utils/cytune.8
+@BUILD_FSTRIM_TRUE@am__append_143 = fstrim
+@BUILD_FSTRIM_TRUE@am__append_144 = sys-utils/fstrim.8
 
 #
 # Linux-only utils with no another dependencies. All another dependencies have
 # to be resolved in configure.ac end exported to makefiles by BUILD_*.
 #
-@LINUX_TRUE@am__append_142 = dmesg
-@LINUX_TRUE@am__append_143 = sys-utils/dmesg.1 sys-utils/ctrlaltdel.8 \
-@LINUX_TRUE@	sys-utils/fsfreeze.8 sys-utils/fstrim.8 \
-@LINUX_TRUE@	sys-utils/blkdiscard.8 sys-utils/ldattach.8 \
-@LINUX_TRUE@	sys-utils/rtcwake.8 sys-utils/setarch.8
-@LINUX_TRUE@am__append_144 = ctrlaltdel fsfreeze fstrim blkdiscard
-@LINUX_TRUE@am__append_145 = ldattach rtcwake
-@LINUX_TRUE@am__append_146 = setarch
-@ARCH_S390_TRUE@@LINUX_TRUE@am__append_147 = s390 s390x
-@ARCH_I86_TRUE@@LINUX_TRUE@am__append_148 = i386
-@ARCH_86_64_TRUE@@LINUX_TRUE@am__append_149 = i386 x86_64
-@ARCH_PPC_TRUE@@LINUX_TRUE@am__append_150 = ppc ppc64 ppc32
-@ARCH_SPARC_TRUE@@LINUX_TRUE@am__append_151 = sparc sparc64 sparc32 sparc32bash
-@ARCH_MIPS_TRUE@@LINUX_TRUE@am__append_152 = mips mips64 mips32
-@ARCH_IA64_TRUE@@LINUX_TRUE@am__append_153 = i386 ia64
-@ARCH_HPPA_TRUE@@LINUX_TRUE@am__append_154 = parisc parisc64 parisc32
-@LINUX_TRUE@am__append_155 = $(SETARCH_MAN_LINKS)
-@LINUX_TRUE@am__append_156 = $(SETARCH_MAN_LINKS)
-@LINUX_TRUE@am__append_157 = install-exec-hook-setarch
-@LINUX_TRUE@am__append_158 = uninstall-hook-setarch
-@BUILD_EJECT_TRUE@am__append_159 = eject
-@BUILD_EJECT_TRUE@am__append_160 = sys-utils/eject.1
-@BUILD_LOSETUP_TRUE@am__append_161 = losetup
-@BUILD_LOSETUP_TRUE@am__append_162 = sys-utils/losetup.8
-@BUILD_LOSETUP_TRUE@@HAVE_STATIC_LOSETUP_TRUE@am__append_163 = losetup.static
-@BUILD_PRLIMIT_TRUE@am__append_164 = prlimit
-@BUILD_PRLIMIT_TRUE@am__append_165 = sys-utils/prlimit.1
+@LINUX_TRUE@am__append_145 = dmesg
+@LINUX_TRUE@am__append_146 = sys-utils/dmesg.1 sys-utils/ctrlaltdel.8 \
+@LINUX_TRUE@	sys-utils/fsfreeze.8 sys-utils/blkdiscard.8 \
+@LINUX_TRUE@	sys-utils/ldattach.8 sys-utils/rtcwake.8 \
+@LINUX_TRUE@	sys-utils/setarch.8
+@LINUX_TRUE@am__append_147 = ctrlaltdel fsfreeze blkdiscard
+@LINUX_TRUE@am__append_148 = ldattach rtcwake
+@LINUX_TRUE@am__append_149 = setarch
+@ARCH_S390_TRUE@@LINUX_TRUE@am__append_150 = s390 s390x
+@ARCH_I86_TRUE@@LINUX_TRUE@am__append_151 = i386
+@ARCH_86_64_TRUE@@LINUX_TRUE@am__append_152 = i386 x86_64
+@ARCH_PPC_TRUE@@LINUX_TRUE@am__append_153 = ppc ppc64 ppc32
+@ARCH_SPARC_TRUE@@LINUX_TRUE@am__append_154 = sparc sparc64 sparc32 sparc32bash
+@ARCH_MIPS_TRUE@@LINUX_TRUE@am__append_155 = mips mips64 mips32
+@ARCH_IA64_TRUE@@LINUX_TRUE@am__append_156 = i386 ia64
+@ARCH_HPPA_TRUE@@LINUX_TRUE@am__append_157 = parisc parisc64 parisc32
+@LINUX_TRUE@am__append_158 = $(SETARCH_MAN_LINKS)
+@LINUX_TRUE@am__append_159 = $(SETARCH_MAN_LINKS)
+@LINUX_TRUE@am__append_160 = install-exec-hook-setarch
+@LINUX_TRUE@am__append_161 = uninstall-hook-setarch
+@BUILD_EJECT_TRUE@am__append_162 = eject
+@BUILD_EJECT_TRUE@am__append_163 = sys-utils/eject.1
+@BUILD_LOSETUP_TRUE@am__append_164 = losetup
+@BUILD_LOSETUP_TRUE@am__append_165 = sys-utils/losetup.8
+@BUILD_LOSETUP_TRUE@@HAVE_STATIC_LOSETUP_TRUE@am__append_166 = losetup.static
+@BUILD_PRLIMIT_TRUE@am__append_167 = prlimit
+@BUILD_PRLIMIT_TRUE@am__append_168 = sys-utils/prlimit.1
 
 #
 # The original mount is in mount/ directory
 # -- temporary we share some man pages
 #
-@BUILD_MOUNT_TRUE@am__append_166 = mount umount
-@BUILD_MOUNT_TRUE@am__append_167 = \
+@BUILD_MOUNT_TRUE@am__append_169 = mount umount
+@BUILD_MOUNT_TRUE@am__append_170 = \
 @BUILD_MOUNT_TRUE@	sys-utils/mount.8 \
 @BUILD_MOUNT_TRUE@	sys-utils/fstab.5 \
 @BUILD_MOUNT_TRUE@	sys-utils/umount.8
 
-@BUILD_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_168 = mount.static
-@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am__append_169 = umount.static
-@BUILD_MOUNT_TRUE@@MAKEINSTALL_DO_SETUID_TRUE@am__append_170 = install-exec-hook-mount
-@BUILD_SWAPON_TRUE@am__append_171 = swapon swapoff
-@BUILD_SWAPON_TRUE@am__append_172 = \
+@BUILD_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@am__append_171 = mount.static
+@BUILD_MOUNT_TRUE@@HAVE_STATIC_UMOUNT_TRUE@am__append_172 = umount.static
+@BUILD_MOUNT_TRUE@@MAKEINSTALL_DO_SETUID_TRUE@am__append_173 = install-exec-hook-mount
+@BUILD_SWAPON_TRUE@am__append_174 = swapon swapoff
+@BUILD_SWAPON_TRUE@am__append_175 = \
 @BUILD_SWAPON_TRUE@	sys-utils/swapoff.8 \
 @BUILD_SWAPON_TRUE@	sys-utils/swapon.8
 
-@BUILD_LSCPU_TRUE@am__append_173 = lscpu
-@BUILD_LSCPU_TRUE@am__append_174 = sys-utils/lscpu.1
-@BUILD_CHCPU_TRUE@am__append_175 = chcpu
-@BUILD_CHCPU_TRUE@am__append_176 = sys-utils/chcpu.8
-@BUILD_WDCTL_TRUE@am__append_177 = wdctl
-@BUILD_WDCTL_TRUE@am__append_178 = sys-utils/wdctl.8
-@BUILD_MOUNTPOINT_TRUE@am__append_179 = mountpoint
-@BUILD_MOUNTPOINT_TRUE@am__append_180 = sys-utils/mountpoint.1
-@BUILD_FALLOCATE_TRUE@am__append_181 = fallocate
-@BUILD_FALLOCATE_TRUE@am__append_182 = sys-utils/fallocate.1
-@BUILD_PIVOT_ROOT_TRUE@am__append_183 = pivot_root
-@BUILD_PIVOT_ROOT_TRUE@am__append_184 = sys-utils/pivot_root.8
-@BUILD_SWITCH_ROOT_TRUE@am__append_185 = switch_root
-@BUILD_SWITCH_ROOT_TRUE@am__append_186 = sys-utils/switch_root.8
-@BUILD_UNSHARE_TRUE@am__append_187 = unshare
-@BUILD_UNSHARE_TRUE@am__append_188 = sys-utils/unshare.1
-@BUILD_NSENTER_TRUE@am__append_189 = nsenter
-@BUILD_NSENTER_TRUE@am__append_190 = sys-utils/nsenter.1
-@BUILD_HWCLOCK_TRUE@am__append_191 = hwclock
-@BUILD_HWCLOCK_TRUE@am__append_192 = sys-utils/hwclock.8
-@BUILD_HWCLOCK_TRUE@@LINUX_TRUE@am__append_193 = sys-utils/hwclock-rtc.c
-@BUILD_HWCLOCK_TRUE@@HAVE_AUDIT_TRUE@am__append_194 = -laudit
-@BUILD_SETPRIV_TRUE@am__append_195 = setpriv
-@BUILD_SETPRIV_TRUE@am__append_196 = sys-utils/setpriv.1
-@HAVE_LANGINFO_FALSE@am__append_197 = lib/langinfo.c
-@HAVE_TERMCAP_TRUE@am__append_198 = -ltermcap
-@BUILD_LSLOCKS_TRUE@am__append_199 = lslocks
-@BUILD_LSLOCKS_TRUE@am__append_200 = misc-utils/lslocks.8
-@BUILD_LSBLK_TRUE@am__append_201 = lsblk
-@BUILD_LSBLK_TRUE@am__append_202 = misc-utils/lsblk.8
-@BUILD_LSBLK_TRUE@@HAVE_UDEV_TRUE@am__append_203 = -ludev
-@BUILD_LIBUUID_TRUE@am__append_204 = uuidgen
-@BUILD_LIBUUID_TRUE@am__append_205 = misc-utils/uuidgen.1
-@BUILD_UUIDD_TRUE@am__append_206 = uuidd
-@BUILD_UUIDD_TRUE@am__append_207 = misc-utils/uuidd.8
-@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__append_208 = misc-utils/sd-daemon.c misc-utils/sd-daemon.h
-@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__append_209 = -lrt
-@BUILD_UUIDD_TRUE@@HAVE_SYSTEMD_TRUE@am__append_210 = \
+@BUILD_LSCPU_TRUE@am__append_176 = lscpu
+@BUILD_LSCPU_TRUE@am__append_177 = sys-utils/lscpu.1
+@BUILD_CHCPU_TRUE@am__append_178 = chcpu
+@BUILD_CHCPU_TRUE@am__append_179 = sys-utils/chcpu.8
+@BUILD_WDCTL_TRUE@am__append_180 = wdctl
+@BUILD_WDCTL_TRUE@am__append_181 = sys-utils/wdctl.8
+@BUILD_MOUNTPOINT_TRUE@am__append_182 = mountpoint
+@BUILD_MOUNTPOINT_TRUE@am__append_183 = sys-utils/mountpoint.1
+@BUILD_FALLOCATE_TRUE@am__append_184 = fallocate
+@BUILD_FALLOCATE_TRUE@am__append_185 = sys-utils/fallocate.1
+@BUILD_PIVOT_ROOT_TRUE@am__append_186 = pivot_root
+@BUILD_PIVOT_ROOT_TRUE@am__append_187 = sys-utils/pivot_root.8
+@BUILD_SWITCH_ROOT_TRUE@am__append_188 = switch_root
+@BUILD_SWITCH_ROOT_TRUE@am__append_189 = sys-utils/switch_root.8
+@BUILD_UNSHARE_TRUE@am__append_190 = unshare
+@BUILD_UNSHARE_TRUE@am__append_191 = sys-utils/unshare.1
+@BUILD_NSENTER_TRUE@am__append_192 = nsenter
+@BUILD_NSENTER_TRUE@am__append_193 = sys-utils/nsenter.1
+@BUILD_HWCLOCK_TRUE@am__append_194 = hwclock
+@BUILD_HWCLOCK_TRUE@am__append_195 = sys-utils/hwclock.8
+@BUILD_HWCLOCK_TRUE@@LINUX_TRUE@am__append_196 = sys-utils/hwclock-rtc.c
+@BUILD_HWCLOCK_TRUE@@HAVE_AUDIT_TRUE@am__append_197 = -laudit
+@BUILD_SETPRIV_TRUE@am__append_198 = setpriv
+@BUILD_SETPRIV_TRUE@am__append_199 = sys-utils/setpriv.1
+@HAVE_LANGINFO_FALSE@am__append_200 = lib/langinfo.c
+@HAVE_TERMCAP_TRUE@am__append_201 = -ltermcap
+@BUILD_LSLOCKS_TRUE@am__append_202 = lslocks
+@BUILD_LSLOCKS_TRUE@am__append_203 = misc-utils/lslocks.8
+@BUILD_LSBLK_TRUE@am__append_204 = lsblk
+@BUILD_LSBLK_TRUE@am__append_205 = misc-utils/lsblk.8
+@BUILD_LSBLK_TRUE@@HAVE_UDEV_TRUE@am__append_206 = -ludev
+@BUILD_LIBUUID_TRUE@am__append_207 = uuidgen
+@BUILD_LIBUUID_TRUE@am__append_208 = misc-utils/uuidgen.1
+@BUILD_UUIDD_TRUE@am__append_209 = uuidd
+@BUILD_UUIDD_TRUE@am__append_210 = misc-utils/uuidd.8
+@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__append_211 = misc-utils/sd-daemon.c misc-utils/sd-daemon.h
+@BUILD_UUIDD_TRUE@@USE_SOCKET_ACTIVATION_TRUE@am__append_212 = -lrt
+@BUILD_UUIDD_TRUE@@HAVE_SYSTEMD_TRUE@am__append_213 = \
 @BUILD_UUIDD_TRUE@@HAVE_SYSTEMD_TRUE@	misc-utils/uuidd.service \
 @BUILD_UUIDD_TRUE@@HAVE_SYSTEMD_TRUE@	misc-utils/uuidd.socket
 
-@BUILD_LIBBLKID_TRUE@am__append_211 = blkid findfs wipefs
-@BUILD_LIBBLKID_TRUE@am__append_212 = misc-utils/blkid.8 \
+@BUILD_LIBBLKID_TRUE@am__append_214 = blkid findfs wipefs
+@BUILD_LIBBLKID_TRUE@am__append_215 = misc-utils/blkid.8 \
 @BUILD_LIBBLKID_TRUE@	misc-utils/findfs.8 misc-utils/wipefs.8
-@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__append_213 = blkid.static
-@BUILD_LIBMOUNT_TRUE@am__append_214 = findmnt
-@BUILD_LIBMOUNT_TRUE@am__append_215 = misc-utils/findmnt.8
-@BUILD_LIBMOUNT_TRUE@@HAVE_UDEV_TRUE@am__append_216 = -ludev
-@BUILD_KILL_TRUE@am__append_217 = kill
-@BUILD_KILL_TRUE@am__append_218 = misc-utils/kill.1
-@BUILD_RENAME_TRUE@am__append_219 = rename
-@BUILD_RENAME_TRUE@am__append_220 = misc-utils/rename.1
-@BUILD_BFS_TRUE@am__append_221 = mkfs.bfs
-@BUILD_BFS_TRUE@am__append_222 = disk-utils/mkfs.bfs.8
-@BUILD_LIBUUID_TRUE@am__append_223 = -I$(ul_libuuid_incdir)
-@BUILD_LIBUUID_TRUE@am__append_224 = libuuid.la
-@BUILD_LIBBLKID_TRUE@am__append_225 = -I$(ul_libblkid_incdir)
-@BUILD_LIBBLKID_TRUE@am__append_226 = libblkid.la
-@HAVE_SELINUX_TRUE@am__append_227 = -lselinux
-@BUILD_SWAPLABEL_TRUE@am__append_228 = swaplabel
-@BUILD_SWAPLABEL_TRUE@am__append_229 = disk-utils/swaplabel.8
-@BUILD_LIBUUID_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_230 = libuuid.la
-@BUILD_LIBUUID_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_231 = -I$(ul_libuuid_incdir)
-@BUILD_FSCK_TRUE@am__append_232 = fsck
-@BUILD_FSCK_TRUE@am__append_233 = disk-utils/fsck.8
-@BUILD_RAW_TRUE@am__append_234 = raw
-@BUILD_RAW_TRUE@am__append_235 = disk-utils/raw.8
-@BUILD_CRAMFS_TRUE@am__append_236 = fsck.cramfs mkfs.cramfs
-@BUILD_CRAMFS_TRUE@am__append_237 = disk-utils/fsck.cramfs.8 \
+@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__append_216 = blkid.static
+@BUILD_LIBMOUNT_TRUE@am__append_217 = findmnt
+@BUILD_LIBMOUNT_TRUE@am__append_218 = misc-utils/findmnt.8
+@BUILD_LIBMOUNT_TRUE@@HAVE_UDEV_TRUE@am__append_219 = -ludev
+@BUILD_KILL_TRUE@am__append_220 = kill
+@BUILD_KILL_TRUE@am__append_221 = misc-utils/kill.1
+@BUILD_RENAME_TRUE@am__append_222 = rename
+@BUILD_RENAME_TRUE@am__append_223 = misc-utils/rename.1
+@BUILD_BFS_TRUE@am__append_224 = mkfs.bfs
+@BUILD_BFS_TRUE@am__append_225 = disk-utils/mkfs.bfs.8
+@BUILD_LIBUUID_TRUE@am__append_226 = -I$(ul_libuuid_incdir)
+@BUILD_LIBUUID_TRUE@am__append_227 = libuuid.la
+@BUILD_LIBBLKID_TRUE@am__append_228 = -I$(ul_libblkid_incdir)
+@BUILD_LIBBLKID_TRUE@am__append_229 = libblkid.la
+@HAVE_SELINUX_TRUE@am__append_230 = -lselinux
+@BUILD_SWAPLABEL_TRUE@am__append_231 = swaplabel
+@BUILD_SWAPLABEL_TRUE@am__append_232 = disk-utils/swaplabel.8
+@BUILD_LIBUUID_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_233 = libuuid.la
+@BUILD_LIBUUID_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_234 = -I$(ul_libuuid_incdir)
+@BUILD_FSCK_TRUE@am__append_235 = fsck
+@BUILD_FSCK_TRUE@am__append_236 = disk-utils/fsck.8
+@BUILD_RAW_TRUE@am__append_237 = raw
+@BUILD_RAW_TRUE@am__append_238 = disk-utils/raw.8
+@BUILD_CRAMFS_TRUE@am__append_239 = fsck.cramfs mkfs.cramfs
+@BUILD_CRAMFS_TRUE@am__append_240 = disk-utils/fsck.cramfs.8 \
 @BUILD_CRAMFS_TRUE@	disk-utils/mkfs.cramfs.8
-@BUILD_CRAMFS_TRUE@am__append_238 = test_fsck.cramfs
-@BUILD_FDFORMAT_TRUE@am__append_239 = fdformat
-@BUILD_FDFORMAT_TRUE@am__append_240 = disk-utils/fdformat.8
-@LINUX_TRUE@am__append_241 = blockdev
-@LINUX_TRUE@am__append_242 = disk-utils/blockdev.8
-@BUILD_PARTX_TRUE@am__append_243 = partx addpart delpart resizepart
-@BUILD_PARTX_TRUE@am__append_244 = \
+@BUILD_CRAMFS_TRUE@am__append_241 = test_fsck.cramfs
+@BUILD_FDFORMAT_TRUE@am__append_242 = fdformat
+@BUILD_FDFORMAT_TRUE@am__append_243 = disk-utils/fdformat.8
+@LINUX_TRUE@am__append_244 = blockdev
+@LINUX_TRUE@am__append_245 = disk-utils/blockdev.8
+@BUILD_PARTX_TRUE@am__append_246 = partx addpart delpart resizepart
+@BUILD_PARTX_TRUE@am__append_247 = \
 @BUILD_PARTX_TRUE@	disk-utils/addpart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/delpart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/resizepart.8 \
 @BUILD_PARTX_TRUE@	disk-utils/partx.8
 
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__append_245 = fdisk
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__append_246 = fdisks/fdisk.8
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_247 = -I$(ul_libblkid_incdir)
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_248 = libblkid.la
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_249 = -I$(ul_libuuid_incdir)
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_250 = libuuid.la
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@am__append_251 = fdisk.static
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_252 = sfdisk
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_253 = fdisks/sfdisk.8
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__append_254 = sfdisk.static
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_255 = cfdisk
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_256 = fdisks/cfdisk.8
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_257 = -I$(ul_libblkid_incdir)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_258 = libblkid.la
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_TRUE@am__append_259 = -lslang
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_FALSE@am__append_260 = $(NCURSES_CFLAGS)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_FALSE@am__append_261 = $(NCURSES_LIBS)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__append_248 = fdisk
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__append_249 = fdisks/fdisk.8
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_250 = -I$(ul_libblkid_incdir)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_251 = libblkid.la
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_252 = -I$(ul_libuuid_incdir)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@BUILD_LIBUUID_TRUE@am__append_253 = libuuid.la
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@am__append_254 = fdisk.static
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_255 = sfdisk
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__append_256 = fdisks/sfdisk.8
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__append_257 = sfdisk.static
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_258 = cfdisk
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__append_259 = fdisks/cfdisk.8
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_260 = -I$(ul_libblkid_incdir)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@BUILD_LIBBLKID_TRUE@am__append_261 = libblkid.la
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_TRUE@am__append_262 = -lslang
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_FALSE@am__append_263 = $(NCURSES_CFLAGS)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_FALSE@am__append_264 = $(NCURSES_LIBS)
 
 # disk-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_BFS_TRUE@am__append_262 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_BFS_TRUE@am__append_265 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_BFS_TRUE@	bash-completion/mkfs.bfs
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_CRAMFS_TRUE@am__append_263 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_CRAMFS_TRUE@am__append_266 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CRAMFS_TRUE@	bash-completion/fsck.cramfs \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CRAMFS_TRUE@	bash-completion/mkfs.cramfs
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_FSCK_TRUE@am__append_264 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_FSCK_TRUE@am__append_267 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_FSCK_TRUE@	bash-completion/fsck
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@am__append_265 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@am__append_268 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@	bash-completion/addpart \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@	bash-completion/delpart \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@	bash-completion/resizepart \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PARTX_TRUE@	bash-completion/partx
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_RAW_TRUE@am__append_266 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_RAW_TRUE@am__append_269 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_RAW_TRUE@	bash-completion/raw
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_267 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPLABEL_TRUE@am__append_270 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPLABEL_TRUE@	bash-completion/swaplabel
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_FDFORMAT_TRUE@am__append_268 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_FDFORMAT_TRUE@am__append_271 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_FDFORMAT_TRUE@	bash-completion/fdformat
 
-@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_269 = \
+@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_272 = \
 @BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@	bash-completion/blockdev
 
 # ...disk-utils
 
 # fdisks...
-@ARCH_M68K_FALSE@@BUILD_BASH_COMPLETION_TRUE@am__append_270 = \
+@ARCH_M68K_FALSE@@BUILD_BASH_COMPLETION_TRUE@am__append_273 = \
 @ARCH_M68K_FALSE@@BUILD_BASH_COMPLETION_TRUE@	bash-completion/fdisk
 
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@am__append_271 = \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@am__append_274 = \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@	bash-completion/sfdisk
 
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@@BUILD_CFDISK_TRUE@am__append_272 = \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@@BUILD_CFDISK_TRUE@am__append_275 = \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_BASH_COMPLETION_TRUE@@BUILD_CFDISK_TRUE@	bash-completion/cfdisk
 
 # ...fdisks
 
 # login-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_CHFN_CHSH_TRUE@am__append_273 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_CHFN_CHSH_TRUE@am__append_276 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CHFN_CHSH_TRUE@	bash-completion/chfn \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CHFN_CHSH_TRUE@	bash-completion/chsh
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_DEPRECATED_LAST_TRUE@am__append_274 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_DEPRECATED_LAST_TRUE@am__append_277 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_DEPRECATED_LAST_TRUE@	bash-completion/last
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_NEWGRP_TRUE@am__append_275 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_NEWGRP_TRUE@am__append_278 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_NEWGRP_TRUE@	bash-completion/newgrp
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SU_TRUE@am__append_276 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SU_TRUE@am__append_279 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SU_TRUE@	bash-completion/su
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_RUNUSER_TRUE@@BUILD_SU_TRUE@am__append_277 = install-data-hook-bashcomp-runuser
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_UTMPDUMP_TRUE@am__append_278 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_RUNUSER_TRUE@@BUILD_SU_TRUE@am__append_280 = install-data-hook-bashcomp-runuser
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_UTMPDUMP_TRUE@am__append_281 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_UTMPDUMP_TRUE@	bash-completion/utmpdump
 
 # ...login-utils
 
 # misc-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_LIBUUID_TRUE@am__append_279 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_LIBUUID_TRUE@am__append_282 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_LIBUUID_TRUE@	bash-completion/uuidgen
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_UUIDD_TRUE@am__append_280 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_UUIDD_TRUE@am__append_283 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_UUIDD_TRUE@	bash-completion/uuidd
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSBLK_TRUE@am__append_281 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSBLK_TRUE@am__append_284 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_LSBLK_TRUE@	bash-completion/lsblk
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSLOCKS_TRUE@am__append_282 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSLOCKS_TRUE@am__append_285 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_LSLOCKS_TRUE@	bash-completion/lslocks
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_RENAME_TRUE@am__append_283 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_RENAME_TRUE@am__append_286 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_RENAME_TRUE@	bash-completion/rename
 
 # ...misc-utils
 
 # schedutils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_284 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_287 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@	bash-completion/chrt
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_285 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__append_288 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@	bash-completion/ionice
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_286 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__append_289 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@	bash-completion/taskset
 
 # ...schedutils
 
 # sys-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_CHCPU_TRUE@am__append_287 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_CHCPU_TRUE@am__append_290 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CHCPU_TRUE@	bash-completion/chcpu
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_EJECT_TRUE@am__append_288 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_EJECT_TRUE@am__append_291 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_EJECT_TRUE@	bash-completion/eject
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_FALLOCATE_TRUE@am__append_289 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_FALLOCATE_TRUE@am__append_292 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_FALLOCATE_TRUE@	bash-completion/fallocate
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_HWCLOCK_TRUE@am__append_290 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_HWCLOCK_TRUE@am__append_293 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_HWCLOCK_TRUE@	bash-completion/hwclock
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_TUNELP_TRUE@am__append_291 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_TUNELP_TRUE@am__append_294 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_TUNELP_TRUE@	bash-completion/tunelp
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSCPU_TRUE@am__append_292 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_LSCPU_TRUE@am__append_295 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_LSCPU_TRUE@	bash-completion/lscpu
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_LOSETUP_TRUE@am__append_293 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_LOSETUP_TRUE@am__append_296 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_LOSETUP_TRUE@	bash-completion/losetup
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_MOUNTPOINT_TRUE@am__append_294 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_MOUNTPOINT_TRUE@am__append_297 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_MOUNTPOINT_TRUE@	bash-completion/mountpoint
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_NSENTER_TRUE@am__append_295 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_NSENTER_TRUE@am__append_298 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_NSENTER_TRUE@	bash-completion/nsenter
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_PIVOT_ROOT_TRUE@am__append_296 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_PIVOT_ROOT_TRUE@am__append_299 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PIVOT_ROOT_TRUE@	bash-completion/pivot_root
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SETPRIV_TRUE@am__append_297 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SETPRIV_TRUE@am__append_300 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SETPRIV_TRUE@	bash-completion/setpriv
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPON_TRUE@am__append_298 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPON_TRUE@am__append_301 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_SWAPON_TRUE@	bash-completion/swapon
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_UNSHARE_TRUE@am__append_299 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_UNSHARE_TRUE@am__append_302 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_UNSHARE_TRUE@	bash-completion/unshare
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_WDCTL_TRUE@am__append_300 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_WDCTL_TRUE@am__append_303 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_WDCTL_TRUE@	bash-completion/wdctl
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_CYTUNE_TRUE@am__append_301 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_CYTUNE_TRUE@am__append_304 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_CYTUNE_TRUE@	bash-completion/cytune
 
-@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_302 = \
+@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_305 = \
 @BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@	bash-completion/blkdiscard \
 @BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@	bash-completion/ctrlaltdel \
 @BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@	bash-completion/dmesg \
@@ -725,28 +728,28 @@ DIST_COMMON = $(srcdir)/include/Makemodule.am \
 # ...sys-utils
 
 # term-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_MESG_TRUE@am__append_303 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_MESG_TRUE@am__append_306 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_MESG_TRUE@	bash-completion/mesg
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_WALL_TRUE@am__append_304 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_WALL_TRUE@am__append_307 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_WALL_TRUE@	bash-completion/wall
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_WRITE_TRUE@am__append_305 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_WRITE_TRUE@am__append_308 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_WRITE_TRUE@	bash-completion/write
 
-@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_306 = \
+@BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@am__append_309 = \
 @BUILD_BASH_COMPLETION_TRUE@@LINUX_TRUE@	bash-completion/setterm
 
 # ...term-utils
 
 # text-utils...
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_MORE_TRUE@am__append_307 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_MORE_TRUE@am__append_310 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_MORE_TRUE@	bash-completion/more
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_PG_TRUE@am__append_308 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_PG_TRUE@am__append_311 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_PG_TRUE@	bash-completion/pg
 
-@BUILD_BASH_COMPLETION_TRUE@@BUILD_UL_TRUE@am__append_309 = \
+@BUILD_BASH_COMPLETION_TRUE@@BUILD_UL_TRUE@am__append_312 = \
 @BUILD_BASH_COMPLETION_TRUE@@BUILD_UL_TRUE@	bash-completion/ul
 
 subdir = .
@@ -817,6 +820,7 @@ am__libblkid_la_SOURCES_DIST = include/list.h libblkid/src/blkidP.h \
 	libblkid/src/resolve.c libblkid/src/save.c \
 	libblkid/src/superblocks/superblocks.h libblkid/src/tag.c \
 	libblkid/src/verify.c libblkid/src/version.c \
+	$(top_builddir)/libblkid/src/blkid.h \
 	libblkid/src/partitions/aix.c libblkid/src/partitions/aix.h \
 	libblkid/src/partitions/bsd.c libblkid/src/partitions/dos.c \
 	libblkid/src/partitions/gpt.c libblkid/src/partitions/mac.c \
@@ -876,7 +880,8 @@ am__libblkid_la_SOURCES_DIST = include/list.h libblkid/src/blkidP.h \
 	libblkid/src/topology/lvm.c libblkid/src/topology/md.c \
 	libblkid/src/topology/sysfs.c
 am__dirstamp = $(am__leading_dot)dirstamp
-@BUILD_LIBBLKID_TRUE@@LINUX_TRUE@am__objects_1 = libblkid/src/topology/libblkid_la-dm.lo \
+am__objects_1 =
+@BUILD_LIBBLKID_TRUE@@LINUX_TRUE@am__objects_2 = libblkid/src/topology/libblkid_la-dm.lo \
 @BUILD_LIBBLKID_TRUE@@LINUX_TRUE@	libblkid/src/topology/libblkid_la-evms.lo \
 @BUILD_LIBBLKID_TRUE@@LINUX_TRUE@	libblkid/src/topology/libblkid_la-ioctl.lo \
 @BUILD_LIBBLKID_TRUE@@LINUX_TRUE@	libblkid/src/topology/libblkid_la-lvm.lo \
@@ -900,6 +905,7 @@ am__dirstamp = $(am__leading_dot)dirstamp
 @BUILD_LIBBLKID_TRUE@	libblkid/src/libblkid_la-tag.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/libblkid_la-verify.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/libblkid_la-version.lo \
+@BUILD_LIBBLKID_TRUE@	$(am__objects_1) \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/libblkid_la-aix.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/libblkid_la-bsd.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/libblkid_la-dos.lo \
@@ -961,7 +967,7 @@ am__dirstamp = $(am__leading_dot)dirstamp
 @BUILD_LIBBLKID_TRUE@	libblkid/src/superblocks/libblkid_la-xfs.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/superblocks/libblkid_la-zfs.lo \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/topology/libblkid_la-topology.lo \
-@BUILD_LIBBLKID_TRUE@	$(am__objects_1)
+@BUILD_LIBBLKID_TRUE@	$(am__objects_2)
 nodist_libblkid_la_OBJECTS =
 libblkid_la_OBJECTS = $(am_libblkid_la_OBJECTS) \
 	$(nodist_libblkid_la_OBJECTS)
@@ -982,10 +988,10 @@ am__libcommon_la_SOURCES_DIST = lib/at.c lib/blkdev.c \
 	lib/strutils.c lib/sysfs.c lib/tt.c lib/wholedisk.c \
 	lib/timeutils.c lib/ttyutils.c lib/xgetpass.c lib/exec_shell.c \
 	lib/linux_version.c lib/loopdev.c lib/langinfo.c lib/cpuset.c
-@LINUX_TRUE@am__objects_2 = lib/libcommon_la-linux_version.lo \
+@LINUX_TRUE@am__objects_3 = lib/libcommon_la-linux_version.lo \
 @LINUX_TRUE@	lib/libcommon_la-loopdev.lo
-@HAVE_LANGINFO_FALSE@am__objects_3 = lib/libcommon_la-langinfo.lo
-@HAVE_CPU_SET_T_TRUE@am__objects_4 = lib/libcommon_la-cpuset.lo
+@HAVE_LANGINFO_FALSE@am__objects_4 = lib/libcommon_la-langinfo.lo
+@HAVE_CPU_SET_T_TRUE@am__objects_5 = lib/libcommon_la-cpuset.lo
 am_libcommon_la_OBJECTS = lib/libcommon_la-at.lo \
 	lib/libcommon_la-blkdev.lo lib/libcommon_la-canonicalize.lo \
 	lib/libcommon_la-colors.lo lib/libcommon_la-crc32.lo \
@@ -999,8 +1005,8 @@ am_libcommon_la_OBJECTS = lib/libcommon_la-at.lo \
 	lib/libcommon_la-sysfs.lo lib/libcommon_la-tt.lo \
 	lib/libcommon_la-wholedisk.lo lib/libcommon_la-timeutils.lo \
 	lib/libcommon_la-ttyutils.lo lib/libcommon_la-xgetpass.lo \
-	lib/libcommon_la-exec_shell.lo $(am__objects_2) \
-	$(am__objects_3) $(am__objects_4)
+	lib/libcommon_la-exec_shell.lo $(am__objects_3) \
+	$(am__objects_4) $(am__objects_5)
 libcommon_la_OBJECTS = $(am_libcommon_la_OBJECTS)
 libcommon_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(libcommon_la_CFLAGS) \
@@ -1042,7 +1048,8 @@ am__libmount_la_SOURCES_DIST = include/list.h libmount/src/cache.c \
 	libmount/src/optmap.c libmount/src/optstr.c libmount/src/tab.c \
 	libmount/src/tab_diff.c libmount/src/tab_parse.c \
 	libmount/src/tab_update.c libmount/src/test.c \
-	libmount/src/utils.c libmount/src/version.c
+	libmount/src/utils.c libmount/src/version.c \
+	$(top_builddir)/libmount/src/libmount.h
 @BUILD_LIBMOUNT_TRUE@am_libmount_la_OBJECTS =  \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-cache.lo \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-context.lo \
@@ -1061,7 +1068,8 @@ am__libmount_la_SOURCES_DIST = include/list.h libmount/src/cache.c \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-tab_update.lo \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-test.lo \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-utils.lo \
-@BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-version.lo
+@BUILD_LIBMOUNT_TRUE@	libmount/src/libmount_la-version.lo \
+@BUILD_LIBMOUNT_TRUE@	$(am__objects_1)
 nodist_libmount_la_OBJECTS =
 libmount_la_OBJECTS = $(am_libmount_la_OBJECTS) \
 	$(nodist_libmount_la_OBJECTS)
@@ -1075,7 +1083,6 @@ am__libuuid_la_SOURCES_DIST = libuuid/src/clear.c \
 	libuuid/src/parse.c libuuid/src/unpack.c libuuid/src/unparse.c \
 	libuuid/src/uuidd.h libuuid/src/uuidP.h \
 	libuuid/src/uuid_time.c libuuid/src/uuid.h lib/randutils.c
-am__objects_5 =
 @BUILD_LIBUUID_TRUE@am_libuuid_la_OBJECTS =  \
 @BUILD_LIBUUID_TRUE@	libuuid/src/libuuid_la-clear.lo \
 @BUILD_LIBUUID_TRUE@	libuuid/src/libuuid_la-compare.lo \
@@ -1087,7 +1094,7 @@ am__objects_5 =
 @BUILD_LIBUUID_TRUE@	libuuid/src/libuuid_la-unpack.lo \
 @BUILD_LIBUUID_TRUE@	libuuid/src/libuuid_la-unparse.lo \
 @BUILD_LIBUUID_TRUE@	libuuid/src/libuuid_la-uuid_time.lo \
-@BUILD_LIBUUID_TRUE@	$(am__objects_5) \
+@BUILD_LIBUUID_TRUE@	$(am__objects_1) \
 @BUILD_LIBUUID_TRUE@	lib/libuuid_la-randutils.lo
 libuuid_la_OBJECTS = $(am_libuuid_la_OBJECTS)
 libuuid_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -1165,64 +1172,65 @@ pylibmount_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 @BUILD_SULOGIN_TRUE@am__EXEEXT_29 = sulogin$(EXEEXT)
 @BUILD_NOLOGIN_TRUE@am__EXEEXT_30 = nologin$(EXEEXT)
 @BUILD_RUNUSER_TRUE@am__EXEEXT_31 = runuser$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_32 = ctrlaltdel$(EXEEXT) fsfreeze$(EXEEXT) \
-@LINUX_TRUE@	fstrim$(EXEEXT) blkdiscard$(EXEEXT)
-@BUILD_LOSETUP_TRUE@am__EXEEXT_33 = losetup$(EXEEXT)
-@BUILD_SWAPON_TRUE@am__EXEEXT_34 = swapon$(EXEEXT) swapoff$(EXEEXT)
-@BUILD_CHCPU_TRUE@am__EXEEXT_35 = chcpu$(EXEEXT)
-@BUILD_PIVOT_ROOT_TRUE@am__EXEEXT_36 = pivot_root$(EXEEXT)
-@BUILD_SWITCH_ROOT_TRUE@am__EXEEXT_37 = switch_root$(EXEEXT)
-@BUILD_HWCLOCK_TRUE@am__EXEEXT_38 = hwclock$(EXEEXT)
-@BUILD_LIBBLKID_TRUE@am__EXEEXT_39 = blkid$(EXEEXT) findfs$(EXEEXT) \
+@BUILD_FSTRIM_TRUE@am__EXEEXT_32 = fstrim$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_33 = ctrlaltdel$(EXEEXT) fsfreeze$(EXEEXT) \
+@LINUX_TRUE@	blkdiscard$(EXEEXT)
+@BUILD_LOSETUP_TRUE@am__EXEEXT_34 = losetup$(EXEEXT)
+@BUILD_SWAPON_TRUE@am__EXEEXT_35 = swapon$(EXEEXT) swapoff$(EXEEXT)
+@BUILD_CHCPU_TRUE@am__EXEEXT_36 = chcpu$(EXEEXT)
+@BUILD_PIVOT_ROOT_TRUE@am__EXEEXT_37 = pivot_root$(EXEEXT)
+@BUILD_SWITCH_ROOT_TRUE@am__EXEEXT_38 = switch_root$(EXEEXT)
+@BUILD_HWCLOCK_TRUE@am__EXEEXT_39 = hwclock$(EXEEXT)
+@BUILD_LIBBLKID_TRUE@am__EXEEXT_40 = blkid$(EXEEXT) findfs$(EXEEXT) \
 @BUILD_LIBBLKID_TRUE@	wipefs$(EXEEXT)
-@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__EXEEXT_40 = blkid.static$(EXEEXT)
-@BUILD_BFS_TRUE@am__EXEEXT_41 = mkfs.bfs$(EXEEXT)
-@BUILD_SWAPLABEL_TRUE@am__EXEEXT_42 = swaplabel$(EXEEXT)
-@BUILD_FSCK_TRUE@am__EXEEXT_43 = fsck$(EXEEXT)
-@BUILD_RAW_TRUE@am__EXEEXT_44 = raw$(EXEEXT)
-@BUILD_CRAMFS_TRUE@am__EXEEXT_45 = fsck.cramfs$(EXEEXT) \
+@BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@am__EXEEXT_41 = blkid.static$(EXEEXT)
+@BUILD_BFS_TRUE@am__EXEEXT_42 = mkfs.bfs$(EXEEXT)
+@BUILD_SWAPLABEL_TRUE@am__EXEEXT_43 = swaplabel$(EXEEXT)
+@BUILD_FSCK_TRUE@am__EXEEXT_44 = fsck$(EXEEXT)
+@BUILD_RAW_TRUE@am__EXEEXT_45 = raw$(EXEEXT)
+@BUILD_CRAMFS_TRUE@am__EXEEXT_46 = fsck.cramfs$(EXEEXT) \
 @BUILD_CRAMFS_TRUE@	mkfs.cramfs$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_46 = blockdev$(EXEEXT)
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__EXEEXT_47 = fdisk$(EXEEXT)
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@am__EXEEXT_48 = fdisk.static$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__EXEEXT_49 = sfdisk$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__EXEEXT_50 = sfdisk.static$(EXEEXT)
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__EXEEXT_51 = cfdisk$(EXEEXT)
-@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_52 = chrt$(EXEEXT)
-@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_53 =  \
+@LINUX_TRUE@am__EXEEXT_47 = blockdev$(EXEEXT)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__EXEEXT_48 = fdisk$(EXEEXT)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@am__EXEEXT_49 = fdisk.static$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@am__EXEEXT_50 = sfdisk$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@am__EXEEXT_51 = sfdisk.static$(EXEEXT)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@am__EXEEXT_52 = cfdisk$(EXEEXT)
+@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_53 = chrt$(EXEEXT)
+@BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@am__EXEEXT_54 =  \
 @BUILD_IONICE_TRUE@@BUILD_SCHEDUTILS_TRUE@	ionice$(EXEEXT)
-@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__EXEEXT_54 =  \
+@BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@am__EXEEXT_55 =  \
 @BUILD_SCHEDUTILS_TRUE@@BUILD_TASKSET_TRUE@	taskset$(EXEEXT)
-@BUILD_LINE_TRUE@am__EXEEXT_55 = line$(EXEEXT)
-@BUILD_PG_TRUE@am__EXEEXT_56 = pg$(EXEEXT)
-@BUILD_UL_TRUE@am__EXEEXT_57 = ul$(EXEEXT)
-@BUILD_SETTERM_TRUE@am__EXEEXT_58 = setterm$(EXEEXT)
-@BUILD_MESG_TRUE@am__EXEEXT_59 = mesg$(EXEEXT)
-@BUILD_WALL_TRUE@am__EXEEXT_60 = wall$(EXEEXT)
-@BUILD_WRITE_TRUE@am__EXEEXT_61 = write$(EXEEXT)
-@BUILD_LAST_TRUE@am__EXEEXT_62 = last$(EXEEXT)
-@BUILD_DEPRECATED_LAST_TRUE@am__EXEEXT_63 = last$(EXEEXT)
-@BUILD_UTMPDUMP_TRUE@am__EXEEXT_64 = utmpdump$(EXEEXT)
-@BUILD_CHFN_CHSH_TRUE@am__EXEEXT_65 = chfn$(EXEEXT) chsh$(EXEEXT)
-@BUILD_NEWGRP_TRUE@am__EXEEXT_66 = newgrp$(EXEEXT)
-@BUILD_CYTUNE_TRUE@am__EXEEXT_67 = cytune$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_68 = setarch$(EXEEXT)
-@BUILD_EJECT_TRUE@am__EXEEXT_69 = eject$(EXEEXT)
-@BUILD_PRLIMIT_TRUE@am__EXEEXT_70 = prlimit$(EXEEXT)
-@BUILD_LSCPU_TRUE@am__EXEEXT_71 = lscpu$(EXEEXT)
-@BUILD_FALLOCATE_TRUE@am__EXEEXT_72 = fallocate$(EXEEXT)
-@BUILD_UNSHARE_TRUE@am__EXEEXT_73 = unshare$(EXEEXT)
-@BUILD_NSENTER_TRUE@am__EXEEXT_74 = nsenter$(EXEEXT)
-@BUILD_SETPRIV_TRUE@am__EXEEXT_75 = setpriv$(EXEEXT)
-@BUILD_LSLOCKS_TRUE@am__EXEEXT_76 = lslocks$(EXEEXT)
-@BUILD_LIBUUID_TRUE@am__EXEEXT_77 = uuidgen$(EXEEXT)
-@BUILD_RENAME_TRUE@am__EXEEXT_78 = rename$(EXEEXT)
-@BUILD_VIPW_TRUE@am__EXEEXT_79 = vipw$(EXEEXT)
-@BUILD_TUNELP_TRUE@am__EXEEXT_80 = tunelp$(EXEEXT)
-@LINUX_TRUE@am__EXEEXT_81 = ldattach$(EXEEXT) rtcwake$(EXEEXT)
-@BUILD_UUIDD_TRUE@am__EXEEXT_82 = uuidd$(EXEEXT)
-@BUILD_FDFORMAT_TRUE@am__EXEEXT_83 = fdformat$(EXEEXT)
-@BUILD_PARTX_TRUE@am__EXEEXT_84 = partx$(EXEEXT) addpart$(EXEEXT) \
+@BUILD_LINE_TRUE@am__EXEEXT_56 = line$(EXEEXT)
+@BUILD_PG_TRUE@am__EXEEXT_57 = pg$(EXEEXT)
+@BUILD_UL_TRUE@am__EXEEXT_58 = ul$(EXEEXT)
+@BUILD_SETTERM_TRUE@am__EXEEXT_59 = setterm$(EXEEXT)
+@BUILD_MESG_TRUE@am__EXEEXT_60 = mesg$(EXEEXT)
+@BUILD_WALL_TRUE@am__EXEEXT_61 = wall$(EXEEXT)
+@BUILD_WRITE_TRUE@am__EXEEXT_62 = write$(EXEEXT)
+@BUILD_LAST_TRUE@am__EXEEXT_63 = last$(EXEEXT)
+@BUILD_DEPRECATED_LAST_TRUE@am__EXEEXT_64 = last$(EXEEXT)
+@BUILD_UTMPDUMP_TRUE@am__EXEEXT_65 = utmpdump$(EXEEXT)
+@BUILD_CHFN_CHSH_TRUE@am__EXEEXT_66 = chfn$(EXEEXT) chsh$(EXEEXT)
+@BUILD_NEWGRP_TRUE@am__EXEEXT_67 = newgrp$(EXEEXT)
+@BUILD_CYTUNE_TRUE@am__EXEEXT_68 = cytune$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_69 = setarch$(EXEEXT)
+@BUILD_EJECT_TRUE@am__EXEEXT_70 = eject$(EXEEXT)
+@BUILD_PRLIMIT_TRUE@am__EXEEXT_71 = prlimit$(EXEEXT)
+@BUILD_LSCPU_TRUE@am__EXEEXT_72 = lscpu$(EXEEXT)
+@BUILD_FALLOCATE_TRUE@am__EXEEXT_73 = fallocate$(EXEEXT)
+@BUILD_UNSHARE_TRUE@am__EXEEXT_74 = unshare$(EXEEXT)
+@BUILD_NSENTER_TRUE@am__EXEEXT_75 = nsenter$(EXEEXT)
+@BUILD_SETPRIV_TRUE@am__EXEEXT_76 = setpriv$(EXEEXT)
+@BUILD_LSLOCKS_TRUE@am__EXEEXT_77 = lslocks$(EXEEXT)
+@BUILD_LIBUUID_TRUE@am__EXEEXT_78 = uuidgen$(EXEEXT)
+@BUILD_RENAME_TRUE@am__EXEEXT_79 = rename$(EXEEXT)
+@BUILD_VIPW_TRUE@am__EXEEXT_80 = vipw$(EXEEXT)
+@BUILD_TUNELP_TRUE@am__EXEEXT_81 = tunelp$(EXEEXT)
+@LINUX_TRUE@am__EXEEXT_82 = ldattach$(EXEEXT) rtcwake$(EXEEXT)
+@BUILD_UUIDD_TRUE@am__EXEEXT_83 = uuidd$(EXEEXT)
+@BUILD_FDFORMAT_TRUE@am__EXEEXT_84 = fdformat$(EXEEXT)
+@BUILD_PARTX_TRUE@am__EXEEXT_85 = partx$(EXEEXT) addpart$(EXEEXT) \
 @BUILD_PARTX_TRUE@	delpart$(EXEEXT) resizepart$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS) $(noinst_PROGRAMS) $(sbin_PROGRAMS) \
 	$(usrbin_exec_PROGRAMS) $(usrsbin_exec_PROGRAMS)
@@ -1285,7 +1293,7 @@ cfdisk_OBJECTS = $(am_cfdisk_OBJECTS)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@@HAVE_SLANG_FALSE@am__DEPENDENCIES_3 = $(am__DEPENDENCIES_1)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	libcommon.la \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_258) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_261) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__DEPENDENCIES_1) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__DEPENDENCIES_3)
 cfdisk_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
@@ -1409,8 +1417,8 @@ fdisk_OBJECTS = $(am_fdisk_OBJECTS)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@fdisk_DEPENDENCIES =  \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__DEPENDENCIES_2) \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	libcommon.la libfdisk.la \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_248) \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_250)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_251) \
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_253)
 fdisk_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(fdisk_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
@@ -1424,8 +1432,8 @@ fdisk_static_OBJECTS = $(am_fdisk_static_OBJECTS)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@am__DEPENDENCIES_5 =  \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__DEPENDENCIES_2) \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	libcommon.la libfdisk.la \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_248) \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_250)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_251) \
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_253)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_DEPENDENCIES = $(am__DEPENDENCIES_5)
 fdisk_static_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(fdisk_static_CFLAGS) \
@@ -1479,9 +1487,14 @@ fsfreeze_OBJECTS = $(am_fsfreeze_OBJECTS)
 fsfreeze_LDADD = $(LDADD)
 fsfreeze_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__fstrim_SOURCES_DIST = sys-utils/fstrim.c
-@LINUX_TRUE@am_fstrim_OBJECTS = sys-utils/fstrim.$(OBJEXT)
+@BUILD_FSTRIM_TRUE@am_fstrim_OBJECTS =  \
+@BUILD_FSTRIM_TRUE@	sys-utils/fstrim-fstrim.$(OBJEXT)
 fstrim_OBJECTS = $(am_fstrim_OBJECTS)
-@LINUX_TRUE@fstrim_DEPENDENCIES = $(am__DEPENDENCIES_2) libcommon.la
+@BUILD_FSTRIM_TRUE@fstrim_DEPENDENCIES = $(am__DEPENDENCIES_2) \
+@BUILD_FSTRIM_TRUE@	libcommon.la libmount.la
+fstrim_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(fstrim_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
 am_getopt_OBJECTS = misc-utils/getopt.$(OBJEXT)
 getopt_OBJECTS = $(am_getopt_OBJECTS)
 getopt_LDADD = $(LDADD)
@@ -1631,7 +1644,7 @@ mkfs_minix_DEPENDENCIES = $(am__DEPENDENCIES_2) libcommon.la
 am_mkswap_OBJECTS = disk-utils/mkswap-mkswap.$(OBJEXT)
 mkswap_OBJECTS = $(am_mkswap_OBJECTS)
 mkswap_DEPENDENCIES = $(am__DEPENDENCIES_2) libcommon.la \
-	$(am__append_224) $(am__append_226) $(am__DEPENDENCIES_1)
+	$(am__append_227) $(am__append_229) $(am__DEPENDENCIES_1)
 mkswap_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(mkswap_CFLAGS) $(CFLAGS) \
 	$(AM_LDFLAGS) $(LDFLAGS) -o $@
@@ -1936,7 +1949,7 @@ am__swaplabel_SOURCES_DIST = disk-utils/swaplabel.c
 swaplabel_OBJECTS = $(am_swaplabel_OBJECTS)
 @BUILD_SWAPLABEL_TRUE@swaplabel_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @BUILD_SWAPLABEL_TRUE@	libblkid.la libcommon.la \
-@BUILD_SWAPLABEL_TRUE@	$(am__append_230)
+@BUILD_SWAPLABEL_TRUE@	$(am__append_233)
 swaplabel_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(swaplabel_CFLAGS) \
 	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
@@ -2436,10 +2449,14 @@ umount_static_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(umount_static_CFLAGS) \
 	$(CFLAGS) $(umount_static_LDFLAGS) $(LDFLAGS) -o $@
 am__unshare_SOURCES_DIST = sys-utils/unshare.c
-@BUILD_UNSHARE_TRUE@am_unshare_OBJECTS = sys-utils/unshare.$(OBJEXT)
+@BUILD_UNSHARE_TRUE@am_unshare_OBJECTS =  \
+@BUILD_UNSHARE_TRUE@	sys-utils/unshare-unshare.$(OBJEXT)
 unshare_OBJECTS = $(am_unshare_OBJECTS)
 @BUILD_UNSHARE_TRUE@unshare_DEPENDENCIES = $(am__DEPENDENCIES_2) \
 @BUILD_UNSHARE_TRUE@	libcommon.la
+unshare_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(unshare_CFLAGS) \
+	$(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 am__utmpdump_SOURCES_DIST = login-utils/utmpdump.c
 @BUILD_UTMPDUMP_TRUE@am_utmpdump_OBJECTS =  \
 @BUILD_UTMPDUMP_TRUE@	login-utils/utmpdump.$(OBJEXT)
@@ -2798,22 +2815,22 @@ am__dist_noinst_DATA_DIST = libuuid/man/uuid.3 \
 	mount-deprecated/umount.8 sys-utils/flock.1 sys-utils/ipcmk.1 \
 	sys-utils/ipcrm.1 sys-utils/ipcs.1 sys-utils/renice.1 \
 	sys-utils/setsid.1 sys-utils/readprofile.8 sys-utils/tunelp.8 \
-	sys-utils/cytune.8 sys-utils/dmesg.1 sys-utils/ctrlaltdel.8 \
-	sys-utils/fsfreeze.8 sys-utils/fstrim.8 sys-utils/blkdiscard.8 \
-	sys-utils/ldattach.8 sys-utils/rtcwake.8 sys-utils/setarch.8 \
-	sys-utils/eject.1 sys-utils/losetup.8 sys-utils/prlimit.1 \
-	sys-utils/mount.8 sys-utils/fstab.5 sys-utils/umount.8 \
-	sys-utils/swapoff.8 sys-utils/swapon.8 sys-utils/lscpu.1 \
-	sys-utils/chcpu.8 sys-utils/wdctl.8 sys-utils/mountpoint.1 \
-	sys-utils/fallocate.1 sys-utils/pivot_root.8 \
-	sys-utils/switch_root.8 sys-utils/unshare.1 \
-	sys-utils/nsenter.1 sys-utils/hwclock.8 sys-utils/setpriv.1 \
-	misc-utils/cal.1 misc-utils/logger.1 misc-utils/look.1 \
-	misc-utils/mcookie.1 misc-utils/namei.1 misc-utils/whereis.1 \
-	misc-utils/lslocks.8 misc-utils/lsblk.8 misc-utils/uuidgen.1 \
-	misc-utils/uuidd.8 misc-utils/blkid.8 misc-utils/findfs.8 \
-	misc-utils/wipefs.8 misc-utils/findmnt.8 misc-utils/kill.1 \
-	misc-utils/rename.1 misc-utils/getopt.1 \
+	sys-utils/cytune.8 sys-utils/fstrim.8 sys-utils/dmesg.1 \
+	sys-utils/ctrlaltdel.8 sys-utils/fsfreeze.8 \
+	sys-utils/blkdiscard.8 sys-utils/ldattach.8 \
+	sys-utils/rtcwake.8 sys-utils/setarch.8 sys-utils/eject.1 \
+	sys-utils/losetup.8 sys-utils/prlimit.1 sys-utils/mount.8 \
+	sys-utils/fstab.5 sys-utils/umount.8 sys-utils/swapoff.8 \
+	sys-utils/swapon.8 sys-utils/lscpu.1 sys-utils/chcpu.8 \
+	sys-utils/wdctl.8 sys-utils/mountpoint.1 sys-utils/fallocate.1 \
+	sys-utils/pivot_root.8 sys-utils/switch_root.8 \
+	sys-utils/unshare.1 sys-utils/nsenter.1 sys-utils/hwclock.8 \
+	sys-utils/setpriv.1 misc-utils/cal.1 misc-utils/logger.1 \
+	misc-utils/look.1 misc-utils/mcookie.1 misc-utils/namei.1 \
+	misc-utils/whereis.1 misc-utils/lslocks.8 misc-utils/lsblk.8 \
+	misc-utils/uuidgen.1 misc-utils/uuidd.8 misc-utils/blkid.8 \
+	misc-utils/findfs.8 misc-utils/wipefs.8 misc-utils/findmnt.8 \
+	misc-utils/kill.1 misc-utils/rename.1 misc-utils/getopt.1 \
 	disk-utils/fsck.minix.8 disk-utils/mkfs.minix.8 \
 	disk-utils/mkfs.8 disk-utils/isosize.8 disk-utils/mkfs.bfs.8 \
 	disk-utils/mkswap.8 disk-utils/swaplabel.8 disk-utils/fsck.8 \
@@ -3295,64 +3312,64 @@ dist_noinst_HEADERS = include/all-io.h include/at.h include/bitops.h \
 	include/widechar.h include/xalloc.h include/xgetpass.h \
 	include/pt-sgi.h include/pt-bsd.h include/pt-mbr.h \
 	include/pt-mbr-partnames.h include/pt-sun.h
-noinst_LTLIBRARIES = libcommon.la $(am__append_41)
-dist_man_MANS = $(am__append_6) $(am__append_28) $(am__append_50) \
-	$(am__append_52) $(am__append_54) text-utils/col.1 \
+noinst_LTLIBRARIES = libcommon.la $(am__append_40)
+dist_man_MANS = $(am__append_6) $(am__append_29) $(am__append_51) \
+	$(am__append_53) $(am__append_55) text-utils/col.1 \
 	text-utils/colcrt.1 text-utils/colrm.1 text-utils/column.1 \
 	text-utils/hexdump.1 text-utils/rev.1 text-utils/tailf.1 \
-	$(am__append_56) $(am__append_58) $(am__append_60) \
-	$(am__append_65) term-utils/script.1 term-utils/scriptreplay.1 \
-	$(am__append_74) $(am__append_76) $(am__append_82) \
-	$(am__append_84) $(am__append_86) $(am__append_89) \
-	$(am__append_92) $(am__append_95) $(am__append_97) \
-	$(am__append_102) $(am__append_106) $(am__append_108) \
-	$(am__append_110) $(am__append_120) $(am__append_122) \
-	$(am__append_124) $(am__append_127) $(am__append_131) \
+	$(am__append_57) $(am__append_59) $(am__append_61) \
+	$(am__append_66) term-utils/script.1 term-utils/scriptreplay.1 \
+	$(am__append_75) $(am__append_77) $(am__append_83) \
+	$(am__append_85) $(am__append_87) $(am__append_90) \
+	$(am__append_93) $(am__append_96) $(am__append_98) \
+	$(am__append_103) $(am__append_107) $(am__append_109) \
+	$(am__append_111) $(am__append_121) $(am__append_123) \
+	$(am__append_125) $(am__append_128) $(am__append_132) \
 	sys-utils/flock.1 sys-utils/ipcmk.1 sys-utils/ipcrm.1 \
 	sys-utils/ipcs.1 sys-utils/renice.1 sys-utils/setsid.1 \
-	sys-utils/readprofile.8 $(am__append_139) $(am__append_141) \
-	$(am__append_143) $(am__append_160) $(am__append_162) \
-	$(am__append_165) $(am__append_167) $(am__append_172) \
-	$(am__append_174) $(am__append_176) $(am__append_178) \
-	$(am__append_180) $(am__append_182) $(am__append_184) \
-	$(am__append_186) $(am__append_188) $(am__append_190) \
-	$(am__append_192) $(am__append_196) misc-utils/cal.1 \
-	misc-utils/logger.1 misc-utils/look.1 misc-utils/mcookie.1 \
-	misc-utils/namei.1 misc-utils/whereis.1 $(am__append_200) \
-	$(am__append_202) $(am__append_205) $(am__append_207) \
-	$(am__append_212) $(am__append_215) $(am__append_218) \
-	$(am__append_220) misc-utils/getopt.1 disk-utils/fsck.minix.8 \
-	disk-utils/mkfs.minix.8 disk-utils/mkfs.8 disk-utils/isosize.8 \
-	$(am__append_222) disk-utils/mkswap.8 $(am__append_229) \
-	$(am__append_233) $(am__append_235) $(am__append_237) \
-	$(am__append_240) $(am__append_242) $(am__append_244) \
-	$(am__append_246) $(am__append_253) $(am__append_256)
-man_MANS = $(am__append_155)
-pkgconfig_DATA = $(am__append_12) $(am__append_26) $(am__append_38)
+	sys-utils/readprofile.8 $(am__append_140) $(am__append_142) \
+	$(am__append_144) $(am__append_146) $(am__append_163) \
+	$(am__append_165) $(am__append_168) $(am__append_170) \
+	$(am__append_175) $(am__append_177) $(am__append_179) \
+	$(am__append_181) $(am__append_183) $(am__append_185) \
+	$(am__append_187) $(am__append_189) $(am__append_191) \
+	$(am__append_193) $(am__append_195) $(am__append_199) \
+	misc-utils/cal.1 misc-utils/logger.1 misc-utils/look.1 \
+	misc-utils/mcookie.1 misc-utils/namei.1 misc-utils/whereis.1 \
+	$(am__append_203) $(am__append_205) $(am__append_208) \
+	$(am__append_210) $(am__append_215) $(am__append_218) \
+	$(am__append_221) $(am__append_223) misc-utils/getopt.1 \
+	disk-utils/fsck.minix.8 disk-utils/mkfs.minix.8 \
+	disk-utils/mkfs.8 disk-utils/isosize.8 $(am__append_225) \
+	disk-utils/mkswap.8 $(am__append_232) $(am__append_236) \
+	$(am__append_238) $(am__append_240) $(am__append_243) \
+	$(am__append_245) $(am__append_247) $(am__append_249) \
+	$(am__append_256) $(am__append_259)
+man_MANS = $(am__append_158)
+pkgconfig_DATA = $(am__append_12) $(am__append_27) $(am__append_38)
 usrlib_exec_LTLIBRARIES = $(am__append_8) $(am__append_14) \
-	$(am__append_29)
-dist_usrbin_exec_SCRIPTS = $(am__append_81)
-systemdsystemunit_DATA = $(am__append_210)
-PATHFILES = $(am__append_13) $(am__append_27) $(am__append_39) \
+	$(am__append_30)
+dist_usrbin_exec_SCRIPTS = $(am__append_82)
+systemdsystemunit_DATA = $(am__append_213)
+PATHFILES = $(am__append_13) $(am__append_28) $(am__append_39) \
 	misc-utils/uuidd.8 misc-utils/uuidd.rc \
 	misc-utils/uuidd.service misc-utils/uuidd.socket
-INSTALL_EXEC_HOOKS = $(am__append_10) $(am__append_22) \
-	$(am__append_33) $(am__append_87) $(am__append_90) \
-	$(am__append_93) $(am__append_129) $(am__append_137) \
-	$(am__append_157) $(am__append_170)
-UNINSTALL_HOOKS = $(am__append_11) $(am__append_23) $(am__append_34) \
-	$(am__append_158)
-INSTALL_DATA_HOOKS = $(am__append_277)
+INSTALL_EXEC_HOOKS = $(am__append_10) $(am__append_23) \
+	$(am__append_34) $(am__append_88) $(am__append_91) \
+	$(am__append_94) $(am__append_130) $(am__append_138) \
+	$(am__append_160) $(am__append_173)
+UNINSTALL_HOOKS = $(am__append_11) $(am__append_24) $(am__append_35) \
+	$(am__append_161)
+INSTALL_DATA_HOOKS = $(am__append_280)
 CLEAN_LOCALS = clean-local-tests
 CHECK_LOCALS = check-local-tests
 EXTRA_DIST = .version autogen.sh Documentation po/update-potfiles \
 	README.licensing tools/git-version-gen $(am__append_9) \
-	$(am__append_18) $(am__append_30) $(am__append_35) \
-	$(am__append_40) term-utils/reset.033c tests/expected \
-	tests/functions.sh tests/commands.sh tests/run.sh tests/ts \
-	$(PATHFILES:=.in)
-CLEANFILES = $(am__append_36) $(am__append_156) $(PATHFILES)
-SUBDIRS = po $(am__append_25) $(am__append_37)
+	$(am__append_19) $(am__append_31) term-utils/reset.033c \
+	tests/expected tests/functions.sh tests/commands.sh \
+	tests/run.sh tests/ts $(PATHFILES:=.in)
+CLEANFILES = $(am__append_36) $(am__append_159) $(PATHFILES)
+SUBDIRS = po $(am__append_26) $(am__append_37)
 RCS_FIND_IGNORE = \( -name SCCS -o -name BitKeeper -o -name .svn -o \
 		-name CVS -o -name .pc -o -name .hg -o -name .git \) -prune -o
 
@@ -3462,7 +3479,7 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 @BUILD_LIBBLKID_TRUE@	libblkid/src/superblocks/superblocks.h \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/tag.c libblkid/src/verify.c \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/version.c \
-@BUILD_LIBBLKID_TRUE@	$(blkidinc_HEADERS) \
+@BUILD_LIBBLKID_TRUE@	$(nodist_blkidinc_HEADERS) \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/aix.c \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/aix.h \
 @BUILD_LIBBLKID_TRUE@	libblkid/src/partitions/bsd.c \
@@ -3533,26 +3550,24 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 @BUILD_LIBBLKID_TRUE@nodist_libblkid_la_SOURCES = libblkid/src/blkid.h
 @BUILD_LIBBLKID_TRUE@libblkid_la_LIBADD = libcommon.la \
 @BUILD_LIBBLKID_TRUE@	$(am__append_16)
+@BUILD_LIBBLKID_TRUE@libblkid_la_DEPENDENCIES = libcommon.la \
+@BUILD_LIBBLKID_TRUE@	libblkid/src/blkid.sym \
+@BUILD_LIBBLKID_TRUE@	libblkid/src/blkid.h.in $(am__append_17)
 @BUILD_LIBBLKID_TRUE@libblkid_la_CFLAGS = $(SOLIB_CFLAGS) \
 @BUILD_LIBBLKID_TRUE@	-I$(ul_libblkid_incdir) \
 @BUILD_LIBBLKID_TRUE@	-I$(top_srcdir)/libblkid/src \
-@BUILD_LIBBLKID_TRUE@	$(am__append_17)
-@BUILD_LIBBLKID_TRUE@libblkid_la_DEPENDENCIES = \
-@BUILD_LIBBLKID_TRUE@	$(libblkid_la_LIBADD) \
-@BUILD_LIBBLKID_TRUE@	libblkid/src/blkid.sym \
-@BUILD_LIBBLKID_TRUE@	libblkid/src/blkid.h.in
-
+@BUILD_LIBBLKID_TRUE@	$(am__append_18)
 @BUILD_LIBBLKID_TRUE@libblkid_la_LDFLAGS = \
 @BUILD_LIBBLKID_TRUE@	$(SOLIB_LDFLAGS) \
 @BUILD_LIBBLKID_TRUE@	-Wl,--version-script=$(top_srcdir)/libblkid/src/blkid.sym \
 @BUILD_LIBBLKID_TRUE@	-version-info $(LIBBLKID_VERSION_INFO)
 
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@blkid_tests_cflags = -DTEST_PROGRAM $(libblkid_la_CFLAGS)
-@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@blkid_tests_ldflags = $(am__append_20) \
+@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@blkid_tests_ldflags = $(am__append_21) \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	-static
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@blkid_tests_ldadd =  \
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	libblkid.la \
-@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	$(am__append_21)
+@BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@	$(am__append_22)
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@test_blkid_cache_SOURCES = libblkid/src/cache.c
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@test_blkid_cache_CFLAGS = $(blkid_tests_cflags)
 @BUILD_LIBBLKID_TESTS_TRUE@@BUILD_LIBBLKID_TRUE@test_blkid_cache_LDFLAGS = $(blkid_tests_ldflags)
@@ -3635,7 +3650,7 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 @BUILD_LIBMOUNT_TRUE@	libmount/src/test.c \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/utils.c \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/version.c \
-@BUILD_LIBMOUNT_TRUE@	$(mountinc_HEADERS)
+@BUILD_LIBMOUNT_TRUE@	$(nodist_mountinc_HEADERS)
 
 @BUILD_LIBMOUNT_TRUE@nodist_libmount_la_SOURCES = libmount/src/mountP.h
 @BUILD_LIBMOUNT_TRUE@libmount_la_LIBADD = libcommon.la libblkid.la $(SELINUX_LIBS)
@@ -3646,7 +3661,8 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 @BUILD_LIBMOUNT_TRUE@	-I$(top_srcdir)/libmount/src
 
 @BUILD_LIBMOUNT_TRUE@libmount_la_DEPENDENCIES = \
-@BUILD_LIBMOUNT_TRUE@	$(libmount_la_LIBADD) \
+@BUILD_LIBMOUNT_TRUE@	libcommon.la \
+@BUILD_LIBMOUNT_TRUE@	libblkid.la \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount.sym \
 @BUILD_LIBMOUNT_TRUE@	libmount/src/libmount.h.in
 
@@ -3660,7 +3676,7 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@libmount_tests_ldadd =  \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	libmount.la \
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	$(UUID_LIBS) \
-@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	$(am__append_32)
+@BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@	$(am__append_33)
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_cache_SOURCES = libmount/src/cache.c
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_cache_CFLAGS = $(libmount_tests_cflags)
 @BUILD_LIBMOUNT_TESTS_TRUE@@BUILD_LIBMOUNT_TRUE@test_mount_cache_LDFLAGS = $(libmount_tests_ldflags)
@@ -3703,7 +3719,7 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 # directory for binary stuff as well as for the scripts otherwise it's
 # not possible to install 32-bit and 64-bit version on the same system.
 @BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@pylibmountexec_LTLIBRARIES = pylibmount.la
-@BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@pylibmountexec_SCRIPTS = libmount/python/libmount/__init__.py
+@BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@pylibmountexec_SCRIPTS = libmount/python/__init__.py
 @BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@pylibmount_la_SOURCES = \
 @BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@	libmount/python/pylibmount.c \
 @BUILD_LIBMOUNT_TRUE@@BUILD_PYLIBMOUNT_TRUE@	libmount/python/pylibmount.h \
@@ -3742,14 +3758,15 @@ test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE
 
 @BUILD_LIBFDISK_TRUE@nodist_libfdisk_la_SOURCES = libfdisk/src/fdiskP.h
 @BUILD_LIBFDISK_TRUE@libfdisk_la_LIBADD = libcommon.la \
-@BUILD_LIBFDISK_TRUE@	$(am__append_42) $(am__append_44)
+@BUILD_LIBFDISK_TRUE@	$(am__append_41) $(am__append_44)
+@BUILD_LIBFDISK_TRUE@libfdisk_la_DEPENDENCIES = libcommon.la \
+@BUILD_LIBFDISK_TRUE@	$(am__append_42) $(am__append_45)
 @BUILD_LIBFDISK_TRUE@libfdisk_la_CFLAGS = -I$(ul_libfdisk_incdir) \
 @BUILD_LIBFDISK_TRUE@	-I$(top_srcdir)/libfdisk/src \
-@BUILD_LIBFDISK_TRUE@	$(am__append_43) $(am__append_45)
-@BUILD_LIBFDISK_TRUE@libfdisk_la_DEPENDENCIES = $(libfdisk_la_LIBADD)
+@BUILD_LIBFDISK_TRUE@	$(am__append_43) $(am__append_46)
 @BUILD_LIBFDISK_TRUE@libfdisk_tests_cflags = -DTEST_PROGRAM $(libfdisk_la_CFLAGS)
-@BUILD_LIBFDISK_TRUE@libfdisk_tests_ldflags = -static $(am__append_47) \
-@BUILD_LIBFDISK_TRUE@	$(am__append_48)
+@BUILD_LIBFDISK_TRUE@libfdisk_tests_ldflags = -static $(am__append_48) \
+@BUILD_LIBFDISK_TRUE@	$(am__append_49)
 @BUILD_LIBFDISK_TRUE@libfdisk_tests_ldadd = libfdisk.la
 @BUILD_LIBFDISK_TRUE@test_fdisk_ask_SOURCES = libfdisk/src/ask.c
 @BUILD_LIBFDISK_TRUE@test_fdisk_ask_CFLAGS = $(libfdisk_tests_cflags)
@@ -3789,26 +3806,26 @@ tailf_LDADD = $(LDADD) libcommon.la
 @BUILD_PG_TRUE@pg_CFLAGS = $(AM_CFLAGS) $(BSD_WARN_CFLAGS) $(NCURSES_CFLAGS) $(TINFO_CFLAGS)
 @BUILD_PG_TRUE@pg_LDADD = $(LDADD) libcommon.la $(NCURSES_LIBS) $(TINFO_LIBS)
 @BUILD_UL_TRUE@ul_SOURCES = text-utils/ul.c
-@BUILD_UL_TRUE@ul_CFLAGS = $(AM_CFLAGS) $(am__append_62)
-@BUILD_UL_TRUE@ul_LDADD = $(LDADD) $(am__append_61) $(am__append_63)
+@BUILD_UL_TRUE@ul_CFLAGS = $(AM_CFLAGS) $(am__append_63)
+@BUILD_UL_TRUE@ul_LDADD = $(LDADD) $(am__append_62) $(am__append_64)
 @BUILD_MORE_TRUE@more_SOURCES = text-utils/more.c
 @BUILD_MORE_TRUE@more_CFLAGS = $(AM_CFLAGS) $(BSD_WARN_CFLAGS) \
-@BUILD_MORE_TRUE@	$(am__append_67)
-@BUILD_MORE_TRUE@more_LDADD = $(LDADD) $(am__append_66) \
-@BUILD_MORE_TRUE@	$(am__append_68) $(am__append_69)
+@BUILD_MORE_TRUE@	$(am__append_68)
+@BUILD_MORE_TRUE@more_LDADD = $(LDADD) $(am__append_67) \
+@BUILD_MORE_TRUE@	$(am__append_69) $(am__append_70)
 @BUILD_MORE_TRUE@test_more_SOURCES = $(more_SOURCES)
 @BUILD_MORE_TRUE@test_more_CFLAGS = -DTEST_PROGRAM
 @BUILD_MORE_TRUE@test_more_LDADD = $(more_LDADD)
 script_SOURCES = term-utils/script.c
-script_LDADD = $(LDADD) $(am__append_71) $(am__append_72)
+script_LDADD = $(LDADD) $(am__append_72) $(am__append_73)
 scriptreplay_SOURCES = term-utils/scriptreplay.c
 @BUILD_AGETTY_TRUE@agetty_SOURCES = term-utils/agetty.c
 @BUILD_AGETTY_TRUE@agetty_LDADD = $(LDADD) libcommon.la
 @BUILD_SETTERM_TRUE@setterm_SOURCES = term-utils/setterm.c
-@BUILD_SETTERM_TRUE@setterm_CFLAGS = $(AM_CFLAGS) $(am__append_78) \
+@BUILD_SETTERM_TRUE@setterm_CFLAGS = $(AM_CFLAGS) $(am__append_79) \
+@BUILD_SETTERM_TRUE@	$(am__append_81)
+@BUILD_SETTERM_TRUE@setterm_LDADD = $(LDADD) $(am__append_78) \
 @BUILD_SETTERM_TRUE@	$(am__append_80)
-@BUILD_SETTERM_TRUE@setterm_LDADD = $(LDADD) $(am__append_77) \
-@BUILD_SETTERM_TRUE@	$(am__append_79)
 @BUILD_MESG_TRUE@mesg_SOURCES = term-utils/mesg.c
 @BUILD_WALL_TRUE@wall_SOURCES = \
 @BUILD_WALL_TRUE@	term-utils/wall.c \
@@ -3830,7 +3847,7 @@ scriptreplay_SOURCES = term-utils/scriptreplay.c
 @BUILD_SULOGIN_TRUE@	login-utils/sulogin-consoles.h
 
 @BUILD_SULOGIN_TRUE@sulogin_LDADD = $(LDADD) libcommon.la \
-@BUILD_SULOGIN_TRUE@	$(am__append_98) $(am__append_99)
+@BUILD_SULOGIN_TRUE@	$(am__append_99) $(am__append_100)
 @BUILD_SULOGIN_TRUE@test_consoles_SOURCES = login-utils/sulogin-consoles.c
 @BUILD_SULOGIN_TRUE@test_consoles_CFLAGS = -DTEST_PROGRAM
 @BUILD_SULOGIN_TRUE@test_consoles_LDADD = libcommon.la
@@ -3840,18 +3857,18 @@ scriptreplay_SOURCES = term-utils/scriptreplay.c
 @BUILD_LOGIN_TRUE@	login-utils/logindefs.h
 
 @BUILD_LOGIN_TRUE@login_LDADD = $(LDADD) libcommon.la -lpam -lpam_misc \
-@BUILD_LOGIN_TRUE@	$(am__append_103) $(am__append_104)
+@BUILD_LOGIN_TRUE@	$(am__append_104) $(am__append_105)
 @BUILD_NOLOGIN_TRUE@nologin_SOURCES = login-utils/nologin.c
 @BUILD_UTMPDUMP_TRUE@utmpdump_SOURCES = login-utils/utmpdump.c
-@BUILD_CHFN_CHSH_TRUE@chfn_chsh_sources = $(am__append_112) \
-@BUILD_CHFN_CHSH_TRUE@	$(am__append_115) $(am__append_116) \
-@BUILD_CHFN_CHSH_TRUE@	$(am__append_117)
-@BUILD_CHFN_CHSH_TRUE@chfn_chsh_cflags = $(SUID_CFLAGS) $(AM_CFLAGS) \
-@BUILD_CHFN_CHSH_TRUE@	$(am__append_114)
-@BUILD_CHFN_CHSH_TRUE@chfn_chsh_ldflags = $(SUID_LDFLAGS) \
-@BUILD_CHFN_CHSH_TRUE@	$(AM_LDFLAGS) $(am__append_113)
-@BUILD_CHFN_CHSH_TRUE@chfn_chsh_ldadd = libcommon.la $(am__append_111) \
+@BUILD_CHFN_CHSH_TRUE@chfn_chsh_sources = $(am__append_113) \
+@BUILD_CHFN_CHSH_TRUE@	$(am__append_116) $(am__append_117) \
 @BUILD_CHFN_CHSH_TRUE@	$(am__append_118)
+@BUILD_CHFN_CHSH_TRUE@chfn_chsh_cflags = $(SUID_CFLAGS) $(AM_CFLAGS) \
+@BUILD_CHFN_CHSH_TRUE@	$(am__append_115)
+@BUILD_CHFN_CHSH_TRUE@chfn_chsh_ldflags = $(SUID_LDFLAGS) \
+@BUILD_CHFN_CHSH_TRUE@	$(AM_LDFLAGS) $(am__append_114)
+@BUILD_CHFN_CHSH_TRUE@chfn_chsh_ldadd = libcommon.la $(am__append_112) \
+@BUILD_CHFN_CHSH_TRUE@	$(am__append_119)
 @BUILD_CHFN_CHSH_TRUE@chfn_SOURCES = login-utils/chfn.c $(chfn_chsh_sources)
 @BUILD_CHFN_CHSH_TRUE@chfn_CFLAGS = $(chfn_chsh_cflags)
 @BUILD_CHFN_CHSH_TRUE@chfn_LDFLAGS = $(chfn_chsh_ldflags)
@@ -3881,12 +3898,12 @@ scriptreplay_SOURCES = term-utils/scriptreplay.c
 @BUILD_NEWGRP_TRUE@newgrp_SOURCES = login-utils/newgrp.c
 @BUILD_NEWGRP_TRUE@newgrp_CFLAGS = $(SUID_CFLAGS) $(AM_CFLAGS)
 @BUILD_NEWGRP_TRUE@newgrp_LDFLAGS = $(SUID_LDFLAGS) $(AM_LDFLAGS)
-@BUILD_NEWGRP_TRUE@newgrp_LDADD = $(LDADD) $(am__append_125)
+@BUILD_NEWGRP_TRUE@newgrp_LDADD = $(LDADD) $(am__append_126)
 @BUILD_VIPW_TRUE@vipw_SOURCES = \
 @BUILD_VIPW_TRUE@	login-utils/vipw.c \
 @BUILD_VIPW_TRUE@	login-utils/setpwnam.h
 
-@BUILD_VIPW_TRUE@vipw_LDADD = $(LDADD) libcommon.la $(am__append_128)
+@BUILD_VIPW_TRUE@vipw_LDADD = $(LDADD) libcommon.la $(am__append_129)
 test_islocal_SOURCES = login-utils/islocal.c
 test_islocal_CPPFLAGS = -DTEST_PROGRAM $(AM_CPPFLAGS)
 test_logindefs_SOURCES = \
@@ -3916,7 +3933,7 @@ test_logindefs_CPPFLAGS = -DTEST_PROGRAM $(AM_CPPFLAGS)
 @BUILD_DEPRECATED_MOUNT_TRUE@mount_LDFLAGS = $(SUID_LDFLAGS) $(AM_LDFLAGS)
 @BUILD_MOUNT_TRUE@mount_LDFLAGS = $(SUID_LDFLAGS) $(AM_LDFLAGS)
 @BUILD_DEPRECATED_MOUNT_TRUE@mount_LDADD = $(LDADD) libblkid.la \
-@BUILD_DEPRECATED_MOUNT_TRUE@	libcommon.la $(am__append_132)
+@BUILD_DEPRECATED_MOUNT_TRUE@	libcommon.la $(am__append_133)
 @BUILD_MOUNT_TRUE@mount_LDADD = $(LDADD) libcommon.la libmount.la $(SELINUX_LIBS)
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@mount_static_SOURCES = $(mount_SOURCES)
 @BUILD_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@mount_static_SOURCES = $(mount_SOURCES)
@@ -3928,7 +3945,7 @@ test_logindefs_CPPFLAGS = -DTEST_PROGRAM $(AM_CPPFLAGS)
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@	$(LDADD) \
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@	libblkid.la \
 @BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@	libcommon.la \
-@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@	$(am__append_134)
+@BUILD_DEPRECATED_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@	$(am__append_135)
 @BUILD_MOUNT_TRUE@@HAVE_STATIC_MOUNT_TRUE@mount_static_LDADD = $(mount_LDADD) $(SELINUX_LIBS_STATIC)
 @BUILD_DEPRECATED_MOUNT_TRUE@umount_SOURCES = mount-deprecated/umount.c $(mount_common_sources)
 @BUILD_MOUNT_TRUE@umount_SOURCES = sys-utils/umount.c
@@ -3963,12 +3980,13 @@ readprofile_SOURCES = sys-utils/readprofile.c
 @BUILD_TUNELP_TRUE@tunelp_SOURCES = sys-utils/tunelp.c sys-utils/lp.h
 @BUILD_CYTUNE_TRUE@cytune_SOURCES = sys-utils/cytune.c sys-utils/cyclades.h
 @BUILD_CYTUNE_TRUE@cytune_LDADD = $(LDADD) libcommon.la
+@BUILD_FSTRIM_TRUE@fstrim_SOURCES = sys-utils/fstrim.c
+@BUILD_FSTRIM_TRUE@fstrim_LDADD = $(LDADD) libcommon.la libmount.la
+@BUILD_FSTRIM_TRUE@fstrim_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir)
 @LINUX_TRUE@dmesg_SOURCES = sys-utils/dmesg.c
 @LINUX_TRUE@dmesg_LDADD = $(LDADD) libcommon.la -lrt
 @LINUX_TRUE@ctrlaltdel_SOURCES = sys-utils/ctrlaltdel.c
 @LINUX_TRUE@fsfreeze_SOURCES = sys-utils/fsfreeze.c
-@LINUX_TRUE@fstrim_SOURCES = sys-utils/fstrim.c
-@LINUX_TRUE@fstrim_LDADD = $(LDADD) libcommon.la
 @LINUX_TRUE@blkdiscard_SOURCES = sys-utils/blkdiscard.c
 @LINUX_TRUE@blkdiscard_LDADD = $(LDADD) libcommon.la
 @LINUX_TRUE@ldattach_SOURCES = sys-utils/ldattach.c
@@ -3976,11 +3994,11 @@ readprofile_SOURCES = sys-utils/readprofile.c
 @LINUX_TRUE@rtcwake_SOURCES = sys-utils/rtcwake.c
 @LINUX_TRUE@rtcwake_LDADD = $(LDADD) libcommon.la
 @LINUX_TRUE@setarch_SOURCES = sys-utils/setarch.c
-@LINUX_TRUE@SETARCH_LINKS = linux32 linux64 $(am__append_147) \
-@LINUX_TRUE@	$(am__append_148) $(am__append_149) \
-@LINUX_TRUE@	$(am__append_150) $(am__append_151) \
-@LINUX_TRUE@	$(am__append_152) $(am__append_153) \
-@LINUX_TRUE@	$(am__append_154)
+@LINUX_TRUE@SETARCH_LINKS = linux32 linux64 $(am__append_150) \
+@LINUX_TRUE@	$(am__append_151) $(am__append_152) \
+@LINUX_TRUE@	$(am__append_153) $(am__append_154) \
+@LINUX_TRUE@	$(am__append_155) $(am__append_156) \
+@LINUX_TRUE@	$(am__append_157)
 @LINUX_TRUE@SETARCH_MAN_LINKS = $(addprefix sys-utils/,$(SETARCH_LINKS:=.8))
 @BUILD_EJECT_TRUE@eject_SOURCES = sys-utils/eject.c
 @BUILD_EJECT_TRUE@eject_LDADD = $(LDADD) libmount.la libcommon.la
@@ -4021,21 +4039,22 @@ readprofile_SOURCES = sys-utils/readprofile.c
 @BUILD_SWITCH_ROOT_TRUE@switch_root_SOURCES = sys-utils/switch_root.c
 @BUILD_UNSHARE_TRUE@unshare_SOURCES = sys-utils/unshare.c
 @BUILD_UNSHARE_TRUE@unshare_LDADD = $(LDADD) libcommon.la
+@BUILD_UNSHARE_TRUE@unshare_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir)
 @BUILD_NSENTER_TRUE@nsenter_SOURCES = sys-utils/nsenter.c
 @BUILD_NSENTER_TRUE@nsenter_LDADD = $(LDADD) libcommon.la
 @BUILD_HWCLOCK_TRUE@hwclock_SOURCES = sys-utils/hwclock.c \
 @BUILD_HWCLOCK_TRUE@	sys-utils/hwclock.h \
 @BUILD_HWCLOCK_TRUE@	sys-utils/hwclock-cmos.c \
-@BUILD_HWCLOCK_TRUE@	sys-utils/hwclock-kd.c $(am__append_193)
+@BUILD_HWCLOCK_TRUE@	sys-utils/hwclock-kd.c $(am__append_196)
 @BUILD_HWCLOCK_TRUE@hwclock_LDADD = $(LDADD) libcommon.la \
-@BUILD_HWCLOCK_TRUE@	$(am__append_194)
+@BUILD_HWCLOCK_TRUE@	$(am__append_197)
 @BUILD_SETPRIV_TRUE@setpriv_SOURCES = sys-utils/setpriv.c
 @BUILD_SETPRIV_TRUE@setpriv_LDADD = $(LDADD) -lcap-ng libcommon.la
 cal_SOURCES = misc-utils/cal.c lib/mbsalign.c lib/strutils.c \
-	$(am__append_197)
+	$(am__append_200)
 cal_CFLAGS = $(AM_CFLAGS) $(NCURSES_CFLAGS)
 cal_LDADD = $(LDADD) libcommon.la $(NCURSES_LIBS) $(TINFO_LIBS) \
-	$(am__append_198)
+	$(am__append_201)
 logger_SOURCES = misc-utils/logger.c lib/strutils.c
 look_SOURCES = misc-utils/look.c
 mcookie_SOURCES = misc-utils/mcookie.c lib/md5.c
@@ -4047,16 +4066,16 @@ whereis_LDADD = $(LDADD) libcommon.la
 @BUILD_LSLOCKS_TRUE@lslocks_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir)
 @BUILD_LSBLK_TRUE@lsblk_SOURCES = misc-utils/lsblk.c
 @BUILD_LSBLK_TRUE@lsblk_LDADD = $(LDADD) libblkid.la libmount.la \
-@BUILD_LSBLK_TRUE@	libcommon.la $(am__append_203)
+@BUILD_LSBLK_TRUE@	libcommon.la $(am__append_206)
 @BUILD_LSBLK_TRUE@lsblk_CFLAGS = $(AM_CFLAGS) -I$(ul_libblkid_incdir) -I$(ul_libmount_incdir)
 @BUILD_LIBUUID_TRUE@uuidgen_SOURCES = misc-utils/uuidgen.c
 @BUILD_LIBUUID_TRUE@uuidgen_LDADD = $(LDADD) libuuid.la
 @BUILD_LIBUUID_TRUE@uuidgen_CFLAGS = $(AM_CFLAGS) -I$(ul_libuuid_incdir)
 @BUILD_UUIDD_TRUE@uuidd_LDADD = $(LDADD) libuuid.la libcommon.la \
-@BUILD_UUIDD_TRUE@	$(am__append_209)
+@BUILD_UUIDD_TRUE@	$(am__append_212)
 @BUILD_UUIDD_TRUE@uuidd_CFLAGS = $(DAEMON_CFLAGS) $(AM_CFLAGS) -I$(ul_libuuid_incdir)
 @BUILD_UUIDD_TRUE@uuidd_LDFLAGS = $(DAEMON_LDFLAGS) $(AM_LDFLAGS)
-@BUILD_UUIDD_TRUE@uuidd_SOURCES = misc-utils/uuidd.c $(am__append_208)
+@BUILD_UUIDD_TRUE@uuidd_SOURCES = misc-utils/uuidd.c $(am__append_211)
 @BUILD_LIBBLKID_TRUE@blkid_SOURCES = misc-utils/blkid.c
 @BUILD_LIBBLKID_TRUE@blkid_LDADD = $(LDADD) libblkid.la libcommon.la
 @BUILD_LIBBLKID_TRUE@blkid_CFLAGS = $(AM_CFLAGS) -I$(ul_libblkid_incdir)
@@ -4071,7 +4090,7 @@ whereis_LDADD = $(LDADD) libcommon.la
 @BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@blkid_static_LDADD = $(LDADD) libblkid.la
 @BUILD_LIBBLKID_TRUE@@HAVE_STATIC_BLKID_TRUE@blkid_static_CFLAGS = $(AM_CFLAGS) -I$(ul_libblkid_incdir)
 @BUILD_LIBMOUNT_TRUE@findmnt_LDADD = $(LDADD) libmount.la libcommon.la \
-@BUILD_LIBMOUNT_TRUE@	$(am__append_216)
+@BUILD_LIBMOUNT_TRUE@	$(am__append_219)
 @BUILD_LIBMOUNT_TRUE@findmnt_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir)
 @BUILD_LIBMOUNT_TRUE@findmnt_SOURCES = misc-utils/findmnt.c
 @BUILD_KILL_TRUE@kill_SOURCES = misc-utils/kill.c
@@ -4103,15 +4122,15 @@ isosize_LDADD = $(LDADD) libcommon.la
 mkswap_SOURCES = \
 	disk-utils/mkswap.c
 
-mkswap_LDADD = $(LDADD) libcommon.la $(am__append_224) \
-	$(am__append_226) $(am__append_227)
-mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
+mkswap_LDADD = $(LDADD) libcommon.la $(am__append_227) \
+	$(am__append_229) $(am__append_230)
+mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_226) $(am__append_228)
 @BUILD_SWAPLABEL_TRUE@swaplabel_SOURCES = disk-utils/swaplabel.c
 @BUILD_SWAPLABEL_TRUE@swaplabel_CFLAGS = $(AM_CFLAGS) \
 @BUILD_SWAPLABEL_TRUE@	-I$(ul_libblkid_incdir) \
-@BUILD_SWAPLABEL_TRUE@	$(am__append_231)
+@BUILD_SWAPLABEL_TRUE@	$(am__append_234)
 @BUILD_SWAPLABEL_TRUE@swaplabel_LDADD = $(LDADD) libblkid.la \
-@BUILD_SWAPLABEL_TRUE@	libcommon.la $(am__append_230)
+@BUILD_SWAPLABEL_TRUE@	libcommon.la $(am__append_233)
 @BUILD_FSCK_TRUE@fsck_SOURCES = disk-utils/fsck.c
 @BUILD_FSCK_TRUE@fsck_LDADD = $(LDADD) libmount.la libblkid.la
 @BUILD_FSCK_TRUE@fsck_CFLAGS = $(AM_CFLAGS) -I$(ul_libmount_incdir) -I$(ul_libblkid_incdir)
@@ -4156,12 +4175,12 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
 
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@fdisk_LDADD = $(LDADD) libcommon.la \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	libfdisk.la \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_248) \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_250)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_251) \
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_253)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@fdisk_CFLAGS = $(AM_CFLAGS) \
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	-I$(ul_libfdisk_incdir) \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_247) \
-@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_249)
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_250) \
+@ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@	$(am__append_252)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_SOURCES = $(fdisk_SOURCES)
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_LDFLAGS = -all-static
 @ARCH_M68K_FALSE@@BUILD_FDISK_TRUE@@HAVE_STATIC_FDISK_TRUE@fdisk_static_CFLAGS = $(fdisk_CFLAGS)
@@ -4177,13 +4196,13 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@HAVE_STATIC_SFDISK_TRUE@sfdisk_static_LDADD = $(sfdisk_LDADD)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_SOURCES = fdisks/cfdisk.c
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_CFLAGS = $(AM_CFLAGS) \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_257) \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_260)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_260) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_263)
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@cfdisk_LDADD = $(LDADD) \
 @ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	libcommon.la \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_258) \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_259) \
-@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_261)
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_261) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_262) \
+@ARCH_M68K_FALSE@@ARCH_SPARC_FALSE@@BUILD_CFDISK_TRUE@	$(am__append_264)
 @BUILD_BASH_COMPLETION_TRUE@dist_bashcompletion_DATA =  \
 @BUILD_BASH_COMPLETION_TRUE@	bash-completion/blkid \
 @BUILD_BASH_COMPLETION_TRUE@	bash-completion/cal \
@@ -4216,9 +4235,6 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
 @BUILD_BASH_COMPLETION_TRUE@	bash-completion/tailf \
 @BUILD_BASH_COMPLETION_TRUE@	bash-completion/whereis \
 @BUILD_BASH_COMPLETION_TRUE@	bash-completion/wipefs \
-@BUILD_BASH_COMPLETION_TRUE@	$(am__append_262) \
-@BUILD_BASH_COMPLETION_TRUE@	$(am__append_263) \
-@BUILD_BASH_COMPLETION_TRUE@	$(am__append_264) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_265) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_266) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_267) \
@@ -4231,9 +4247,9 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_274) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_275) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_276) \
+@BUILD_BASH_COMPLETION_TRUE@	$(am__append_277) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_278) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_279) \
-@BUILD_BASH_COMPLETION_TRUE@	$(am__append_280) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_281) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_282) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_283) \
@@ -4262,7 +4278,10 @@ mkswap_CFLAGS = $(AM_CFLAGS) $(am__append_223) $(am__append_225)
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_306) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_307) \
 @BUILD_BASH_COMPLETION_TRUE@	$(am__append_308) \
-@BUILD_BASH_COMPLETION_TRUE@	$(am__append_309)
+@BUILD_BASH_COMPLETION_TRUE@	$(am__append_309) \
+@BUILD_BASH_COMPLETION_TRUE@	$(am__append_310) \
+@BUILD_BASH_COMPLETION_TRUE@	$(am__append_311) \
+@BUILD_BASH_COMPLETION_TRUE@	$(am__append_312)
 test_byteswap_SOURCES = tests/helpers/test_byteswap.c
 test_md5_SOURCES = tests/helpers/test_md5.c lib/md5.c
 test_pathnames_SOURCES = tests/helpers/test_pathnames.c
@@ -5395,12 +5414,12 @@ sys-utils/fsfreeze.$(OBJEXT): sys-utils/$(am__dirstamp) \
 fsfreeze$(EXEEXT): $(fsfreeze_OBJECTS) $(fsfreeze_DEPENDENCIES) $(EXTRA_fsfreeze_DEPENDENCIES) 
 	@rm -f fsfreeze$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(fsfreeze_OBJECTS) $(fsfreeze_LDADD) $(LIBS)
-sys-utils/fstrim.$(OBJEXT): sys-utils/$(am__dirstamp) \
+sys-utils/fstrim-fstrim.$(OBJEXT): sys-utils/$(am__dirstamp) \
 	sys-utils/$(DEPDIR)/$(am__dirstamp)
 
 fstrim$(EXEEXT): $(fstrim_OBJECTS) $(fstrim_DEPENDENCIES) $(EXTRA_fstrim_DEPENDENCIES) 
 	@rm -f fstrim$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(fstrim_OBJECTS) $(fstrim_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(fstrim_LINK) $(fstrim_OBJECTS) $(fstrim_LDADD) $(LIBS)
 misc-utils/getopt.$(OBJEXT): misc-utils/$(am__dirstamp) \
 	misc-utils/$(DEPDIR)/$(am__dirstamp)
 
@@ -6294,12 +6313,12 @@ sys-utils/umount_static-umount.$(OBJEXT): sys-utils/$(am__dirstamp) \
 umount.static$(EXEEXT): $(umount_static_OBJECTS) $(umount_static_DEPENDENCIES) $(EXTRA_umount_static_DEPENDENCIES) 
 	@rm -f umount.static$(EXEEXT)
 	$(AM_V_CCLD)$(umount_static_LINK) $(umount_static_OBJECTS) $(umount_static_LDADD) $(LIBS)
-sys-utils/unshare.$(OBJEXT): sys-utils/$(am__dirstamp) \
+sys-utils/unshare-unshare.$(OBJEXT): sys-utils/$(am__dirstamp) \
 	sys-utils/$(DEPDIR)/$(am__dirstamp)
 
 unshare$(EXEEXT): $(unshare_OBJECTS) $(unshare_DEPENDENCIES) $(EXTRA_unshare_DEPENDENCIES) 
 	@rm -f unshare$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(unshare_OBJECTS) $(unshare_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(unshare_LINK) $(unshare_OBJECTS) $(unshare_LDADD) $(LIBS)
 login-utils/utmpdump.$(OBJEXT): login-utils/$(am__dirstamp) \
 	login-utils/$(DEPDIR)/$(am__dirstamp)
 
@@ -6827,7 +6846,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/fallocate.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/flock.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/fsfreeze.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/fstrim.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/fstrim-fstrim.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/hwclock-cmos.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/hwclock-kd.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/hwclock-rtc.Po@am__quote@
@@ -6860,7 +6879,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/tunelp.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/umount-umount.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/umount_static-umount.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/unshare.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/unshare-unshare.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@sys-utils/$(DEPDIR)/wdctl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@term-utils/$(DEPDIR)/agetty.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@term-utils/$(DEPDIR)/mesg.Po@am__quote@
@@ -8441,6 +8460,20 @@ disk-utils/fsck-fsck.obj: disk-utils/fsck.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(fsck_CFLAGS) $(CFLAGS) -c -o disk-utils/fsck-fsck.obj `if test -f 'disk-utils/fsck.c'; then $(CYGPATH_W) 'disk-utils/fsck.c'; else $(CYGPATH_W) '$(srcdir)/disk-utils/fsck.c'; fi`
 
+sys-utils/fstrim-fstrim.o: sys-utils/fstrim.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(fstrim_CFLAGS) $(CFLAGS) -MT sys-utils/fstrim-fstrim.o -MD -MP -MF sys-utils/$(DEPDIR)/fstrim-fstrim.Tpo -c -o sys-utils/fstrim-fstrim.o `test -f 'sys-utils/fstrim.c' || echo '$(srcdir)/'`sys-utils/fstrim.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) sys-utils/$(DEPDIR)/fstrim-fstrim.Tpo sys-utils/$(DEPDIR)/fstrim-fstrim.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sys-utils/fstrim.c' object='sys-utils/fstrim-fstrim.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(fstrim_CFLAGS) $(CFLAGS) -c -o sys-utils/fstrim-fstrim.o `test -f 'sys-utils/fstrim.c' || echo '$(srcdir)/'`sys-utils/fstrim.c
+
+sys-utils/fstrim-fstrim.obj: sys-utils/fstrim.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(fstrim_CFLAGS) $(CFLAGS) -MT sys-utils/fstrim-fstrim.obj -MD -MP -MF sys-utils/$(DEPDIR)/fstrim-fstrim.Tpo -c -o sys-utils/fstrim-fstrim.obj `if test -f 'sys-utils/fstrim.c'; then $(CYGPATH_W) 'sys-utils/fstrim.c'; else $(CYGPATH_W) '$(srcdir)/sys-utils/fstrim.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) sys-utils/$(DEPDIR)/fstrim-fstrim.Tpo sys-utils/$(DEPDIR)/fstrim-fstrim.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sys-utils/fstrim.c' object='sys-utils/fstrim-fstrim.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(fstrim_CFLAGS) $(CFLAGS) -c -o sys-utils/fstrim-fstrim.obj `if test -f 'sys-utils/fstrim.c'; then $(CYGPATH_W) 'sys-utils/fstrim.c'; else $(CYGPATH_W) '$(srcdir)/sys-utils/fstrim.c'; fi`
+
 misc-utils/lsblk-lsblk.o: misc-utils/lsblk.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(lsblk_CFLAGS) $(CFLAGS) -MT misc-utils/lsblk-lsblk.o -MD -MP -MF misc-utils/$(DEPDIR)/lsblk-lsblk.Tpo -c -o misc-utils/lsblk-lsblk.o `test -f 'misc-utils/lsblk.c' || echo '$(srcdir)/'`misc-utils/lsblk.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) misc-utils/$(DEPDIR)/lsblk-lsblk.Tpo misc-utils/$(DEPDIR)/lsblk-lsblk.Po
@@ -9854,6 +9887,20 @@ sys-utils/umount_static-umount.obj: sys-utils/umount.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sys-utils/umount.c' object='sys-utils/umount_static-umount.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(umount_static_CFLAGS) $(CFLAGS) -c -o sys-utils/umount_static-umount.obj `if test -f 'sys-utils/umount.c'; then $(CYGPATH_W) 'sys-utils/umount.c'; else $(CYGPATH_W) '$(srcdir)/sys-utils/umount.c'; fi`
+
+sys-utils/unshare-unshare.o: sys-utils/unshare.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(unshare_CFLAGS) $(CFLAGS) -MT sys-utils/unshare-unshare.o -MD -MP -MF sys-utils/$(DEPDIR)/unshare-unshare.Tpo -c -o sys-utils/unshare-unshare.o `test -f 'sys-utils/unshare.c' || echo '$(srcdir)/'`sys-utils/unshare.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) sys-utils/$(DEPDIR)/unshare-unshare.Tpo sys-utils/$(DEPDIR)/unshare-unshare.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sys-utils/unshare.c' object='sys-utils/unshare-unshare.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(unshare_CFLAGS) $(CFLAGS) -c -o sys-utils/unshare-unshare.o `test -f 'sys-utils/unshare.c' || echo '$(srcdir)/'`sys-utils/unshare.c
+
+sys-utils/unshare-unshare.obj: sys-utils/unshare.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(unshare_CFLAGS) $(CFLAGS) -MT sys-utils/unshare-unshare.obj -MD -MP -MF sys-utils/$(DEPDIR)/unshare-unshare.Tpo -c -o sys-utils/unshare-unshare.obj `if test -f 'sys-utils/unshare.c'; then $(CYGPATH_W) 'sys-utils/unshare.c'; else $(CYGPATH_W) '$(srcdir)/sys-utils/unshare.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) sys-utils/$(DEPDIR)/unshare-unshare.Tpo sys-utils/$(DEPDIR)/unshare-unshare.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sys-utils/unshare.c' object='sys-utils/unshare-unshare.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(unshare_CFLAGS) $(CFLAGS) -c -o sys-utils/unshare-unshare.obj `if test -f 'sys-utils/unshare.c'; then $(CYGPATH_W) 'sys-utils/unshare.c'; else $(CYGPATH_W) '$(srcdir)/sys-utils/unshare.c'; fi`
 
 misc-utils/uuidd-uuidd.o: misc-utils/uuidd.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(uuidd_CFLAGS) $(CFLAGS) -MT misc-utils/uuidd-uuidd.o -MD -MP -MF misc-utils/$(DEPDIR)/uuidd-uuidd.Tpo -c -o misc-utils/uuidd-uuidd.o `test -f 'misc-utils/uuidd.c' || echo '$(srcdir)/'`misc-utils/uuidd.c
