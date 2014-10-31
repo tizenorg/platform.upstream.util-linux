@@ -1,5 +1,5 @@
 Name:           util-linux
-Version:        2.24
+Version:        2.24.2
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
 BuildRequires:  gettext-devel
