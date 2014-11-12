@@ -14,11 +14,13 @@
 # GNU General Public License for more details.
 #
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="sunlabel tests"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
+
+ts_check_test_command "$TS_CMD_FDISK"
 
 FDISK_CMD_INIT="s\n" # create new sunlabel
 FDISK_CMD_WRITE_CLOSE="w\nq\n"

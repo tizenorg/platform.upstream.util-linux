@@ -17,15 +17,18 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+
 #include "c.h"
 #include "libfdisk.h"
 
 #include "nls.h"		/* temporary before dialog API will be implamented */
-#include "tt.h"
+#include "list.h"
+#include "debug.h"
+#include <stdio.h>
+#include <stdarg.h>
 
 /* features */
 #define CONFIG_LIBFDISK_ASSERT
-#define CONFIG_LIBFDISK_DEBUG
 
 #ifdef CONFIG_LIBFDISK_ASSERT
 #include <assert.h>
@@ -34,61 +37,20 @@
 /*
  * Debug
  */
-#if defined(TEST_PROGRAM) && !defined(LIBFDISK_DEBUG)
-#define CONFIG_LIBFDISK_DEBUG
-#endif
-
-#ifdef CONFIG_LIBFDISK_DEBUG
-# include <stdio.h>
-# include <stdarg.h>
-
-/* fdisk debugging flags/options */
 #define FDISK_DEBUG_INIT	(1 << 1)
-#define FDISK_DEBUG_CONTEXT	(1 << 2)
-#define FDISK_DEBUG_TOPOLOGY    (1 << 3)
-#define FDISK_DEBUG_GEOMETRY    (1 << 4)
-#define FDISK_DEBUG_LABEL       (1 << 5)
-#define FDISK_DEBUG_ASK         (1 << 6)
-#define FDISK_DEBUG_FRONTEND	(1 << 7)
+#define FDISK_DEBUG_CXT		(1 << 2)
+#define FDISK_DEBUG_LABEL       (1 << 3)
+#define FDISK_DEBUG_ASK         (1 << 4)
+#define FDISK_DEBUG_FRONTEND	(1 << 5)
+#define FDISK_DEBUG_PART	(1 << 6)
+#define FDISK_DEBUG_PARTTYPE	(1 << 7)
+#define FDISK_DEBUG_TAB		(1 << 8)
 #define FDISK_DEBUG_ALL		0xFFFF
 
-# define ON_DBG(m, x)	do { \
-				if ((FDISK_DEBUG_ ## m) & fdisk_debug_mask) { \
-					x; \
-				}	   \
-			} while (0)
-
-# define DBG(m, x)	do { \
-				if ((FDISK_DEBUG_ ## m) & fdisk_debug_mask) { \
-					fprintf(stderr, "%d: fdisk: %8s: ", getpid(), # m); \
-					x;				\
-				} \
-			} while (0)
-
-# define DBG_FLUSH	do { \
-				if (fdisk_debug_mask && \
-				    fdisk_debug_mask != FDISK_DEBUG_INIT) \
-					fflush(stderr);			\
-			} while(0)
-
-static inline void __attribute__ ((__format__ (__printf__, 1, 2)))
-dbgprint(const char *mesg, ...)
-{
-	va_list ap;
-	va_start(ap, mesg);
-	vfprintf(stderr, mesg, ap);
-	va_end(ap);
-	fputc('\n', stderr);
-}
-
-extern int fdisk_debug_mask;
-
-#else /* !CONFIG_LIBFDISK_DEBUG */
-# define ON_DBG(m,x) do { ; } while (0)
-# define DBG(m,x) do { ; } while (0)
-# define DBG_FLUSH do { ; } while(0)
-#endif
-
+UL_DEBUG_DECLARE_MASK(libfdisk);
+#define DBG(m, x)	__UL_DBG(libfdisk, FDISK_DEBUG_, m, x)
+#define ON_DBG(m, x)	__UL_DBG_CALL(libfdisk, FDISK_DEBUG_, m, x)
+#define DBG_FLUSH	__UL_DBG_FLUSH(libfdisk, FDISK_DEBUG_)
 
 #ifdef TEST_PROGRAM
 struct fdisk_test {
@@ -103,6 +65,33 @@ extern int fdisk_run_test(struct fdisk_test *tests, int argc, char *argv[]);
 
 
 typedef unsigned long long sector_t;
+
+
+/*
+ * Generic iterator
+ */
+struct fdisk_iter {
+        struct list_head        *p;		/* current position */
+        struct list_head        *head;		/* start position */
+	int			direction;	/* FDISK_ITER_{FOR,BACK}WARD */
+};
+
+#define IS_ITER_FORWARD(_i)	((_i)->direction == FDISK_ITER_FORWARD)
+#define IS_ITER_BACKWARD(_i)	((_i)->direction == FDISK_ITER_BACKWARD)
+
+#define FDISK_ITER_INIT(itr, list) \
+	do { \
+		(itr)->p = IS_ITER_FORWARD(itr) ? \
+				(list)->next : (list)->prev; \
+		(itr)->head = (list); \
+	} while(0)
+
+#define FDISK_ITER_ITERATE(itr, res, restype, member) \
+	do { \
+		res = list_entry((itr)->p, restype, member); \
+		(itr)->p = IS_ITER_FORWARD(itr) ? \
+				(itr)->p->next : (itr)->p->prev; \
+	} while(0)
 
 /*
  * Partition types
@@ -125,6 +114,53 @@ enum {
 #define fdisk_parttype_is_invisible(_x)	((_x) && ((_x)->flags & FDISK_PARTTYPE_INVISIBLE))
 #define fdisk_parttype_is_allocated(_x)	((_x) && ((_x)->flags & FDISK_PARTTYPE_ALLOCATED))
 
+struct fdisk_partition {
+	int		refcount;		/* reference counter */
+	size_t		partno;			/* partition number */
+	size_t		parent_partno;		/* for logical partitions */
+
+	uint64_t	start;			/* first sectors */
+	uint64_t	end;			/* last sector */
+	uint64_t	size;			/* size in sectors */
+
+	char		*name;			/* partition name */
+	char		*uuid;			/* partition UUID */
+	char		*attrs;			/* partition flags/attributes converted to string */
+	struct fdisk_parttype	*type;		/* partition type */
+
+	struct list_head	parts;		/* list of partitions */
+
+	/* extra fields for partition_to_string() */
+	char		start_post;		/* start postfix  (e.g. '+') */
+	char		end_post;		/* end postfix */
+	char		size_post;		/* size postfix */
+
+	uint64_t	fsize;			/* bsd junk */
+	uint64_t	bsize;
+	uint64_t	cpg;
+
+	char		boot;			/* is bootable (MBS only) */
+	char		*start_addr;		/* start C/H/S in string */
+	char		*end_addr;		/* end C/H/S in string */
+
+	unsigned int	partno_follow_default : 1,	/* use default partno */
+			start_follow_default : 1,	/* use default start */
+			end_follow_default : 1,		/* use default end */
+			freespace : 1,		/* this is free space */
+			container : 1,		/* container partition (e.g. extended partition) */
+			wholedisk : 1,		/* special system partition */
+			used   : 1;		/* partition already used */
+};
+
+#define FDISK_EMPTY_PARTNO	((size_t) -1)
+#define FDISK_EMPTY_PARTITION	{ .partno = FDISK_EMPTY_PARTNO }
+
+struct fdisk_table {
+	struct list_head	parts;		/* partitions */
+	int			refcount;
+	size_t			nents;		/* number of partitions */
+};
+
 /*
  * Legacy CHS based geometry
  */
@@ -146,10 +182,12 @@ struct fdisk_label_operations {
 	int (*verify)(struct fdisk_context *cxt);
 	/* create new disk label */
 	int (*create)(struct fdisk_context *cxt);
-	/* list partition table */
+	/* list disklabel details */
 	int (*list)(struct fdisk_context *cxt);
 	/* returns offset and size of the 'n' part of the PT */
 	int (*locate)(struct fdisk_context *cxt, int n, const char **name, off_t *offset, size_t *size);
+	/* reorder partitions */
+	int (*reorder)(struct fdisk_context *cxt);
 
 	/* get disk label ID */
 	int (*get_id)(struct fdisk_context *cxt, char **id);
@@ -157,9 +195,8 @@ struct fdisk_label_operations {
 	int (*set_id)(struct fdisk_context *cxt);
 
 	/* new partition */
-	int (*part_add)(struct fdisk_context *cxt,
-						size_t partnum,
-						struct fdisk_parttype *t);
+	int (*add_part)(struct fdisk_context *cxt, struct fdisk_partition *pa);
+
 	/* delete partition */
 	int (*part_delete)(struct fdisk_context *cxt,
 						size_t partnum);
@@ -171,10 +208,13 @@ struct fdisk_label_operations {
 						size_t partnum,
 						struct fdisk_parttype *t);
 
-	/* returns FDISK_PARTSTAT_* flags */
-	int (*part_get_status)(struct fdisk_context *cxt,
-						size_t partnum,
-						int *status);
+	/* return state of the partition */
+	int (*part_is_used)(struct fdisk_context *cxt, size_t partnum);
+
+	/* fill in partition struct */
+	int (*get_part)(struct fdisk_context *cxt,
+						size_t n,
+						struct fdisk_partition *pa);
 
 	int (*part_toggle_flag)(struct fdisk_context *cxt, size_t i, unsigned long flag);
 
@@ -186,6 +226,24 @@ struct fdisk_label_operations {
 
 	/* deinit in-memory label stuff */
 	void (*deinit)(struct fdisk_label *lb);
+};
+
+/*
+ * fdisk_label_operations->list() output column
+ */
+struct fdisk_column {
+	int		id;		/* FDISK_COL_* */
+	const char	*name;		/* column header */
+	double		width;
+	int		scols_flags;	/* SCOLS_FL_* */
+
+	int		flags;		/* FDISK_COLFL_* */
+};
+
+/* note that the defauls is to display a column always */
+enum {
+	FDISK_COLFL_DETAIL	= (1 << 1),	/* only display if fdisk_context_display_details() */
+	FDISK_COLFL_EYECANDY	= (1 << 2),	/* don't display if fdisk_context_display_details() */
 };
 
 /*
@@ -205,12 +263,15 @@ struct fdisk_label {
 	unsigned int		changed:1,	/* label has been modified */
 				disabled:1;	/* this driver is disabled at all */
 
+	const struct fdisk_column *columns;	/* all possible columns */
+	size_t			ncolumns;
+
 	const struct fdisk_label_operations *op;
 };
 
+
 /* label driver flags */
 enum {
-	FDISK_LABEL_FL_ADDPART_NOPARTNO = (1 << 1),
 	FDISK_LABEL_FL_REQUIRE_GEOMETRY = (1 << 2),
 	FDISK_LABEL_FL_INCHARS_PARTNO   = (1 << 3)
 };
@@ -222,6 +283,14 @@ extern struct fdisk_label *fdisk_new_bsd_label(struct fdisk_context *cxt);
 extern struct fdisk_label *fdisk_new_sgi_label(struct fdisk_context *cxt);
 extern struct fdisk_label *fdisk_new_sun_label(struct fdisk_context *cxt);
 
+
+struct ask_menuitem {
+	char	key;
+	const char	*name;
+	const char	*desc;
+
+	struct ask_menuitem *next;
+};
 
 /* fdisk dialog -- note that nothing from this stuff will be directly exported,
  * we will have get/set() function for everything.
@@ -257,15 +326,21 @@ struct fdisk_ask {
 		struct ask_string {
 			char		*result;	/* allocated */
 		} str;
-		/* FDISK_ASKTYPE_TABLE, see include/tt.h  */
-		struct tt *table;
+		/* FDISK_ASKTYPE_MENU */
+		struct ask_menu {
+			int		dfl;		/* default meni item */
+			int		result;
+			struct ask_menuitem *first;
+		} menu;
 	} data;
 };
 
 struct fdisk_context {
 	int dev_fd;         /* device descriptor */
 	char *dev_path;     /* device path */
+
 	unsigned char *firstsector; /* buffer with master boot record */
+	unsigned long firstsector_bufsz;
 
 	/* topology */
 	unsigned long io_size;		/* I/O size used by fdisk */
@@ -283,6 +358,7 @@ struct fdisk_context {
 	/* alignment */
 	unsigned long grain;		/* alignment unit */
 	sector_t first_lba;		/* recommended begin of the first partition */
+	sector_t last_lba;		/* recomennded end of last partition */
 
 	/* geometry */
 	sector_t total_sectors;	/* in logical sectors */
@@ -309,8 +385,6 @@ struct fdisk_context {
 extern int __fdisk_context_switch_label(struct fdisk_context *cxt,
 				    struct fdisk_label *lb);
 
-extern int fdisk_context_use_cylinders(struct fdisk_context *cxt);
-extern int fdisk_context_display_details(struct fdisk_context *cxt);
 extern int fdisk_context_enable_listonly(struct fdisk_context *cxt, int enable);
 extern int fdisk_context_listonly(struct fdisk_context *cxt);
 
@@ -346,20 +420,18 @@ extern int fdisk_apply_user_device_properties(struct fdisk_context *cxt);
 extern void fdisk_zeroize_device_properties(struct fdisk_context *cxt);
 
 /* utils.c */
-extern void fdisk_zeroize_firstsector(struct fdisk_context *cxt);
+extern int fdisk_init_firstsector_buffer(struct fdisk_context *cxt);
 extern int fdisk_read_firstsector(struct fdisk_context *cxt);
 extern char *fdisk_partname(const char *dev, size_t partno);
 
 /* label.c */
 extern int fdisk_probe_labels(struct fdisk_context *cxt);
 extern void fdisk_deinit_label(struct fdisk_label *lb);
-
+extern const struct fdisk_column *fdisk_label_get_column(
+					struct fdisk_label *lb, int id);
 
 /* ask.c */
 extern int fdisk_ask_partnum(struct fdisk_context *cxt, size_t *partnum, int wantnew);
-
-extern struct tt *fdisk_ask_get_table(struct fdisk_ask *ask);
-extern int fdisk_print_table(struct fdisk_context *cxt, struct tt *tb);
 
 extern int fdisk_info_new_partition(
 			struct fdisk_context *cxt,

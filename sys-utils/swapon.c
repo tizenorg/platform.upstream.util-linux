@@ -13,6 +13,7 @@
 #include <ctype.h>
 
 #include <libmount.h>
+#include <libsmartcols.h>
 
 #include "c.h"
 #include "nls.h"
@@ -25,7 +26,6 @@
 #include "swapheader.h"
 #include "swapon-common.h"
 #include "strutils.h"
-#include "tt.h"
 
 #define PATH_MKSWAP	"/sbin/mkswap"
 
@@ -76,9 +76,6 @@ enum {
 	SIG_SWSUSPEND
 };
 
-#define SWAP_SIGNATURE		"SWAPSPACE2"
-#define SWAP_SIGNATURE_SZ	(sizeof(SWAP_SIGNATURE) - 1)
-
 static int all;
 static int priority = -1;	/* non-prioritized swap by default */
 static int discard;		/* don't send swap discards by default */
@@ -92,19 +89,25 @@ static int verbose;
 struct colinfo {
         const char *name; /* header */
         double     whint; /* width hint (N < 1 is in percent of termwidth) */
-        int        flags; /* TT_FL_* */
+	int        flags; /* SCOLS_FL_* */
         const char *help;
 };
+
+/* basic output flags */
+static int no_headings;
+static int raw;
+
 enum { COL_PATH, COL_TYPE, COL_SIZE, COL_USED, COL_PRIO };
 struct colinfo infos[] = {
 	[COL_PATH]     = { "NAME",	0.20, 0, N_("device file or partition path") },
-	[COL_TYPE]     = { "TYPE",	0.20, TT_FL_TRUNC, N_("type of the device")},
-	[COL_SIZE]     = { "SIZE",	0.20, TT_FL_RIGHT, N_("size of the swap area")},
-	[COL_USED]     = { "USED",	0.20, TT_FL_RIGHT, N_("bytes in use")},
-	[COL_PRIO]     = { "PRIO",	0.20, TT_FL_RIGHT, N_("swap priority")},
+	[COL_TYPE]     = { "TYPE",	0.20, SCOLS_FL_TRUNC, N_("type of the device")},
+	[COL_SIZE]     = { "SIZE",	0.20, SCOLS_FL_RIGHT, N_("size of the swap area")},
+	[COL_USED]     = { "USED",	0.20, SCOLS_FL_RIGHT, N_("bytes in use")},
+	[COL_PRIO]     = { "PRIO",	0.20, SCOLS_FL_RIGHT, N_("swap priority")},
 };
-#define NCOLS ARRAY_SIZE(infos)
-static int columns[NCOLS], ncolumns;
+
+static int columns[ARRAY_SIZE(infos) * 2];
+static int ncolumns;
 
 static int column_name_to_id(const char *name, size_t namesz)
 {
@@ -112,7 +115,7 @@ static int column_name_to_id(const char *name, size_t namesz)
 
 	assert(name);
 
-	for (i = 0; i < NCOLS; i++) {
+	for (i = 0; i < ARRAY_SIZE(infos); i++) {
 		const char *cn = infos[i].name;
 
 		if (!strncasecmp(name, cn, namesz) && !*(cn + namesz))
@@ -124,9 +127,8 @@ static int column_name_to_id(const char *name, size_t namesz)
 
 static inline int get_column_id(int num)
 {
-	assert(ARRAY_SIZE(columns) == NCOLS);
 	assert(num < ncolumns);
-	assert(columns[num] < (int)NCOLS);
+	assert(columns[num] < (int) ARRAY_SIZE(infos));
 
 	return columns[num];
 }
@@ -136,19 +138,17 @@ static inline struct colinfo *get_column_info(unsigned num)
 	return &infos[get_column_id(num)];
 }
 
-static void add_tt_line(struct tt *tt, struct libmnt_fs *fs, int bytes)
+static void add_scols_line(struct libscols_table *table, struct libmnt_fs *fs, int bytes)
 {
 	int i;
-	struct tt_line *line;
+	struct libscols_line *line;
 
-	assert(tt);
+	assert(table);
 	assert(fs);
 
-	line = tt_add_line(tt, NULL);
-	if (!line) {
-		warn(_("failed to add line to output"));
-		return;
-	}
+	line = scols_table_new_line(table, NULL);
+	if (!line)
+		err(EXIT_FAILURE, _("failed to initialize output line"));
 
 	for (i = 0; i < ncolumns; i++) {
 		char *str = NULL;
@@ -185,7 +185,7 @@ static void add_tt_line(struct tt *tt, struct libmnt_fs *fs, int bytes)
 		}
 
 		if (str)
-			tt_line_set_data(line, i, str);
+			scols_line_refer_data(line, i, str);
 	}
 	return;
 }
@@ -209,7 +209,7 @@ static int display_summary(void)
 	printf(_("%s\t\t\t\tType\t\tSize\tUsed\tPriority\n"), _("Filename"));
 
 	while (mnt_table_next_fs(st, itr, &fs) == 0) {
-		printf("%-39s\t%s\t%jd\t%jd\t%d\n",
+		printf("%-39s\t%-8s\t%jd\t%jd\t%d\n",
 			mnt_fs_get_source(fs),
 			mnt_fs_get_swaptype(fs),
 			mnt_fs_get_size(fs),
@@ -221,14 +221,13 @@ static int display_summary(void)
 	return 0;
 }
 
-static int show_table(int tt_flags, int bytes)
+static int show_table(int bytes)
 {
 	struct libmnt_table *st = get_swaps();
 	struct libmnt_iter *itr = NULL;
 	struct libmnt_fs *fs;
-
-	int i, rc = 0;
-	struct tt *tt = NULL;
+	int i;
+	struct libscols_table *table = NULL;
 
 	if (!st)
 		return -1;
@@ -237,30 +236,29 @@ static int show_table(int tt_flags, int bytes)
 	if (!itr)
 		err(EXIT_FAILURE, _("failed to initialize libmount iterator"));
 
-	tt = tt_new_table(tt_flags | TT_FL_FREEDATA);
-	if (!tt) {
-		warn(_("failed to initialize output table"));
-		goto done;
-	}
+	scols_init_debug(0);
+
+	table = scols_new_table();
+	if (!table)
+		err(EXIT_FAILURE, _("failed to initialize output table"));
+
+	scols_table_enable_raw(table, raw);
+	scols_table_enable_noheadings(table, no_headings);
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *col = get_column_info(i);
 
-		if (!tt_define_column(tt, col->name, col->whint, col->flags)) {
-			warnx(_("failed to initialize output column"));
-			rc = -1;
-			goto done;
-		}
+		if (!scols_table_new_column(table, col->name, col->whint, col->flags))
+			err(EXIT_FAILURE, _("failed to initialize output column"));
 	}
 
 	while (mnt_table_next_fs(st, itr, &fs) == 0)
-		add_tt_line(tt, fs, bytes);
+		add_scols_line(table, fs, bytes);
 
-	tt_print_table(tt);
- done:
+	scols_print_table(table);
+	scols_unref_table(table);
 	mnt_free_iter(itr);
-	tt_free_table(tt);
-	return rc;
+	return 0;
 }
 
 /* calls mkswap */
@@ -345,8 +343,7 @@ err:
 
 static int swap_detect_signature(const char *buf, int *sig)
 {
-	if (memcmp(buf, "SWAP-SPACE", 10) == 0 ||
-            memcmp(buf, "SWAPSPACE2", 10) == 0)
+	if (memcmp(buf, SWAP_SIGNATURE, SWAP_SIGNATURE_SZ) == 0)
 		*sig = SIG_SWAPSPACE;
 
 	else if (memcmp(buf, "S1SUSPEND", 9) == 0 ||
@@ -403,21 +400,19 @@ static unsigned long long swap_get_size(const char *hdr, const char *devname,
 					unsigned int pagesize)
 {
 	unsigned int last_page = 0;
-	int swap_version = 0;
+	const unsigned int swap_version = SWAP_VERSION;
 	int flip = 0;
 	struct swap_header_v1_2 *s;
 
 	s = (struct swap_header_v1_2 *) hdr;
-	if (s->version == 1) {
-		swap_version = 1;
+	if (s->version == swap_version) {
 		last_page = s->last_page;
-	} else if (swab32(s->version) == 1) {
+	} else if (swab32(s->version) == swap_version) {
 		flip = 1;
-		swap_version = 1;
 		last_page = swab32(s->last_page);
 	}
 	if (verbose)
-		warnx(_("%s: found swap signature: version %d, "
+		warnx(_("%s: found swap signature: version %ud, "
 			"page-size %d, %s byte order"),
 			devname,
 			swap_version,
@@ -490,13 +485,13 @@ static int swapon_checks(const char *special)
 	}
 
 	if (S_ISBLK(st.st_mode) && blkdev_get_size(fd, &devsize)) {
-		warn(_("%s: get size failed"), special);
+		warnx(_("%s: get size failed"), special);
 		goto err;
 	}
 
 	hdr = swap_get_header(fd, &sig, &pagesize);
 	if (!hdr) {
-		warn(_("%s: read swap header failed"), special);
+		warnx(_("%s: read swap header failed"), special);
 		goto err;
 	}
 
@@ -688,7 +683,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 		" -e, --ifexists           silently skip devices that do not exist\n"
 		" -f, --fixpgsz            reinitialize the swap space if necessary\n"
 		" -p, --priority <prio>    specify the priority of the swap device\n"
-		" -s, --summary            display summary about used swap devices\n"
+		" -s, --summary            display summary about used swap devices (DEPRECATED)\n"
 		"     --show[=<columns>]   display summary in definable table\n"
 		"     --noheadings         don't print headings, use with --show\n"
 		"     --raw                use the raw output format, use with --show\n"
@@ -715,7 +710,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 		" * if no policy is selected both discard types are enabled. (default)\n"), out);
 
 	fputs(_("\nAvailable columns (for --show):\n"), out);
-	for (i = 0; i < NCOLS; i++)
+	for (i = 0; i < ARRAY_SIZE(infos); i++)
 		fprintf(out, " %4s  %s\n", infos[i].name, _(infos[i].help));
 
 	fprintf(out, USAGE_MAN_TAIL("swapon(8)"));
@@ -725,7 +720,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 int main(int argc, char *argv[])
 {
 	int status = 0, c;
-	int show = 0, tt_flags = 0;
+	int show = 0;
 	int bytes = 0;
 	size_t i;
 
@@ -818,10 +813,10 @@ int main(int argc, char *argv[])
 			show = 1;
 			break;
 		case NOHEADINGS_OPTION:
-			tt_flags |= TT_FL_NOHEADINGS;
+			no_headings = 1;
 			break;
 		case RAW_OPTION:
-			tt_flags |= TT_FL_RAW;
+			raw = 1;
 			break;
 		case BYTES_OPTION:
 			bytes = 1;
@@ -847,7 +842,7 @@ int main(int argc, char *argv[])
 			columns[ncolumns++] = COL_USED;
 			columns[ncolumns++] = COL_PRIO;
 		}
-		status = show_table(tt_flags, bytes);
+		status = show_table(bytes);
 		return status;
 	}
 

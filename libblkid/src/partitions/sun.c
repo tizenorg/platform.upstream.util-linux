@@ -27,22 +27,25 @@ static int probe_sun_pt(blkid_probe pr,
 	int i, use_vtoc;
 
 	l = (struct sun_disklabel *) blkid_probe_get_sector(pr, 0);
-	if (!l)
+	if (!l) {
+		if (errno)
+			return -errno;
 		goto nothing;
+	}
 
 	if (sun_pt_checksum(l)) {
-		DBG(LOWPROBE, blkid_debug(
+		DBG(LOWPROBE, ul_debug(
 			"detected corrupted sun disk label -- ignore"));
 		goto nothing;
 	}
 
 	if (blkid_partitions_need_typeonly(pr))
 		/* caller does not ask for details about partitions */
-		return 0;
+		return BLKID_PROBE_OK;
 
 	ls = blkid_probe_get_partlist(pr);
 	if (!ls)
-		goto err;
+		goto nothing;
 
 	tab = blkid_partlist_new_parttable(ls, "sun", 0);
 	if (!tab)
@@ -51,7 +54,7 @@ static int probe_sun_pt(blkid_probe pr,
 	/* sectors per cylinder (partition offset is in cylinders...) */
 	spc = be16_to_cpu(l->nhead) * be16_to_cpu(l->nsect);
 
-	DBG(LOWPROBE, blkid_debug("Sun VTOC sanity=%u version=%u nparts=%u",
+	DBG(LOWPROBE, ul_debug("Sun VTOC sanity=%u version=%u nparts=%u",
 			be32_to_cpu(l->vtoc.sanity),
 			be32_to_cpu(l->vtoc.version),
 			be16_to_cpu(l->vtoc.nparts)));
@@ -76,7 +79,7 @@ static int probe_sun_pt(blkid_probe pr,
 		uint16_t type = 0, flags = 0;
 		blkid_partition par;
 
-                start = be32_to_cpu(p->start_cylinder) * spc;
+		start = be32_to_cpu(p->start_cylinder) * spc;
 		size = be32_to_cpu(p->num_sectors);
 		if (use_vtoc) {
 			type = be16_to_cpu(l->vtoc.infos[i].id);
@@ -96,12 +99,12 @@ static int probe_sun_pt(blkid_probe pr,
 		if (flags)
 			blkid_partition_set_flags(par, flags);
 	}
-	return 0;
+	return BLKID_PROBE_OK;
 
 nothing:
-	return 1;
+	return BLKID_PROBE_NONE;
 err:
-	return -1;
+	return -ENOMEM;
 }
 
 

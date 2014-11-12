@@ -53,23 +53,23 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 	fprintf(out, " %s [resource ...] [output-format]\n", program_invocation_short_name);
 	fprintf(out, " %s [resource] -i <id>\n", program_invocation_short_name);
 	fprintf(out, USAGE_OPTIONS);
-	fputs(_(" -i, --id <id>  print details on resource identified by id\n"), out);
+	fputs(_(" -i, --id <id>  print details on resource identified by <id>\n"), out);
 	fprintf(out, USAGE_HELP);
 	fprintf(out, USAGE_VERSION);
-	fputs(_("\n"), out);
+	fprintf(out, USAGE_SEPARATOR);
 	fputs(_("Resource options:\n"), out);
 	fputs(_(" -m, --shmems      shared memory segments\n"), out);
 	fputs(_(" -q, --queues      message queues\n"), out);
 	fputs(_(" -s, --semaphores  semaphores\n"), out);
 	fputs(_(" -a, --all         all (default)\n"), out);
-	fputs(_("\n"), out);
+	fprintf(out, USAGE_SEPARATOR);
 	fputs(_("Output format:\n"), out);
 	fputs(_(" -t, --time        show attach, detach and change times\n"), out);
-	fputs(_(" -p, --pid         show creator and last operations PIDs\n"), out);
+	fputs(_(" -p, --pid         show PIDs of creator and last operator\n"), out);
 	fputs(_(" -c, --creator     show creator and owner\n"), out);
 	fputs(_(" -l, --limits      show resource limits\n"), out);
 	fputs(_(" -u, --summary     show status summary\n"), out);
-	fputs(_("     --human       show sizes in human readable format\n"), out);
+	fputs(_("     --human       show sizes in human-readable format\n"), out);
 	fputs(_(" -b, --bytes       show sizes in bytes\n"), out);
 	fprintf(out, USAGE_MAN_TAIL("ipcs(1)"));
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
@@ -201,7 +201,7 @@ static void do_shm (char format, int unit)
 			       _("max seg size"), lim.shmmax, "\n", 0);
 		ipc_print_size(unit == IPC_UNIT_DEFAULT ? IPC_UNIT_KB : unit,
 			       _("max total shared memory"),
-			       lim.shmall * getpagesize(), "\n", 0);
+			       (uint64_t) lim.shmall * getpagesize(), "\n", 0);
 		ipc_print_size(unit == IPC_UNIT_DEFAULT ? IPC_UNIT_BYTES : unit,
 			       _("min seg size"), lim.shmmin, "\n", 0);
 		return;
@@ -461,8 +461,10 @@ static void do_msg (char format, int unit)
 			return;
 		}
 		printf (_("------ Messages Status --------\n"));
+#ifndef __FreeBSD_kernel__
 		printf (_("allocated queues = %d\n"), msginfo.msgpool);
 		printf (_("used headers = %d\n"), msginfo.msgmap);
+#endif
 		ipc_print_size(unit, _("used space"), msginfo.msgtql,
 			       unit == IPC_UNIT_DEFAULT ? _(" bytes\n") : "\n", 0);
 		return;

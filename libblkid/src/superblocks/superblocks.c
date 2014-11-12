@@ -146,6 +146,7 @@ static const struct blkid_idinfo *idinfos[] =
 	&oracleasm_idinfo,
 	&vxfs_idinfo,
 	&squashfs_idinfo,
+	&squashfs3_idinfo,
 	&netware_idinfo,
 	&btrfs_idinfo,
 	&ubifs_idinfo,
@@ -284,7 +285,7 @@ int blkid_probe_filter_superblocks_usage(blkid_probe pr, int flag, int usage)
 		} else if (flag & BLKID_FLTR_ONLYIN)
 			blkid_bmp_set_item(chn->fltr, i);
 	}
-	DBG(LOWPROBE, blkid_debug("a new probing usage-filter initialized"));
+	DBG(LOWPROBE, ul_debug("a new probing usage-filter initialized"));
 	return 0;
 }
 
@@ -335,19 +336,24 @@ int blkid_superblocks_get_name(size_t idx, const char **name, int *usage)
 static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 {
 	size_t i;
+	int rc = BLKID_PROBE_NONE;
 
 	if (!pr || chn->idx < -1)
-		return -1;
+		return -EINVAL;
+
 	blkid_probe_chain_reset_vals(pr, chn);
 
-	DBG(LOWPROBE, blkid_debug("--> starting probing loop [SUBLKS idx=%d]",
-		chn->idx));
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		return BLKID_PROBE_NONE;
 
 	if (pr->size <= 0 || (pr->size <= 1024 && !S_ISCHR(pr->mode)))
 		/* Ignore very very small block devices or regular files (e.g.
 		 * extended partitions). Note that size of the UBI char devices
 		 * is 1 byte */
-		goto nothing;
+		return BLKID_PROBE_NONE;
+
+	DBG(LOWPROBE, ul_debug("--> starting probing loop [SUBLKS idx=%d]",
+		chn->idx));
 
 	i = chn->idx < 0 ? 0 : chn->idx + 1U;
 
@@ -355,38 +361,50 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 		const struct blkid_idinfo *id;
 		const struct blkid_idmag *mag = NULL;
 		blkid_loff_t off = 0;
-		int rc = 0;
 
 		chn->idx = i;
 		id = idinfos[i];
 
 		if (chn->fltr && blkid_bmp_get_item(chn->fltr, i)) {
-			DBG(LOWPROBE, blkid_debug("filter out: %s", id->name));
+			DBG(LOWPROBE, ul_debug("filter out: %s", id->name));
+			rc = BLKID_PROBE_NONE;
 			continue;
 		}
 
-		if (id->minsz && id->minsz > pr->size)
+		if (id->minsz && id->minsz > pr->size) {
+			rc = BLKID_PROBE_NONE;
 			continue;	/* the device is too small */
+		}
 
 		/* don't probe for RAIDs, swap or journal on CD/DVDs */
 		if ((id->usage & (BLKID_USAGE_RAID | BLKID_USAGE_OTHER)) &&
-		    blkid_probe_is_cdrom(pr))
+		    blkid_probe_is_cdrom(pr)) {
+			rc = BLKID_PROBE_NONE;
 			continue;
+		}
 
 		/* don't probe for RAIDs on floppies */
-		if ((id->usage & BLKID_USAGE_RAID) && blkid_probe_is_tiny(pr))
+		if ((id->usage & BLKID_USAGE_RAID) && blkid_probe_is_tiny(pr)) {
+			rc = BLKID_PROBE_NONE;
 			continue;
+		}
 
-		DBG(LOWPROBE, blkid_debug("[%zd] %s:", i, id->name));
+		DBG(LOWPROBE, ul_debug("[%zd] %s:", i, id->name));
 
-		if (blkid_probe_get_idmag(pr, id, &off, &mag))
+		rc = blkid_probe_get_idmag(pr, id, &off, &mag);
+		if (rc < 0)
+			break;
+		if (rc != BLKID_PROBE_OK)
 			continue;
 
 		/* final check by probing function */
 		if (id->probefunc) {
-			DBG(LOWPROBE, blkid_debug("\tcall probefunc()"));
-			if (id->probefunc(pr, mag) != 0) {
+			DBG(LOWPROBE, ul_debug("\tcall probefunc()"));
+			rc = id->probefunc(pr, mag);
+			if (rc != BLKID_PROBE_OK) {
 				blkid_probe_chain_reset_vals(pr, chn);
+				if (rc < 0)
+					break;
 				continue;
 			}
 		}
@@ -405,19 +423,18 @@ static int superblocks_probe(blkid_probe pr, struct blkid_chain *chn)
 					(unsigned char *) mag->magic);
 		if (rc) {
 			blkid_probe_chain_reset_vals(pr, chn);
-			DBG(LOWPROBE, blkid_debug("failed to set result -- ingnore"));
+			DBG(LOWPROBE, ul_debug("failed to set result -- ignore"));
 			continue;
 		}
 
-		DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (type=%s) [SUBLKS idx=%d]",
+		DBG(LOWPROBE, ul_debug("<-- leaving probing loop (type=%s) [SUBLKS idx=%d]",
 			id->name, chn->idx));
-		return 0;
+		return BLKID_PROBE_OK;
 	}
 
-nothing:
-	DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (failed) [SUBLKS idx=%d]",
-		chn->idx));
-	return 1;
+	DBG(LOWPROBE, ul_debug("<-- leaving probing loop (failed=%d) [SUBLKS idx=%d]",
+			rc, chn->idx));
+	return rc;
 }
 
 /*
@@ -441,11 +458,13 @@ static int superblocks_safeprobe(blkid_probe pr, struct blkid_chain *chn)
 	int intol = 0;
 	int rc;
 
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		return BLKID_PROBE_NONE;
+
 	while ((rc = superblocks_probe(pr, chn)) == 0) {
 
 		if (blkid_probe_is_tiny(pr) && !count)
-			/* floppy or so -- returns the first result. */
-			return 0;
+			return BLKID_PROBE_OK;	/* floppy or so -- returns the first result. */
 
 		count++;
 
@@ -468,13 +487,13 @@ static int superblocks_safeprobe(blkid_probe pr, struct blkid_chain *chn)
 		return rc;		/* error */
 
 	if (count > 1 && intol) {
-		DBG(LOWPROBE, blkid_debug("ERROR: superblocks chain: "
+		DBG(LOWPROBE, ul_debug("ERROR: superblocks chain: "
 			       "ambivalent result detected (%d filesystems)!",
 			       count));
 		return -2;		/* error, ambivalent result (more FS) */
 	}
 	if (!count)
-		return 1;		/* nothing detected */
+		return BLKID_PROBE_NONE;
 
 	if (idx != -1) {
 		/* restore the first result */
@@ -491,7 +510,7 @@ static int superblocks_safeprobe(blkid_probe pr, struct blkid_chain *chn)
 	if (chn->idx >= 0 && idinfos[chn->idx]->usage & BLKID_USAGE_RAID)
 		pr->prob_flags |= BLKID_PROBE_FL_IGNORE_PT;
 
-	return 0;
+	return BLKID_PROBE_OK;
 }
 
 int blkid_probe_set_version(blkid_probe pr, const char *version)

@@ -254,9 +254,10 @@ static void dump_groups(void)
 		return;
 	}
 
-	groups = alloca(n * sizeof(gid_t));
+	groups = xmalloc(n * sizeof(gid_t));
 	n = getgroups(n, groups);
 	if (n < 0) {
+		free(groups);
 		warn("getgroups failed");
 		return;
 	}
@@ -273,6 +274,7 @@ static void dump_groups(void)
 		}
 	}
 	printf("\n");
+	free(groups);
 }
 
 static void dump(int dumplevel)
@@ -526,9 +528,9 @@ static void do_selinux_label(const char *label)
 		err(SETPRIV_EXIT_PRIVERR,
 		    _("write failed: %s"), _PATH_PROC_ATTR_EXEC);
 
-	if (close_fd(fd) != 0)
+	if (close(fd) != 0)
 		err(SETPRIV_EXIT_PRIVERR,
-		    _("write failed: %s"), _PATH_PROC_ATTR_EXEC);
+		    _("close failed: %s"), _PATH_PROC_ATTR_EXEC);
 }
 
 static void do_apparmor_profile(const char *label)

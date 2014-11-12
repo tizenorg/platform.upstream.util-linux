@@ -22,12 +22,11 @@ libcommon_la_SOURCES = \
 	lib/setproctitle.c \
 	lib/strutils.c \
 	lib/sysfs.c \
-	lib/tt.c \
-	lib/wholedisk.c \
 	lib/timeutils.c \
 	lib/ttyutils.c \
 	lib/xgetpass.c \
-	lib/exec_shell.c
+	lib/exec_shell.c \
+	lib/readutmp.c
 
 if LINUX
 libcommon_la_SOURCES += \
@@ -43,6 +42,8 @@ if HAVE_CPU_SET_T
 libcommon_la_SOURCES += lib/cpuset.c
 endif
 
+dist_man_MANS += lib/terminal-colors.d.5
+
 check_PROGRAMS += \
 	test_at \
 	test_blkdev \
@@ -54,9 +55,7 @@ check_PROGRAMS += \
 	test_procutils \
 	test_randutils \
 	test_strutils \
-	test_tt \
-	test_ttyutils \
-	test_wholedisk
+	test_ttyutils
 
 if LINUX
 if HAVE_CPU_SET_T
@@ -79,9 +78,6 @@ test_blkdev_LDADD = libcommon.la
 test_ismounted_SOURCES = lib/ismounted.c
 test_ismounted_CFLAGS = -DTEST_PROGRAM
 test_ismounted_LDADD = libcommon.la
-
-test_wholedisk_SOURCES = lib/wholedisk.c
-test_wholedisk_CFLAGS = -DTEST_PROGRAM
 
 test_mangle_SOURCES = lib/mangle.c
 test_mangle_CFLAGS = -DTEST_PROGRAM
@@ -119,10 +115,6 @@ endif
 
 test_fileutils_SOURCES = lib/fileutils.c
 test_fileutils_CFLAGS = -DTEST_PROGRAM
-
-test_tt_SOURCES = lib/tt.c
-test_tt_CFLAGS = -DTEST_PROGRAM
-test_tt_LDADD = libcommon.la
 
 test_canonicalize_SOURCES = lib/canonicalize.c
 test_canonicalize_CFLAGS = -DTEST_PROGRAM_CANONICALIZE

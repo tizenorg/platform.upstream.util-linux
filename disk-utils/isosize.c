@@ -125,7 +125,7 @@ struct iso_primary_descriptor
 	unsigned char unused5			[ISODCL (1396, 2048)];
 };
 
-static void isosize(char *filenamep, int xflag, long divisor)
+static void isosize(int argc, char *filenamep, int xflag, long divisor)
 {
 	int fd, nsecs, ssize;
 	struct iso_primary_descriptor ipd;
@@ -145,6 +145,8 @@ static void isosize(char *filenamep, int xflag, long divisor)
 	/* isonum_723 returns nowadays always 2048 */
 	ssize = isonum_723(ipd.logical_block_size, xflag);
 
+	if (1 < argc)
+		printf("%s: ", filenamep);
 	if (xflag) {
 		printf(_("sector count: %d, sector size: %d\n"), nsecs, ssize);
 	} else {
@@ -184,7 +186,7 @@ int main(int argc, char **argv)
 	long divisor = 0;
 
 	static const struct option longopts[] = {
-		{"divisor", no_argument, 0, 'd'},
+		{"divisor", required_argument, 0, 'd'},
 		{"sectors", no_argument, 0, 'x'},
 		{"version", no_argument, 0, 'V'},
 		{"help", no_argument, 0, 'h'},
@@ -220,11 +222,8 @@ int main(int argc, char **argv)
 	if (ct <= 0)
 		usage(stderr);
 
-	for (j = optind; j < argc; j++) {
-		if (ct > 1)
-			printf("%s: ", argv[j]);
-		isosize(argv[j], xflag, divisor);
-	}
+	for (j = optind; j < argc; j++)
+		isosize(ct, argv[j], xflag, divisor);
 
 	return EXIT_SUCCESS;
 }

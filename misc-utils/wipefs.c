@@ -251,10 +251,13 @@ new_probe(const char *devname, int mode)
 		goto error;
 
 	blkid_probe_enable_superblocks(pr, 1);
-	blkid_probe_set_superblocks_flags(pr, BLKID_SUBLKS_MAGIC |
-			BLKID_SUBLKS_TYPE | BLKID_SUBLKS_USAGE |
-			BLKID_SUBLKS_LABEL | BLKID_SUBLKS_UUID |
-			BLKID_SUBLKS_BADCSUM);
+	blkid_probe_set_superblocks_flags(pr,
+			BLKID_SUBLKS_MAGIC |	/* return magic string and offset */
+			BLKID_SUBLKS_TYPE |	/* return superblock type */
+			BLKID_SUBLKS_USAGE |	/* return USAGE= */
+			BLKID_SUBLKS_LABEL |	/* return LABEL= */
+			BLKID_SUBLKS_UUID |	/* return UUID= */
+			BLKID_SUBLKS_BADCSUM);	/* accept bad checksums */
 
 	blkid_probe_enable_partitions(pr, 1);
 	blkid_probe_set_partitions_flags(pr, BLKID_PARTS_MAGIC);
@@ -355,14 +358,14 @@ static void rereadpt(int fd, const char *devname)
 
 	errno = 0;
 	ioctl(fd, BLKRRPART);
-	printf(_("%s: calling ioclt to re-read partition table: %m\n"), devname);
+	printf(_("%s: calling ioctl to re-read partition table: %m\n"), devname);
 #endif
 }
 
 static struct wipe_desc *
 do_wipe(struct wipe_desc *wp, const char *devname, int flags)
 {
-	int mode = O_RDWR, reread = 0;
+	int mode = O_RDWR, reread = 0, need_force = 0;
 	blkid_probe pr;
 	struct wipe_desc *w, *wp0;
 	int zap = (flags & WP_FL_ALL) ? 1 : wp->zap;
@@ -402,6 +405,15 @@ do_wipe(struct wipe_desc *wp, const char *devname, int flags)
 		if (!wp->on_disk)
 			continue;
 
+		if (!(flags & WP_FL_FORCE)
+		    && wp->is_parttable
+		    && !blkid_probe_is_wholedisk(pr)) {
+			warnx(_("%s: ignoring nested \"%s\" partition table "
+				"on non-whole disk device"), devname, wp->type);
+			need_force = 1;
+			continue;
+		}
+
 		if (zap) {
 			if (backup)
 				do_backup(wp, backup);
@@ -416,9 +428,12 @@ do_wipe(struct wipe_desc *wp, const char *devname, int flags)
 			warnx(_("%s: offset 0x%jx not found"), devname, w->offset);
 	}
 
+	if (need_force)
+		warnx(_("Use the --force option to force erase."));
+
 	fsync(blkid_probe_get_fd(pr));
 
-	if (reread)
+	if (reread && (mode & O_EXCL))
 		rereadpt(blkid_probe_get_fd(pr), devname);
 
 	close(blkid_probe_get_fd(pr));

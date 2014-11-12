@@ -603,8 +603,10 @@ FILE *checkf(register char *fs, int *clearfirst)
 		perror(fs);
 		return ((FILE *)NULL);
 	}
-	if (magic(f, fs))
+	if (magic(f, fs)) {
+		fclose(f);
 		return ((FILE *)NULL);
+	}
 	fcntl(fileno(f), F_SETFD, FD_CLOEXEC);
 	c = Getc(f);
 	*clearfirst = (c == '\f');
@@ -637,7 +639,6 @@ static int magic(FILE *f, char *fs)
 		case 0x457f:	/* simple ELF detection */
 			printf(_("\n******** %s: Not a text file ********\n\n"),
 			       fs);
-			fclose(f);
 			return 1;
 		}
 	}
@@ -1231,10 +1232,9 @@ int command(char *filename, register FILE *f)
 				putchar('\n');
 				if (clreol)
 					cleareol();
-				if (nlines != 1)
-					printf(_("...back %d pages"), nlines);
-				else
-					putsout(_("...back 1 page"));
+				printf(P_("...back %d page",
+					"...back %d pages", nlines),
+					nlines);
 				if (clreol)
 					cleareol();
 				putchar('\n');
@@ -1280,10 +1280,9 @@ int command(char *filename, register FILE *f)
 			putchar('\n');
 			if (clreol)
 				cleareol();
-			if (nlines == 1)
-				putsout(_("...skipping one line"));
-			else
-				printf(_("...skipping %d lines"), nlines);
+			printf(P_("...skipping %d line",
+				"...skipping %d lines", nlines),
+				nlines);
 
 			if (clreol)
 				cleareol();

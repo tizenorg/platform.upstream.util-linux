@@ -220,6 +220,8 @@ extern void mnt_free_cache(struct libmnt_cache *cache);
 extern void mnt_ref_cache(struct libmnt_cache *cache);
 extern void mnt_unref_cache(struct libmnt_cache *cache);
 
+extern int mnt_cache_set_targets(struct libmnt_cache *cache,
+				struct libmnt_table *mtab);
 extern int mnt_cache_read_tags(struct libmnt_cache *cache, const char *devname);
 
 extern int mnt_cache_device_has_tag(struct libmnt_cache *cache,
@@ -234,6 +236,8 @@ extern char *mnt_get_fstype(const char *devname, int *ambi,
 			    struct libmnt_cache *cache)
 			__ul_attribute__((warn_unused_result));
 extern char *mnt_resolve_path(const char *path, struct libmnt_cache *cache)
+			__ul_attribute__((warn_unused_result));
+extern char *mnt_resolve_target(const char *path, struct libmnt_cache *cache)
 			__ul_attribute__((warn_unused_result));
 extern char *mnt_resolve_tag(const char *token, const char *value,
 			     struct libmnt_cache *cache)
@@ -448,6 +452,15 @@ extern int mnt_table_next_child_fs(struct libmnt_table *tb, struct libmnt_iter *
 extern int mnt_table_get_root_fs(struct libmnt_table *tb, struct libmnt_fs **root);
 extern int mnt_table_set_iter(struct libmnt_table *tb, struct libmnt_iter *itr,
 			      struct libmnt_fs *fs);
+
+enum {
+	MNT_UNIQ_FORWARD  = (1 << 1),	/* default is backward */
+	MNT_UNIQ_KEEPTREE = (1 << 2)
+};
+extern int mnt_table_uniq_fs(struct libmnt_table *tb, int flags,
+				int (*cmp)(struct libmnt_table *,
+					   struct libmnt_fs *,
+					   struct libmnt_fs *));
 
 extern struct libmnt_fs *mnt_table_find_mountpoint(struct libmnt_table *tb,
 				const char *path, int direction);
@@ -760,29 +773,28 @@ extern int mnt_context_set_syscall_status(struct libmnt_context *cxt, int status
 #define MS_REC		0x4000	/* 16384: Recursive loopback */
 #endif
 #ifndef MS_SILENT
-#define MS_SILENT	0x8000	/* 32768 */
-#endif
-#ifndef MS_RELATIME
-#define MS_RELATIME	0x200000 /* 200000: Update access times relative
-                                  to mtime/ctime */
+#define MS_SILENT	0x8000	/* 32768: Don't emit certain kernel messages */
 #endif
 #ifndef MS_UNBINDABLE
-#define MS_UNBINDABLE	(1<<17)	/* 131072 unbindable*/
+#define MS_UNBINDABLE	(1<<17)	/* 131072: Make unbindable */
 #endif
 #ifndef MS_PRIVATE
-#define MS_PRIVATE	(1<<18)	/* 262144 Private*/
+#define MS_PRIVATE	(1<<18)	/* 262144: Make private */
 #endif
 #ifndef MS_SLAVE
-#define MS_SLAVE	(1<<19)	/* 524288 Slave*/
+#define MS_SLAVE	(1<<19)	/* 524288: Make slave */
 #endif
 #ifndef MS_SHARED
-#define MS_SHARED	(1<<20)	/* 1048576 Shared*/
+#define MS_SHARED	(1<<20)	/* 1048576: Make shared */
+#endif
+#ifndef MS_RELATIME
+#define MS_RELATIME	(1<<21) /* 2097152: Update atime relative to mtime/ctime */
 #endif
 #ifndef MS_I_VERSION
-#define MS_I_VERSION	(1<<23)	/* update inode I_version field */
+#define MS_I_VERSION	(1<<23)	/* Update the inode I_version field */
 #endif
 #ifndef MS_STRICTATIME
-#define MS_STRICTATIME	(1<<24) /* strict atime semantics */
+#define MS_STRICTATIME	(1<<24) /* Always perform atime updates */
 #endif
 
 /*

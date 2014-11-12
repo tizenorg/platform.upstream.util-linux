@@ -146,6 +146,7 @@ set_arch(const char *pers, unsigned long options, int list)
     int perval;
     const char *target_arch, *result_arch;
   } transitions[] = {
+    {UNAME26, "uname26", NULL},
     {PER_LINUX32, "linux32", NULL},
     {PER_LINUX, "linux64", NULL},
 #if defined(__powerpc__) || defined(__powerpc64__)
@@ -201,8 +202,24 @@ set_arch(const char *pers, unsigned long options, int list)
     {PER_LINUX, "alphaev6", "alpha"},
     {PER_LINUX, "alphaev67", "alpha"},
 #endif
+    {-1, NULL, NULL}, /* place holder, eventually filled up at runtime */
     {-1, NULL, NULL}
   };
+
+  /* Add the trivial transition {PER_LINUX, machine, machine} if no such
+     target_arch is hardcoded yet. */
+  uname(&un);
+  for (i = 0; transitions[i].perval >= 0; i++)
+	if(!strcmp(un.machine, transitions[i].target_arch))
+		break;
+  if (transitions[i].perval < 0) {
+	unsigned long wrdsz = CHAR_BIT * sizeof(void*);
+	if (wrdsz == 32 || wrdsz == 64) {
+		transitions[i].perval = wrdsz == 32 ? PER_LINUX32 : PER_LINUX;
+		transitions[i].target_arch = un.machine;
+		transitions[i].result_arch = un.machine;
+	}
+  }
 
   if (list) {
     for(i = 0; transitions[i].target_arch != NULL; i++)
@@ -355,6 +372,9 @@ int main(int argc, char *argv[])
 
   if (set_arch(p, options, 0))
     err(EXIT_FAILURE, _("Failed to set personality to %s"), p);
+
+  /* flush all output streams before exec */
+  fflush(NULL);
 
   if (!argc) {
     execl("/bin/sh", "-sh", NULL);

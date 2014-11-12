@@ -37,6 +37,7 @@
 #include "c.h"
 #include "nls.h"
 #include "closestream.h"
+#include "statfs_magic.h"
 
 #ifndef MS_MOVE
 #define MS_MOVE 8192
@@ -45,10 +46,6 @@
 #ifndef MNT_DETACH
 #define MNT_DETACH       0x00000002	/* Just detach from the tree */
 #endif
-
-#define STATFS_RAMFS_MAGIC      0x858458f6
-#define STATFS_TMPFS_MAGIC      0x01021994
-
 
 /* remove all files/directories below dirName -- don't cross mountpoints */
 static int recursiveRemove(int fd)
@@ -184,8 +181,8 @@ static int switchroot(const char *newroot)
 		if (pid <= 0) {
 			struct statfs stfs;
 			if (fstatfs(cfd, &stfs) == 0 &&
-			    (stfs.f_type == STATFS_RAMFS_MAGIC ||
-			     stfs.f_type == STATFS_TMPFS_MAGIC))
+			    (stfs.f_type == (__SWORD_TYPE)STATFS_RAMFS_MAGIC ||
+			     stfs.f_type == (__SWORD_TYPE)STATFS_TMPFS_MAGIC))
 				recursiveRemove(cfd);
 			else
 				warn(_("old root filesystem is not an initramfs"));

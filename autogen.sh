@@ -13,6 +13,32 @@ THEDIR=`pwd`
 cd $srcdir
 DIE=0
 
+# provide simple gettext backward compatibility
+autopoint_fun ()
+{
+	# we have to deal with set -e ...
+	ret="0"
+
+	# check against this hardcoded set of alternative gettext versions
+	gt_ver=`gettext --version |\
+		sed -n -e 's/.* \(0\.18\|0\.18\.[1-2]\)$/\1/p'`
+
+	if [ -n "$gt_ver" ]; then
+		echo "warning, force autopoint to use old gettext $gt_ver"
+		rm -f configure.ac.autogenbak
+		sed -i.autogenbak configure.ac \
+			-e "s/\(AM_GNU_GETTEXT_VERSION\).*/\1([$gt_ver])/"
+	fi
+
+	autopoint "$@" || ret=$?
+
+	if [ -n "$gt_ver" ]; then
+		mv configure.ac.autogenbak configure.ac
+	fi
+
+	return $ret
+}
+
 test -f sys-utils/mount.c || {
 	echo
 	echo "You must run this script in the top-level util-linux directory"
@@ -40,7 +66,7 @@ test -f sys-utils/mount.c || {
 	echo
 	DIE=1
 }
-(libtool --version) < /dev/null > /dev/null 2>&1 || {
+(libtoolize --version) < /dev/null > /dev/null 2>&1 || {
 	echo
 	echo "You must have libtool-2 installed to generate util-linux build system."
 	echo
@@ -77,7 +103,7 @@ rm -rf autom4te.cache
 
 set -e
 po/update-potfiles
-autopoint --force $AP_OPTS
+autopoint_fun --force $AP_OPTS
 if ! grep -q datarootdir po/Makefile.in.in; then
 	echo autopoint does not honor dataroot variable, patching.
 	sed -i -e 's/^datadir *=\(.*\)/datarootdir = @datarootdir@\

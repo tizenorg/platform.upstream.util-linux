@@ -93,12 +93,12 @@ static int probe_nilfs2(blkid_probe pr, const struct blkid_idmag *mag)
 	sbp = (struct nilfs_super_block *) blkid_probe_get_buffer(
 			pr, NILFS_SB_OFFSET, sizeof(struct nilfs_super_block));
 	if (!sbp)
-		return -1;
+		return errno ? -errno : 1;
 	/* backup */
 	sbb = (struct nilfs_super_block *) blkid_probe_get_buffer(
 			pr, ((pr->size / 0x200) - 8) * 0x200, sizeof(struct nilfs_super_block));
 	if (!sbp)
-		return -1;
+		return errno ? -errno : 1;
 
 	/*
 	 * Compare two super blocks and set 1 in swp if the secondary
@@ -114,7 +114,7 @@ static int probe_nilfs2(blkid_probe pr, const struct blkid_idmag *mag)
 			   le64_to_cpu(sbb->s_last_cno));
 	sb = swp ? sbb : sbp;
 
-	DBG(LOWPROBE, blkid_debug("nilfs2: primary=%d, backup=%d, swap=%d",
+	DBG(LOWPROBE, ul_debug("nilfs2: primary=%d, backup=%d, swap=%d",
 				valid[0], valid[1], swp));
 
 	if (strlen(sb->s_volume_name))

@@ -67,18 +67,17 @@ static int fstrim_filesystem(const char *path, struct fstrim_range *rangetpl,
 	/* kernel modifies the range */
 	memcpy(&range, rangetpl, sizeof(range));
 
-	if (stat(path, &sb) == -1) {
+	fd = open(path, O_RDONLY);
+	if (fd < 0) {
+		warn(_("cannot open %s"), path);
+		return -1;
+	}
+	if (fstat(fd, &sb) == -1) {
 		warn(_("stat failed %s"), path);
 		return -1;
 	}
 	if (!S_ISDIR(sb.st_mode)) {
 		warnx(_("%s: not a directory"), path);
-		return -1;
-	}
-
-	fd = open(path, O_RDONLY);
-	if (fd < 0) {
-		warn(_("cannot open %s"), path);
 		return -1;
 	}
 	errno = 0;
@@ -118,7 +117,7 @@ static int has_discard(const char *devname, struct sysfs_cxt *wholedisk)
 	 * This is tricky to read the info from sys/, because the queue
 	 * atrributes are provided for whole devices (disk) only. We're trying
 	 * to reuse the whole-disk sysfs context to optimize this stuff (as
-	 * system usualy have just one disk only).
+	 * system usually have just one disk only).
 	 */
 	if (sysfs_devno_to_wholedisk(dev, NULL, 0, &disk) || !disk)
 		return 1;
@@ -139,6 +138,15 @@ static int has_discard(const char *devname, struct sysfs_cxt *wholedisk)
 	return rc == 0 && dg > 0;
 }
 
+
+static int uniq_fs_target_cmp(
+		struct libmnt_table *tb __attribute__((__unused__)),
+		struct libmnt_fs *a,
+		struct libmnt_fs *b)
+{
+	return !mnt_fs_streq_target(a, mnt_fs_get_target(b));
+}
+
 /*
  * fstrim --all follows "mount -a" return codes:
  *
@@ -154,6 +162,8 @@ static int fstrim_all(struct fstrim_range *rangetpl, int verbose)
 	struct sysfs_cxt wholedisk = UL_SYSFSCXT_EMPTY;
 	int cnt = 0, cnt_err = 0;
 
+	mnt_init_debug(0);
+
 	itr = mnt_new_iter(MNT_ITER_BACKWARD);
 	if (!itr)
 		err(MOUNT_EX_FAIL, _("failed to initialize libmount iterator"));
@@ -161,6 +171,9 @@ static int fstrim_all(struct fstrim_range *rangetpl, int verbose)
 	tab = mnt_new_table_from_file(_PATH_PROC_MOUNTINFO);
 	if (!tab)
 		err(MOUNT_EX_FAIL, _("failed to parse %s"), _PATH_PROC_MOUNTINFO);
+
+	/* de-duplicate the table */
+	mnt_table_uniq_fs(tab, 0, uniq_fs_target_cmp);
 
 	while (mnt_table_next_fs(tab, itr, &fs) == 0) {
 		const char *src = mnt_fs_get_srcpath(fs),
@@ -199,7 +212,8 @@ static int fstrim_all(struct fstrim_range *rangetpl, int verbose)
 	}
 
 	sysfs_deinit(&wholedisk);
-	mnt_free_table(tab);
+	mnt_unref_table(tab);
+	mnt_free_iter(itr);
 
 	if (cnt && cnt == cnt_err)
 		return MOUNT_EX_FAIL;		/* all failed */
@@ -301,7 +315,7 @@ int main(int argc, char **argv)
 	else {
 		rc = fstrim_filesystem(path, &range, verbose);
 		if (rc == 1) {
-			warnx(_("%s: discard operation not supported."), path);
+			warnx(_("%s: the discard operation is not supported"), path);
 			rc = EXIT_FAILURE;
 		}
 	}

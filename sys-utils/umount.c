@@ -435,7 +435,9 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 		return mk_exit_code(cxt, rc);		/* error */
 
 	if (!mnt_fs_get_srcpath(fs) || !mnt_fs_get_devno(fs))
-		err(MOUNT_EX_USAGE, _("%s: failed to determine source"), spec);
+		errx(MOUNT_EX_USAGE, _("%s: failed to determine source "
+				"(--all-targets is unsupported on systems with "
+				"regular mtab file)."), spec);
 
 	itr = mnt_new_iter(MNT_ITER_BACKWARD);
 	if (!itr)
@@ -443,8 +445,10 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 
 	/* get on @cxt independent mountinfo */
 	tb = new_mountinfo(cxt);
-	if (!tb)
-		return MOUNT_EX_SOFTWARE;
+	if (!tb) {
+		rc = MOUNT_EX_SOFTWARE;
+		goto done;
+	}
 
 	/* Note that @fs is from mount context and the context will be reseted
 	 * after each umount() call */
@@ -466,6 +470,7 @@ static int umount_alltargets(struct libmnt_context *cxt, const char *spec, int r
 			break;
 	}
 
+done:
 	mnt_free_iter(itr);
 	mnt_unref_table(tb);
 
@@ -644,6 +649,6 @@ int main(int argc, char **argv)
 	}
 
 	mnt_free_context(cxt);
-	return rc;
+	return (rc < 256) ? rc : 255;
 }
 

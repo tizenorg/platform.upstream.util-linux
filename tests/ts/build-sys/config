@@ -2,7 +2,7 @@
 
 # Copyright (C) 2011 Karel Zak <kzak@redhat.com>
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="config"
 
 # Don't execute this test by default, --force required
@@ -11,8 +11,8 @@ TS_OPTIONAL="yes"
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
 
-[ -x /usr/bin/readelf ] || ts_skip "readelf(1) not found"
-[ -x /usr/bin/file ] || ts_skip "file(1) not found"
+ts_check_prog "readelf"
+ts_check_prog "file"
 
 config_gen_dir="$top_srcdir/tools"
 . $config_gen_dir/config-gen-functions.sh

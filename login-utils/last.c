@@ -31,6 +31,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <utmp.h>
+#include <pwd.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -49,6 +50,7 @@
 #include "carefulputc.h"
 #include "strutils.h"
 #include "timeutils.h"
+#include "boottime.h"
 
 #if defined(_HAVE_UT_TV)
 # define UL_UT_TIME ut_tv.tv_sec
@@ -80,8 +82,7 @@ struct last_control {
 		     showhost :1, /* Show hostname */
 		     altlist :1,  /* Hostname at the end */
 		     usedns :1,	  /* Use DNS to lookup the hostname */
-		     useip :1,	  /* Print IP address in number format */
-		     fulltime :1; /* Print full dates and times */
+		     useip :1;    /* Print IP address in number format */
 
 	unsigned int name_len;	/* Number of login name characters to print */
 	unsigned int domain_len; /* Number of domain name characters to print */
@@ -93,6 +94,7 @@ struct last_control {
 	unsigned int altc;	/* Number of alternative files */
 	unsigned int alti;	/* Index number of the alternative file */
 
+	struct timeval boot_time; /* system boot time */
 	time_t since;		/* at what time to start displaying the file */
 	time_t until;		/* at what time to stop displaying the file */
 	time_t present;		/* who where present at time_t */
@@ -399,7 +401,7 @@ static int list(const struct last_control *ctl, struct utmp *p, time_t t, int wh
 		utline[4] = 0;
 
 	/*
-	 *	Is this something we wanna show?
+	 *	Is this something we want to show?
 	 */
 	if (ctl->show) {
 		char **walk;
@@ -431,9 +433,10 @@ static int list(const struct last_control *ctl, struct utmp *p, time_t t, int wh
 
 	epoch = time(NULL);
 	if (t == epoch) {
-		if (ctl->fulltime)
+		if (ctl->time_fmt > LAST_TIMEFTM_SHORT_CTIME) {
 			sprintf(logouttime, "  still running");
-		else {
+			length[0] = 0;
+		} else {
 			sprintf(logouttime, "  still");
 			sprintf(length, "running");
 		}
@@ -450,21 +453,24 @@ static int list(const struct last_control *ctl, struct utmp *p, time_t t, int wh
 			sprintf(logouttime, "- down ");
 			break;
 		case R_NOW:
-			length[0] = 0;
-			if (ctl->fulltime)
+			if (ctl->time_fmt > LAST_TIMEFTM_SHORT_CTIME) {
 				sprintf(logouttime, "  still logged in");
-			else {
+				length[0] = 0;
+			} else {
 				sprintf(logouttime, "  still");
 				sprintf(length, "logged in");
 			}
 			break;
 		case R_PHANTOM:
-			length[0] = 0;
-			if (ctl->fulltime)
+			if (ctl->time_fmt > LAST_TIMEFTM_SHORT_CTIME) {
 				sprintf(logouttime, "  gone - no logout");
-			else {
+				length[0] = 0;
+			} else if (ctl->time_fmt == LAST_TIMEFTM_SHORT_CTIME) {
 				sprintf(logouttime, "   gone");
 				sprintf(length, "- no logout");
+			} else {
+				logouttime[0] = 0;
+				sprintf(length, "no logout");
 			}
 			break;
 		case R_REBOOT:
@@ -527,7 +533,7 @@ static int list(const struct last_control *ctl, struct utmp *p, time_t t, int wh
 	 *	Print out "final" string safely.
 	 */
 	for (s = final; *s; s++)
-		carefulputc(*s, stdout, '*');
+		fputc_careful(*s, stdout, '*');
 
 	if (len < 0 || (size_t)len >= sizeof(final))
 		putchar('\n');
@@ -558,11 +564,11 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(_(" -R, --nohostname     don't display the hostname field\n"), out);
 	fputs(_(" -s, --since <time>   display the lines since the specified time\n"), out);
 	fputs(_(" -t, --until <time>   display the lines until the specified time\n"), out);
-	fputs(_(" -p, --present <time> display who where present at the specified time\n"), out);
+	fputs(_(" -p, --present <time> display who were present at the specified time\n"), out);
 	fputs(_(" -w, --fullnames      display full user and domain names\n"), out);
 	fputs(_(" -x, --system         display system shutdown entries and run level changes\n"), out);
-	fputs(_("     --time-format <format>  show time stamp using format:\n"), out);
-	fputs(_("                               [notime|short|full|iso]\n"), out);
+	fputs(_("     --time-format <format>  show timestamps in the specified <format>:\n"
+		"                               notime|short|full|iso\n"), out);
 
 	fputs(USAGE_SEPARATOR, out);
 	fputs(USAGE_HELP, out);
@@ -572,6 +578,40 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	exit(out == stderr ? EXIT_FAILURE : EXIT_SUCCESS);
 }
 
+static int is_phantom(const struct last_control *ctl, struct utmp *ut)
+{
+	struct passwd *pw;
+	char path[32];
+	int ret = 0;
+
+	if (ut->UL_UT_TIME < ctl->boot_time.tv_sec)
+		return 1;
+	pw = getpwnam(ut->ut_name);
+	if (!pw)
+		return 1;
+	sprintf(path, "/proc/%u/loginuid", ut->ut_pid);
+	if (access(path, R_OK) == 0) {
+		unsigned int loginuid;
+		FILE *f = NULL;
+
+		if (!(f = fopen(path, "r")))
+			return 1;
+		if (fscanf(f, "%u", &loginuid) != 1)
+			ret = 1;
+		fclose(f);
+		if (!ret && pw->pw_uid != loginuid)
+			return 1;
+	} else {
+		struct stat st;
+
+		sprintf(path, "/dev/%s", ut->ut_line);
+		if (stat(path, &st))
+			return 1;
+		if (pw->pw_uid != st.st_uid)
+			return 1;
+	}
+	return ret;
+}
 
 static void process_wtmp_file(const struct last_control *ctl)
 {
@@ -766,9 +806,7 @@ static void process_wtmp_file(const struct last_control *ctl)
 				if (!lastboot) {
 					c = R_NOW;
 					/* Is process still alive? */
-					if (ut.ut_pid > 0 &&
-					    kill(ut.ut_pid, 0) != 0 &&
-					    errno == ESRCH)
+					if (is_phantom(ctl, &ut))
 						c = R_PHANTOM;
 				} else
 					c = whydown;
@@ -905,7 +943,6 @@ int main(int argc, char **argv)
 			ctl.altlist = 1;
 			break;
 		case 'F':
-			ctl.fulltime = 1;
 			ctl.time_fmt = LAST_TIMEFTM_FULL_CTIME;
 			break;
 		case 'p':
@@ -935,8 +972,6 @@ int main(int argc, char **argv)
 			break;
 		case OPT_TIME_FORMAT:
 			ctl.time_fmt = which_time_format(optarg);
-			if (ctl.time_fmt == LAST_TIMEFTM_ISO8601)
-				ctl.fulltime = 1;
 			break;
 		default:
 			usage(stderr);
@@ -961,6 +996,7 @@ int main(int argc, char **argv)
 	}
 
 	for (; ctl.alti < ctl.altc; ctl.alti++) {
+		get_boot_time(&ctl.boot_time);
 		process_wtmp_file(&ctl);
 		free(ctl.altv[ctl.alti]);
 	}

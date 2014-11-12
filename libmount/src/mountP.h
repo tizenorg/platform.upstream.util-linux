@@ -15,15 +15,18 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/vfs.h>
 #include <unistd.h>
+#include <stdio.h>
+#include <stdarg.h>
 
 #include "c.h"
 #include "list.h"
+#include "debug.h"
 #include "libmount.h"
 
 /* features */
 #define CONFIG_LIBMOUNT_ASSERT
-#define CONFIG_LIBMOUNT_DEBUG
 
 #ifdef CONFIG_LIBMOUNT_ASSERT
 # include <assert.h>
@@ -34,10 +37,6 @@
 /*
  * Debug
  */
-#if defined(TEST_PROGRAM) && !defined(LIBMOUNT_DEBUG)
-#define CONFIG_LIBMOUNT_DEBUG
-#endif
-
 #define MNT_DEBUG_INIT		(1 << 1)
 #define MNT_DEBUG_CACHE		(1 << 2)
 #define MNT_DEBUG_OPTIONS	(1 << 3)
@@ -51,67 +50,10 @@
 #define MNT_DEBUG_DIFF		(1 << 11)
 #define MNT_DEBUG_ALL		0xFFFF
 
-#ifdef CONFIG_LIBMOUNT_DEBUG
-# include <stdio.h>
-# include <stdarg.h>
-
-# define WARN_REFCOUNT(m, o, r) \
-			do { \
-				if ((MNT_DEBUG_ ## m) & libmount_debug_mask && r != 0) \
-					fprintf(stderr, "%d: libmount: %8s: [%p]: *** deallocates with refcount=%d\n", \
-							getpid(), # m, o, r); \
-			} while (0)
-
-# define ON_DBG(m, x)	do { \
-				if ((MNT_DEBUG_ ## m) & libmount_debug_mask) { \
-					x; \
-				} \
-			} while (0)
-
-# define DBG(m, x)	do { \
-				if ((MNT_DEBUG_ ## m) & libmount_debug_mask) { \
-					fprintf(stderr, "%d: libmount: %8s: ", getpid(), # m); \
-					x; \
-				} \
-			} while (0)
-
-# define DBG_FLUSH	do { \
-				if (libmount_debug_mask && \
-				    libmount_debug_mask != MNT_DEBUG_INIT) \
-					fflush(stderr); \
-			} while(0)
-
-extern int libmount_debug_mask;
-
-static inline void __attribute__ ((__format__ (__printf__, 1, 2)))
-mnt_debug(const char *mesg, ...)
-{
-	va_list ap;
-	va_start(ap, mesg);
-	vfprintf(stderr, mesg, ap);
-	va_end(ap);
-	fputc('\n', stderr);
-}
-
-static inline void __attribute__ ((__format__ (__printf__, 2, 3)))
-mnt_debug_h(void *handler, const char *mesg, ...)
-{
-	va_list ap;
-
-	if (handler)
-		fprintf(stderr, "[%p]: ", handler);
-	va_start(ap, mesg);
-	vfprintf(stderr, mesg, ap);
-	va_end(ap);
-	fputc('\n', stderr);
-}
-
-#else /* !CONFIG_LIBMOUNT_DEBUG */
-# define WARN_REFCOUNT(m,o,r)  do { ; } while (0)
-# define ON_DBG(m,x) do { ; } while (0)
-# define DBG(m,x) do { ; } while (0)
-# define DBG_FLUSH do { ; } while(0)
-#endif
+UL_DEBUG_DECLARE_MASK(libmount);
+#define DBG(m, x)	__UL_DBG(libmount, MNT_DEBUG_, m, x)
+#define ON_DBG(m, x)	__UL_DBG_CALL(libmount, MNT_DEBUG_, m, x)
+#define DBG_FLUSH	__UL_DBG_FLUSH(libmount, MNT_DEBUG_)
 
 /* extension for files in the directory */
 #define MNT_MNTTABDIR_EXT	".fstab"
@@ -137,14 +79,11 @@ extern int mnt_run_test(struct libmnt_test *tests, int argc, char *argv[]);
 #endif
 
 /* utils.c */
-extern char *stripoff_last_component(char *path);
-
 extern int mnt_valid_tagname(const char *tagname);
 extern int append_string(char **a, const char *b);
 
+extern const char *mnt_statfs_get_fstype(struct statfs *vfs);
 extern int is_file_empty(const char *name);
-
-extern int mkdir_p(const char *path, mode_t mode);
 
 extern int mnt_is_readonly(const char *path)
 			__attribute__((nonnull));
@@ -178,6 +117,11 @@ extern struct libmnt_fs *mnt_table_get_fs_root(struct libmnt_table *tb,
                                         struct libmnt_fs *fs,
                                         unsigned long mountflags,
                                         char **fsroot);
+extern int __mnt_table_parse_mtab(struct libmnt_table *tb,
+					const char *filename,
+					struct libmnt_table *u_tb);
+
+
 /*
  * Generic iterator
  */
@@ -327,6 +271,7 @@ struct libmnt_context
 
 	struct libmnt_table *fstab;	/* fstab (or mtab for some remounts) entries */
 	struct libmnt_table *mtab;	/* mtab entries */
+	struct libmnt_table *utab;	/* rarely used by umount only */
 
 	int	(*table_errcb)(struct libmnt_table *tb,	/* callback for libmnt_table structs */
 			 const char *filename, int line);
@@ -395,6 +340,7 @@ struct libmnt_context
 #define MNT_FL_HELPER		(1 << 25)	/* [u]mount.<type> */
 #define MNT_FL_LOOPDEV_READY	(1 << 26)	/* /dev/loop<N> initialized by the library */
 #define MNT_FL_MOUNTOPTS_FIXED  (1 << 27)
+#define MNT_FL_TABPATHS_CHECKED	(1 << 28)
 
 /* default flags */
 #define MNT_FL_DEFAULT		0
@@ -426,8 +372,13 @@ extern int __mnt_fs_set_fstype_ptr(struct libmnt_fs *fs, char *fstype)
 			__attribute__((nonnull(1)));
 
 /* context.c */
+extern int mnt_context_mtab_writable(struct libmnt_context *cxt);
+extern int mnt_context_utab_writable(struct libmnt_context *cxt);
+extern const char *mnt_context_get_writable_tabpath(struct libmnt_context *cxt);
+
 extern int mnt_context_prepare_srcpath(struct libmnt_context *cxt);
 extern int mnt_context_prepare_target(struct libmnt_context *cxt);
+extern int mnt_context_guess_srcpath_fstype(struct libmnt_context *cxt, char **type);
 extern int mnt_context_guess_fstype(struct libmnt_context *cxt);
 extern int mnt_context_prepare_helper(struct libmnt_context *cxt,
 				      const char *name, const char *type);
@@ -460,5 +411,7 @@ extern int mnt_context_set_tabfilter(struct libmnt_context *cxt,
 /* tab_update.c */
 extern int mnt_update_set_filename(struct libmnt_update *upd,
 				   const char *filename, int userspace_only);
+extern int mnt_update_already_done(struct libmnt_update *upd,
+				   struct libmnt_lock *lc);
 
 #endif /* _LIBMOUNT_PRIVATE_H */

@@ -93,8 +93,9 @@ further details.
 .SH OPTIONS
 .TP
 .B \-l
-Lock the whole-disk device by an exclusive
-.BR flock (2).
+Create an exclusive
+.BR flock (2)
+lock file (/run/fsck/<diskname>.lock) for whole-disk device.
 This option can be used with one device only (this means that \fB\-A\fR and
 \fB\-l\fR are mutually exclusive).  This option is recommended when more
 .BR fsck (8)
@@ -456,7 +457,6 @@ or
 .BR fsck.nfs (8),
 .BR fsck.vfat (8),
 .BR fsck.xfs (8),
-.BR fsck.xiafs (8),
 .BR reiserfsck (8).
 .ad
 .SH AUTHOR

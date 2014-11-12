@@ -30,8 +30,8 @@
 extern "C" {
 #endif
 
-#define BLKID_VERSION   "2.24.0"
-#define BLKID_DATE      "24-Apr-2014"
+#define BLKID_VERSION   "2.25.0"
+#define BLKID_DATE      "24-Oct-2014"
 
 /**
  * blkid_dev:
@@ -327,6 +327,7 @@ extern blkid_partlist blkid_probe_get_partitions(blkid_probe pr);
 extern int blkid_partlist_numof_partitions(blkid_partlist ls);
 extern blkid_parttable blkid_partlist_get_table(blkid_partlist ls);
 extern blkid_partition blkid_partlist_get_partition(blkid_partlist ls, int n);
+extern blkid_partition blkid_partlist_get_partition_by_partno(blkid_partlist ls, int n);
 extern blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno);
 extern blkid_parttable blkid_partition_get_table(blkid_partition par);
 

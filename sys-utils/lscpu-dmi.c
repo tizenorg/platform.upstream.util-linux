@@ -161,13 +161,14 @@ static int hypervisor_from_dmi_table(uint32_t base, uint16_t len,
 	else if (manufacturer && strstr(manufacturer, "HITACHI") &&
 					product && strstr(product, "LPAR"))
 		rc = HYPER_HITACHI;
-	else if (!vendor && strcmp(vendor, "Parallels"))
+	else if (vendor && !strcmp(vendor, "Parallels"))
 		rc = HYPER_PARALLELS;
 done:
 	free(buf);
 	return rc;
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 static int hypervisor_decode_legacy(uint8_t *buf, const char *devmem)
 {
 	if (!checksum(buf, 0x0F))
@@ -177,6 +178,7 @@ static int hypervisor_decode_legacy(uint8_t *buf, const char *devmem)
 			 WORD(buf + 0x0C),
 		devmem);
 }
+#endif
 
 static int hypervisor_decode_smbios(uint8_t *buf, const char *devmem)
 {
@@ -256,7 +258,7 @@ int read_hypervisor_dmi(void)
 	if (rc)
 		goto done;
 	free(buf);
-
+	buf = NULL;
 memory_scan:
 #if defined(__x86_64__) || defined(__i386__)
 	/* Fallback to memory scan (x86, x86_64) */

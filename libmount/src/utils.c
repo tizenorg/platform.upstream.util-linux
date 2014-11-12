@@ -23,6 +23,8 @@
 #include "canonicalize.h"
 #include "env.h"
 #include "match.h"
+#include "fileutils.h"
+#include "statfs_magic.h"
 
 int append_string(char **a, const char *b)
 {
@@ -115,18 +117,6 @@ static int fstype_cmp(const void *v1, const void *v2)
 	return strcmp(s1, s2);
 }
 
-/* returns basename and keeps dirname in the @path, if @path is "/" (root)
- * then returns empty string */
-char *stripoff_last_component(char *path)
-{
-	char *p = path ? strrchr(path, '/') : NULL;
-
-	if (!p)
-		return NULL;
-	*p = '\0';
-	return p + 1;
-}
-
 /*
  * Note that the @target has to be an absolute path (so at least "/").  The
  * @filename returns an allocated buffer with the last path component, for example:
@@ -142,7 +132,7 @@ int mnt_chdir_to_parent(const char *target, char **filename)
 	if (!target || *target != '/')
 		return -EINVAL;
 
-	DBG(UTILS, mnt_debug("moving to %s parent", target));
+	DBG(UTILS, ul_debug("moving to %s parent", target));
 
 	buf = strdup(target);
 	if (!buf)
@@ -157,22 +147,22 @@ int mnt_chdir_to_parent(const char *target, char **filename)
 	parent = buf && *buf ? buf : "/";
 
 	if (chdir(parent) == -1) {
-		DBG(UTILS, mnt_debug("failed to chdir to %s: %m", parent));
+		DBG(UTILS, ul_debug("failed to chdir to %s: %m", parent));
 		rc = -errno;
 		goto err;
 	}
 	if (!getcwd(cwd, sizeof(cwd))) {
-		DBG(UTILS, mnt_debug("failed to obtain current directory: %m"));
+		DBG(UTILS, ul_debug("failed to obtain current directory: %m"));
 		rc = -errno;
 		goto err;
 	}
 	if (strcmp(cwd, parent) != 0) {
-		DBG(UTILS, mnt_debug(
+		DBG(UTILS, ul_debug(
 		    "unexpected chdir (expected=%s, cwd=%s)", parent, cwd));
 		goto err;
 	}
 
-	DBG(CXT, mnt_debug(
+	DBG(CXT, ul_debug(
 		"current directory moved to %s [last_component='%s']",
 		parent, last));
 
@@ -203,7 +193,7 @@ int mnt_is_readonly(const char *path)
 	if (errno != EACCES)
 		return 0;
 
-#ifdef HAVE_FUTIMENS
+#ifdef HAVE_UTIMENSAT
 	/*
 	 * access(2) returns EACCES on read-only FS:
 	 *
@@ -319,6 +309,92 @@ int mnt_fstype_is_netfs(const char *type)
 		return 1;
 	return 0;
 }
+
+const char *mnt_statfs_get_fstype(struct statfs *vfs)
+{
+	assert(vfs);
+
+	switch (vfs->f_type) {
+	case STATFS_ADFS_MAGIC:		return "adfs";
+	case STATFS_AFFS_MAGIC:		return "affs";
+	case STATFS_AFS_MAGIC:		return "afs";
+	case STATFS_AUTOFS_MAGIC:	return "autofs";
+	case STATFS_BDEVFS_MAGIC:	return "bdev";
+	case STATFS_BEFS_MAGIC:		return "befs";
+	case STATFS_BFS_MAGIC:		return "befs";
+	case STATFS_BINFMTFS_MAGIC:	return "binfmt_misc";
+	case STATFS_BTRFS_MAGIC:	return "btrfs";
+	case STATFS_CEPH_MAGIC:		return "ceph";
+	case STATFS_CGROUP_MAGIC:	return "cgroup";
+	case STATFS_CIFS_MAGIC:		return "cifs";
+	case STATFS_CODA_MAGIC:		return "coda";
+	case STATFS_CONFIGFS_MAGIC:	return "configfs";
+	case STATFS_CRAMFS_MAGIC:	return "cramfs";
+	case STATFS_DEBUGFS_MAGIC:	return "debugfs";
+	case STATFS_DEVPTS_MAGIC:	return "devpts";
+	case STATFS_ECRYPTFS_MAGIC:	return "ecryptfs";
+	case STATFS_EFIVARFS_MAGIC:	return "efivarfs";
+	case STATFS_EFS_MAGIC:		return "efs";
+	case STATFS_EXOFS_MAGIC:	return "exofs";
+	case STATFS_EXT4_MAGIC:		return "ext4";	   /* all extN use the same magic */
+	case STATFS_F2FS_MAGIC:		return "f2fs";
+	case STATFS_FUSE_MAGIC:		return "fuse";
+	case STATFS_FUTEXFS_MAGIC:	return "futexfs";
+	case STATFS_GFS2_MAGIC:		return "gfs2";
+	case STATFS_HFSPLUS_MAGIC:	return "hfsplus";
+	case STATFS_HOSTFS_MAGIC:	return "hostfs";
+	case STATFS_HPFS_MAGIC:		return "hpfs";
+	case STATFS_HPPFS_MAGIC:	return "hppfs";
+	case STATFS_HUGETLBFS_MAGIC:	return "hugetlbfs";
+	case STATFS_ISOFS_MAGIC:	return "iso9660";
+	case STATFS_JFFS2_MAGIC:	return "jffs2";
+	case STATFS_JFS_MAGIC:		return "jfs";
+	case STATFS_LOGFS_MAGIC:	return "logfs";
+	case STATFS_MINIX2_MAGIC:
+	case STATFS_MINIX2_MAGIC2:
+	case STATFS_MINIX3_MAGIC:
+	case STATFS_MINIX_MAGIC:
+	case STATFS_MINIX_MAGIC2:	return "minix";
+	case STATFS_MQUEUE_MAGIC:	return "mqueue";
+	case STATFS_MSDOS_MAGIC:	return "vfat";
+	case STATFS_NCP_MAGIC:		return "ncp";
+	case STATFS_NFS_MAGIC:		return "nfs";
+	case STATFS_NILFS_MAGIC:	return "nilfs2";
+	case STATFS_NTFS_MAGIC:		return "ntfs";
+	case STATFS_OCFS2_MAGIC:	return "ocfs2";
+	case STATFS_OMFS_MAGIC:		return "omfs";
+	case STATFS_OPENPROMFS_MAGIC:	return "openpromfs";
+	case STATFS_PIPEFS_MAGIC:	return "pipefs";
+	case STATFS_PROC_MAGIC:		return "proc";
+	case STATFS_PSTOREFS_MAGIC:	return "pstore";
+	case STATFS_QNX4_MAGIC:		return "qnx4";
+	case STATFS_QNX6_MAGIC:		return "qnx6";
+	case STATFS_RAMFS_MAGIC:	return "ramfs";
+	case STATFS_REISERFS_MAGIC:	return "reiser4";
+	case STATFS_ROMFS_MAGIC:	return "romfs";
+	case STATFS_SECURITYFS_MAGIC:	return "securityfs";
+	case STATFS_SELINUXFS_MAGIC:	return "selinuxfs";
+	case STATFS_SMACKFS_MAGIC:	return "smackfs";
+	case STATFS_SMB_MAGIC:		return "smb";
+	case STATFS_SOCKFS_MAGIC:	return "sockfs";
+	case STATFS_SQUASHFS_MAGIC:	return "squashfs";
+	case STATFS_SYSFS_MAGIC:	return "sysfs";
+	case STATFS_TMPFS_MAGIC:	return "tmpfs";
+	case STATFS_UBIFS_MAGIC:	return "ubifs";
+	case STATFS_UDF_MAGIC:		return "udf";
+	case STATFS_UFS2_MAGIC:
+	case STATFS_UFS_MAGIC:		return "ufs";
+	case STATFS_V9FS_MAGIC:		return "9p";
+	case STATFS_VXFS_MAGIC:		return "vxfs";
+	case STATFS_XENFS_MAGIC:	return "xenfs";
+	case STATFS_XFS_MAGIC:		return "xfs";
+	default:
+		break;
+	}
+
+	return NULL;
+}
+
 
 /**
  * mnt_match_fstype:
@@ -495,7 +571,7 @@ static int get_filesystems(const char *filename, char ***filesystems, const char
 	if (!f)
 		return 1;
 
-	DBG(UTILS, mnt_debug("reading filesystems list from: %s", filename));
+	DBG(UTILS, ul_debug("reading filesystems list from: %s", filename));
 
 	while (fgets(line, sizeof(line), f)) {
 		char name[sizeof(line)];
@@ -600,7 +676,7 @@ int mnt_get_uid(const char *username, uid_t *uid)
 		*uid= pw->pw_uid;
 		rc = 0;
 	} else {
-		DBG(UTILS, mnt_debug(
+		DBG(UTILS, ul_debug(
 			"cannot convert '%s' username to UID", username));
 		rc = errno ? -errno : -EINVAL;
 	}
@@ -628,7 +704,7 @@ int mnt_get_gid(const char *groupname, gid_t *gid)
 		*gid= gr->gr_gid;
 		rc = 0;
 	} else {
-		DBG(UTILS, mnt_debug(
+		DBG(UTILS, ul_debug(
 			"cannot convert '%s' groupname to GID", groupname));
 		rc = errno ? -errno : -EINVAL;
 	}
@@ -704,7 +780,7 @@ int mnt_has_regular_mtab(const char **mtab, int *writable)
 	if (mtab && !*mtab)
 		*mtab = filename;
 
-	DBG(UTILS, mnt_debug("mtab: %s", filename));
+	DBG(UTILS, ul_debug("mtab: %s", filename));
 
 	rc = lstat(filename, &st);
 
@@ -726,7 +802,7 @@ int mnt_has_regular_mtab(const char **mtab, int *writable)
 	}
 
 done:
-	DBG(UTILS, mnt_debug("%s: irregular/non-writable", filename));
+	DBG(UTILS, ul_debug("%s: irregular/non-writable", filename));
 	return 0;
 }
 
@@ -750,7 +826,7 @@ int mnt_has_regular_utab(const char **utab, int *writable)
 	if (utab && !*utab)
 		*utab = filename;
 
-	DBG(UTILS, mnt_debug("utab: %s", filename));
+	DBG(UTILS, ul_debug("utab: %s", filename));
 
 	rc = lstat(filename, &st);
 
@@ -784,7 +860,7 @@ int mnt_has_regular_utab(const char **utab, int *writable)
 			return 1;
 	}
 done:
-	DBG(UTILS, mnt_debug("%s: irregular/non-writable file", filename));
+	DBG(UTILS, ul_debug("%s: irregular/non-writable file", filename));
 	return 0;
 }
 
@@ -924,7 +1000,7 @@ char *mnt_get_mountpoint(const char *path)
 
 	memcpy(mnt, "/", 2);
 done:
-	DBG(UTILS, mnt_debug("%s mountpoint is %s", path, mnt));
+	DBG(UTILS, ul_debug("%s mountpoint is %s", path, mnt));
 	return mnt;
 err:
 	free(mnt);
@@ -949,7 +1025,7 @@ char *mnt_get_fs_root(const char *path, const char *mnt)
 		free(m);
 
 	res = *p ? strdup(p) : strdup("/");
-	DBG(UTILS, mnt_debug("%s fs-root is %s", path, res));
+	DBG(UTILS, ul_debug("%s fs-root is %s", path, res));
 	return res;
 }
 
@@ -1021,43 +1097,6 @@ char *mnt_get_kernel_cmdline_option(const char *name)
 	}
 
 	return res;
-}
-
-int mkdir_p(const char *path, mode_t mode)
-{
-	char *p, *dir;
-	int rc = 0;
-
-	if (!path || !*path)
-		return -EINVAL;
-
-	dir = p = strdup(path);
-	if (!dir)
-		return -ENOMEM;
-
-	if (*p == '/')
-		p++;
-
-	while (p && *p) {
-		char *e = strchr(p, '/');
-		if (e)
-			*e = '\0';
-		if (*p) {
-			rc = mkdir(dir, mode);
-			if (rc && errno != EEXIST)
-				break;
-			rc = 0;
-		}
-		if (!e)
-			break;
-		*e = '/';
-		p = e + 1;
-	}
-
-	DBG(UTILS, mnt_debug("%s mkdir %s", path, rc ? "FAILED" : "SUCCESS"));
-
-	free(dir);
-	return rc;
 }
 
 #ifdef TEST_PROGRAM
@@ -1195,6 +1234,21 @@ int test_mkdir(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
+int test_statfs_type(struct libmnt_test *ts, int argc, char *argv[])
+{
+	struct statfs vfs;
+	int rc;
+
+	rc = statfs(argv[1], &vfs);
+	if (rc)
+		printf("%s: statfs failed: %m\n", argv[1]);
+	else
+		printf("%-30s: statfs type: %-12s [0x%lx]\n", argv[1],
+				mnt_statfs_get_fstype(&vfs),
+				(long) vfs.f_type);
+	return rc;
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -1210,6 +1264,7 @@ int main(int argc, char *argv[])
 	{ "--cd-parent",     test_chdir,           "<path>" },
 	{ "--kernel-cmdline",test_kernel_cmdline,  "<option> | <option>=" },
 	{ "--mkdir",         test_mkdir,           "<path>" },
+	{ "--statfs-type",   test_statfs_type,     "<path>" },
 
 	{ NULL }
 	};

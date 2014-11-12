@@ -43,7 +43,7 @@
  *
  * @PART_ENTRY_NAME: partition name (gpt and mac only)
  *
- * @PART_ENTRY_UUID: partition UUID (gpt only)
+ * @PART_ENTRY_UUID: partition UUID (gpt, or pseudo IDs for MBR)
  *
  * @PART_ENTRY_TYPE: partition type, 0xNN (e.g 0x82) or type UUID (gpt only) or type string (mac)
  *
@@ -163,7 +163,7 @@ const struct blkid_chaindrv partitions_drv = {
 /* exported as opaque type "blkid_parttable" */
 struct blkid_struct_parttable {
 	const char	*type;		/* partition table type */
-	blkid_loff_t	offset;		/* begin of the partition table */
+	blkid_loff_t	offset;		/* begin of the partition table (in bytes) */
 	int		nparts;		/* number of partitions */
 	blkid_partition	parent;		/* parent of nested partition table */
 	char		id[37];		/* PT identifier (e.g. UUID for GPT) */
@@ -173,8 +173,8 @@ struct blkid_struct_parttable {
 
 /* exported as opaque type "blkid_partition" */
 struct blkid_struct_partition {
-	blkid_loff_t	start;		/* begin of the partition */
-	blkid_loff_t	size;		/* size of the partitions */
+	blkid_loff_t	start;		/* begin of the partition (512-bytes sectors) */
+	blkid_loff_t	size;		/* size of the partitions (512-bytes sectors) */
 
 	int		type;		/* partition type */
 	char		typestr[37];	/* partition type string (GPT and Mac) */
@@ -364,7 +364,7 @@ static void reset_partlist(blkid_partlist ls)
 	ls->next_partno = 1;
 	INIT_LIST_HEAD(&ls->l_tabs);
 
-	DBG(LOWPROBE, blkid_debug("partlist reset"));
+	DBG(LOWPROBE, ul_debug("partlist reset"));
 }
 
 static blkid_partlist partitions_init_data(struct blkid_chain *chn)
@@ -383,7 +383,7 @@ static blkid_partlist partitions_init_data(struct blkid_chain *chn)
 
 	reset_partlist(ls);
 
-	DBG(LOWPROBE, blkid_debug("parts: initialized partitions list (%p, size=%d)",
+	DBG(LOWPROBE, ul_debug("parts: initialized partitions list (%p, size=%d)",
 		ls, ls->nparts_max));
 	return ls;
 }
@@ -418,7 +418,7 @@ blkid_parttable blkid_partlist_new_parttable(blkid_partlist ls,
 	INIT_LIST_HEAD(&tab->t_tabs);
 	list_add_tail(&tab->t_tabs, &ls->l_tabs);
 
-	DBG(LOWPROBE, blkid_debug("parts: create a new partition table "
+	DBG(LOWPROBE, ul_debug("parts: create a new partition table "
 		       "(%p, type=%s, offset=%"PRId64")", tab, type, offset));
 	return tab;
 }
@@ -431,10 +431,11 @@ static blkid_partition new_partition(blkid_partlist ls, blkid_parttable tab)
 		/* Linux kernel has DISK_MAX_PARTS=256, but it's too much for
 		 * generic Linux machine -- let start with 32 partititions.
 		 */
-		ls->parts = realloc(ls->parts, (ls->nparts_max + 32) *
+		void *tmp = realloc(ls->parts, (ls->nparts_max + 32) *
 					sizeof(struct blkid_struct_partition));
-		if (!ls->parts)
+		if (!tmp)
 			return NULL;
+		ls->parts = tmp;
 		ls->nparts_max += 32;
 	}
 
@@ -460,7 +461,7 @@ blkid_partition blkid_partlist_add_partition(blkid_partlist ls,
 	par->start = start;
 	par->size = size;
 
-	DBG(LOWPROBE, blkid_debug("parts: add partition (%p start=%"
+	DBG(LOWPROBE, ul_debug("parts: add partition (%p start=%"
 		PRId64 ", size=%" PRId64 ", table=%p)",
 		par, par->start, par->size, tab));
 	return par;
@@ -535,35 +536,41 @@ static int idinfo_probe(blkid_probe pr, const struct blkid_idinfo *id,
 {
 	const struct blkid_idmag *mag = NULL;
 	blkid_loff_t off;
-	int rc = 1;		/* = nothing detected */
+	int rc = BLKID_PROBE_NONE;		/* default is nothing */
 
 	if (pr->size <= 0 || (id->minsz && id->minsz > pr->size))
 		goto nothing;	/* the device is too small */
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		goto nothing;
 
-	if (blkid_probe_get_idmag(pr, id, &off, &mag))
+	rc = blkid_probe_get_idmag(pr, id, &off, &mag);
+	if (rc != BLKID_PROBE_OK)
 		goto nothing;
 
 	/* final check by probing function */
 	if (id->probefunc) {
-		DBG(LOWPROBE, blkid_debug(
+		DBG(LOWPROBE, ul_debug(
 			"%s: ---> call probefunc()", id->name));
 		rc = id->probefunc(pr, mag);
-	        if (rc == -1) {
+		if (rc < 0) {
 			/* reset after error */
 			reset_partlist(blkid_probe_get_partlist(pr));
 			if (chn && !chn->binary)
 				blkid_probe_chain_reset_vals(pr, chn);
-			DBG(LOWPROBE, blkid_debug("%s probefunc failed", id->name));
+			DBG(LOWPROBE, ul_debug("%s probefunc failed, rc %d",
+						  id->name, rc));
 		}
-		if (rc == 0 && mag && chn && !chn->binary)
+		if (rc == BLKID_PROBE_OK && mag && chn && !chn->binary)
 			rc = blkid_probe_set_magic(pr, off, mag->len,
 					(unsigned char *) mag->magic);
 
-		DBG(LOWPROBE, blkid_debug("%s: <--- (rc = %d)", id->name, rc));
+		DBG(LOWPROBE, ul_debug("%s: <--- (rc = %d)", id->name, rc));
 	}
 
-nothing:
 	return rc;
+
+nothing:
+	return BLKID_PROBE_NONE;
 }
 
 /*
@@ -571,12 +578,16 @@ nothing:
  */
 static int partitions_probe(blkid_probe pr, struct blkid_chain *chn)
 {
-	int rc = 1;
+	int rc = BLKID_PROBE_NONE;
 	size_t i;
 
 	if (!pr || chn->idx < -1)
-		return -1;
+		return -EINVAL;
+
 	blkid_probe_chain_reset_vals(pr, chn);
+
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		return BLKID_PROBE_NONE;
 
 	if (chn->binary)
 		partitions_init_data(chn);
@@ -584,7 +595,7 @@ static int partitions_probe(blkid_probe pr, struct blkid_chain *chn)
 	if (!pr->wipe_size && (pr->prob_flags & BLKID_PROBE_FL_IGNORE_PT))
 		goto details_only;
 
-	DBG(LOWPROBE, blkid_debug("--> starting probing loop [PARTS idx=%d]",
+	DBG(LOWPROBE, ul_debug("--> starting probing loop [PARTS idx=%d]",
 		chn->idx));
 
 	i = chn->idx < 0 ? 0 : chn->idx + 1U;
@@ -599,7 +610,10 @@ static int partitions_probe(blkid_probe pr, struct blkid_chain *chn)
 			continue;
 
 		/* apply checks from idinfo */
-		if (idinfo_probe(pr, idinfos[i], chn) != 0)
+		rc = idinfo_probe(pr, idinfos[i], chn);
+		if (rc < 0)
+			break;
+		if (rc != BLKID_PROBE_OK)
 			continue;
 
 		name = idinfos[i]->name;
@@ -614,28 +628,35 @@ static int partitions_probe(blkid_probe pr, struct blkid_chain *chn)
 						(unsigned char *) name,
 						strlen(name) + 1);
 
-		DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (type=%s) [PARTS idx=%d]",
+		DBG(LOWPROBE, ul_debug("<-- leaving probing loop (type=%s) [PARTS idx=%d]",
 			name, chn->idx));
-		rc = 0;
+		rc = BLKID_PROBE_OK;
 		break;
 	}
 
-	if (rc == 1) {
-		DBG(LOWPROBE, blkid_debug("<-- leaving probing loop (failed) [PARTS idx=%d]",
-			chn->idx));
+	if (rc != BLKID_PROBE_OK) {
+		DBG(LOWPROBE, ul_debug("<-- leaving probing loop (failed=%d) [PARTS idx=%d]",
+			rc, chn->idx));
 	}
 
 details_only:
 	/*
 	 * Gather PART_ENTRY_* values if the current device is a partition.
 	 */
-	if (!chn->binary &&
+	if ((rc == BLKID_PROBE_OK || rc == BLKID_PROBE_NONE) && !chn->binary &&
 	    (blkid_partitions_get_flags(pr) & BLKID_PARTS_ENTRY_DETAILS)) {
 
-		if (!blkid_partitions_probe_partition(pr))
-			rc = 0;
+		int xrc = blkid_partitions_probe_partition(pr);
+
+		/* partition entry probing is optional, and "not-found" from
+		 * this sub-probing must not to overwrite previous success. */
+		if (xrc < 0)
+			rc = xrc;			/* always propagate errors */
+		else if (rc == BLKID_PROBE_NONE)
+			rc = xrc;
 	}
 
+	DBG(LOWPROBE, ul_debug("partitions probe done [rc=%d]",	rc));
 	return rc;
 }
 
@@ -644,32 +665,34 @@ int blkid_partitions_do_subprobe(blkid_probe pr, blkid_partition parent,
 		const struct blkid_idinfo *id)
 {
 	blkid_probe prc;
-	int rc = 1;
+	int rc;
 	blkid_partlist ls;
 	blkid_loff_t sz, off;
 
-	DBG(LOWPROBE, blkid_debug(
+	DBG(LOWPROBE, ul_debug(
 		"parts: ----> %s subprobe requested (parent=%p)",
 		id->name, parent));
 
 	if (!pr || !parent || !parent->size)
-		return -1;
+		return -EINVAL;
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		return BLKID_PROBE_NONE;
 
 	/* range defined by parent */
 	sz = ((blkid_loff_t) parent->size) << 9;
 	off = ((blkid_loff_t) parent->start) << 9;
 
 	if (off < pr->off || pr->off + pr->size < off + sz) {
-		DBG(LOWPROBE, blkid_debug(
+		DBG(LOWPROBE, ul_debug(
 			"ERROR: parts: <---- '%s' subprobe: overflow detected.",
 			id->name));
-		return -1;
+		return -ENOSPC;
 	}
 
 	/* create private prober */
 	prc = blkid_clone_probe(pr);
 	if (!prc)
-		return -1;
+		return -ENOMEM;
 
 	blkid_probe_set_dimension(prc, off, sz);
 
@@ -693,7 +716,7 @@ int blkid_partitions_do_subprobe(blkid_probe pr, blkid_partition parent,
 
 	blkid_free_probe(prc);	/* free cloned prober */
 
-	DBG(LOWPROBE, blkid_debug(
+	DBG(LOWPROBE, ul_debug(
 		"parts: <---- %s subprobe done (parent=%p, rc=%d)",
 		id->name, parent, rc));
 
@@ -702,11 +725,15 @@ int blkid_partitions_do_subprobe(blkid_probe pr, blkid_partition parent,
 
 static int blkid_partitions_probe_partition(blkid_probe pr)
 {
-	int rc = 1;
 	blkid_probe disk_pr = NULL;
 	blkid_partlist ls;
 	blkid_partition par;
 	dev_t devno;
+
+	DBG(LOWPROBE, ul_debug("parts: start probing for partition entry"));
+
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		goto nothing;
 
 	devno = blkid_probe_get_devno(pr);
 	if (!devno)
@@ -722,7 +749,9 @@ static int blkid_partitions_probe_partition(blkid_probe pr)
 		goto nothing;
 
 	par = blkid_partlist_devno_to_partition(ls, devno);
-	if (par) {
+	if (!par)
+		goto nothing;
+	else {
 		const char *v;
 		blkid_parttable tab = blkid_partition_get_table(par);
 		dev_t disk = blkid_probe_get_devno(disk_pr);
@@ -768,9 +797,15 @@ static int blkid_partitions_probe_partition(blkid_probe pr)
 		blkid_probe_sprintf_value(pr, "PART_ENTRY_DISK", "%u:%u",
 				major(disk), minor(disk));
 	}
-	rc = 0;
+
+	DBG(LOWPROBE, ul_debug("parts: end probing for partition entry [success]"));
+	return BLKID_PROBE_OK;
+
 nothing:
-	return rc;
+	DBG(LOWPROBE, ul_debug("parts: end probing for partition entry [nothing]"));
+	return BLKID_PROBE_NONE;
+
+
 }
 
 /*
@@ -780,14 +815,17 @@ nothing:
 int blkid_probe_is_covered_by_pt(blkid_probe pr,
 				 blkid_loff_t offset, blkid_loff_t size)
 {
-	blkid_probe prc;
+	blkid_probe prc = NULL;
 	blkid_partlist ls = NULL;
 	blkid_loff_t start, end;
 	int nparts, i, rc = 0;
 
-	DBG(LOWPROBE, blkid_debug(
+	DBG(LOWPROBE, ul_debug(
 		"=> checking if off=%jd size=%jd covered by PT",
 		offset, size));
+
+	if (pr->flags & BLKID_FL_NOSCAN_DEV)
+		goto done;
 
 	prc = blkid_clone_probe(pr);
 	if (!prc)
@@ -809,7 +847,7 @@ int blkid_probe_is_covered_by_pt(blkid_probe pr,
 		blkid_partition par = &ls->parts[i];
 
 		if (par->start + par->size > (pr->size >> 9)) {
-			DBG(LOWPROBE, blkid_debug("partition #%d overflows "
+			DBG(LOWPROBE, ul_debug("partition #%d overflows "
 				"device (off=%" PRId64 " size=%" PRId64 ")",
 				par->partno, par->start, par->size));
 			goto done;
@@ -828,7 +866,7 @@ int blkid_probe_is_covered_by_pt(blkid_probe pr,
 done:
 	blkid_free_probe(prc);
 
-	DBG(LOWPROBE, blkid_debug("<= %s covered by PT", rc ? "IS" : "NOT"));
+	DBG(LOWPROBE, ul_debug("<= %s covered by PT", rc ? "IS" : "NOT"));
 	return rc;
 }
 
@@ -903,6 +941,35 @@ blkid_partition blkid_partlist_get_partition(blkid_partlist ls, int n)
 }
 
 /**
+ * blkid_partlist_get_partition_by_partno
+ * @ls: partitions list
+ * @n: the partition number (e.g. 'N' from sda'N')
+ *
+ * This does not assume any order of the input blkid_partlist.  And correctly
+ * handles "out of order" partition tables.  partition N is located after
+ * partition N+1 on the disk.
+ *
+ * Returns: partition object or NULL in case or error.
+ */
+blkid_partition blkid_partlist_get_partition_by_partno(blkid_partlist ls, int n)
+{
+	int i, nparts;
+	blkid_partition par;
+
+	if (!ls)
+		return NULL;
+
+	nparts = blkid_partlist_numof_partitions(ls);
+	for (i = 0; i < nparts; i++) {
+		par = blkid_partlist_get_partition(ls, i);
+		if (n == blkid_partition_get_partno(par))
+			return par;
+	}
+	return NULL;
+}
+
+
+/**
  * blkid_partlist_devno_to_partition:
  * @ls: partitions list
  * @devno: requested partition
@@ -924,11 +991,11 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 	if (!ls)
 		return NULL;
 
-	DBG(LOWPROBE, blkid_debug("triyng to convert devno 0x%llx to partition",
+	DBG(LOWPROBE, ul_debug("triyng to convert devno 0x%llx to partition",
 			(long long) devno));
 
 	if (sysfs_init(&sysfs, devno, NULL)) {
-		DBG(LOWPROBE, blkid_debug("failed t init sysfs context"));
+		DBG(LOWPROBE, ul_debug("failed t init sysfs context"));
 		return NULL;
 	}
 	rc = sysfs_read_u64(&sysfs, "size", &size);
@@ -960,7 +1027,7 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 		return NULL;
 
 	if (partno) {
-		DBG(LOWPROBE, blkid_debug("mapped by DM, using partno %d", partno));
+		DBG(LOWPROBE, ul_debug("mapped by DM, using partno %d", partno));
 
 		/*
 		 * Partition mapped by kpartx does not provide "start" offset
@@ -982,7 +1049,7 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 		 return NULL;
 	}
 
-	DBG(LOWPROBE, blkid_debug("searching by offset/size"));
+	DBG(LOWPROBE, ul_debug("searching by offset/size"));
 
 	for (i = 0; i < ls->nparts; i++) {
 		blkid_partition par = &ls->parts[i];
@@ -998,9 +1065,10 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 
 	}
 
-	DBG(LOWPROBE, blkid_debug("not found partition for device"));
+	DBG(LOWPROBE, ul_debug("not found partition for device"));
 	return NULL;
 }
+
 
 int blkid_parttable_set_uuid(blkid_parttable tab, const unsigned char *id)
 {
@@ -1075,7 +1143,7 @@ int blkid_partitions_strcpy_ptuuid(blkid_probe pr, char *str)
  */
 const char *blkid_parttable_get_id(blkid_parttable tab)
 {
-	return tab && tab->id && *tab->id ? tab->id : NULL;
+	return tab && *tab->id ? tab->id : NULL;
 }
 
 

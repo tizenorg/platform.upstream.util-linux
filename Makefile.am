@@ -17,11 +17,13 @@ LDADD = $(LTLIBINTL)
 # Work the bug around until it is fixed:
 dist_noinst_DATA = $(dist_man_MANS)
 
-# Paths to in-tree libraries (use ul_ prefix to avoid possible collisions)
-# Note that blkid.h and libmount.h are generated and stored in build dirs.
+# Paths to in-tree libraries (use ul_ prefix to avoid possible collisions) Note
+# that blkid.h, libmount.h and libsmartcols.h are generated and stored in build
+# dirs.
 #
 ul_libblkid_incdir = $(top_builddir)/libblkid/src
 ul_libmount_incdir = $(top_builddir)/libmount/src
+ul_libsmartcols_incdir = $(top_builddir)/libsmartcols/src
 ul_libuuid_incdir  = $(top_srcdir)/libuuid/src
 ul_libfdisk_incdir  = $(top_srcdir)/libfdisk/src
 
@@ -42,7 +44,9 @@ bin_PROGRAMS =
 sbin_PROGRAMS =
 dist_usrbin_exec_SCRIPTS =
 systemdsystemunit_DATA =
+dist_bashcompletion_DATA =
 check_PROGRAMS =
+dist_check_SCRIPTS =
 TESTS =
 
 PATHFILES =
@@ -77,17 +81,16 @@ include lib/Makemodule.am
 include libuuid/Makemodule.am
 include libblkid/Makemodule.am
 include libmount/Makemodule.am
+include libsmartcols/Makemodule.am
 include libfdisk/Makemodule.am
 
 include schedutils/Makemodule.am
 include text-utils/Makemodule.am
 include term-utils/Makemodule.am
 include login-utils/Makemodule.am
-include mount-deprecated/Makemodule.am
 include sys-utils/Makemodule.am
 include misc-utils/Makemodule.am
 include disk-utils/Makemodule.am
-include fdisks/Makemodule.am
 
 include bash-completion/Makemodule.am
 
@@ -114,8 +117,10 @@ edit_cmd = sed \
 	 -e 's|@usrbin_execdir[@]|$(usrbin_execdir)|g' \
 	 -e 's|@usrsbin_execdir[@]|$(usrsbin_execdir)|g' \
 	 -e 's|@VERSION[@]|$(VERSION)|g' \
+	 -e 's|@ADJTIME_PATH[@]|$(ADJTIME_PATH)|g' \
 	 -e 's|@LIBUUID_VERSION[@]|$(LIBUUID_VERSION)|g' \
 	 -e 's|@LIBMOUNT_VERSION[@]|$(LIBMOUNT_VERSION)|g' \
+	 -e 's|@LIBSMARTCOLS_VERSION[@]|$(LIBSMARTCOLS_VERSION)|g' \
 	 -e 's|@LIBBLKID_VERSION[@]|$(LIBBLKID_VERSION)|g'
 
 CLEANFILES += $(PATHFILES)
@@ -123,6 +128,7 @@ EXTRA_DIST += $(PATHFILES:=.in)
 
 $(PATHFILES): Makefile
 	@ rm -f $@ $@.tmp
+	$(AM_V_at) test -d $(dir $@) || mkdir -p $(dir $@)
 	$(AM_V_GEN) srcdir=''; \
 		test -f ./$@.in || srcdir=$(srcdir)/; \
 		$(edit_cmd) $${srcdir}$@.in >$@.tmp
@@ -159,12 +165,15 @@ checkxalloc:
 checkdecl:
 	@ $(top_srcdir)/tools/checkdecl.sh
 
-ENABLE_ALL = --enable-static-programs --enable-most-builds
-DISTCHECK_CONFIGURE_FLAGS = --disable-use-tty-group \
-			    --disable-silent-rules $(ENABLE_ALL) \
-			    --with-bashcompletiondir=$$dc_install_base/$(bashcompletiondir) \
-			    --with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
-
+DISTCHECK_CONFIGURE_FLAGS = \
+	--disable-use-tty-group \
+	--disable-silent-rules \
+	--enable-all-programs \
+	--enable-static-programs \
+	--enable-gtk-doc \
+	--with-python \
+	--with-bashcompletiondir=$$dc_install_base/$(bashcompletiondir) \
+	--with-systemdsystemunitdir=$$dc_install_base/$(systemdsystemunitdir)
 
 BUILT_SOURCES = .version
 .version:

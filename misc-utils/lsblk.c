@@ -41,6 +41,7 @@
 
 #include <blkid.h>
 #include <libmount.h>
+#include <libsmartcols.h>
 
 #ifdef HAVE_LIBUDEV
 #include <libudev.h>
@@ -53,7 +54,6 @@
 #include "blkdev.h"
 #include "canonicalize.h"
 #include "nls.h"
-#include "tt.h"
 #include "xalloc.h"
 #include "strutils.h"
 #include "at.h"
@@ -71,8 +71,10 @@ enum {
 	COL_TARGET,
 	COL_LABEL,
 	COL_UUID,
+	COL_PARTTYPE,
 	COL_PARTLABEL,
 	COL_PARTUUID,
+	COL_PARTFLAGS,
 	COL_RA,
 	COL_RO,
 	COL_RM,
@@ -106,62 +108,83 @@ enum {
 	COL_VENDOR,
 };
 
+/* basic table settings */
+enum {
+	LSBLK_ASCII =		(1 << 0),
+	LSBLK_RAW =		(1 << 1),
+	LSBLK_NOHEADINGS =	(1 << 2),
+	LSBLK_EXPORT =		(1 << 3),
+	LSBLK_TREE =		(1 << 4),
+};
+
+enum {
+	SORT_STRING	= 0,	/* default is to use scols_cell_get_data() */
+	SORT_U64	= 1	/* use private pointer from scols_cell_get_userdata() */
+};
+
 /* column names */
 struct colinfo {
 	const char	*name;		/* header */
 	double		whint;		/* width hint (N < 1 is in percent of termwidth) */
-	int		flags;		/* TT_FL_* */
+	int		flags;		/* SCOLS_FL_* */
 	const char      *help;
+
+	int	sort_type;		/* SORT_* */
 };
 
 /* columns descriptions */
 static struct colinfo infos[] = {
-	[COL_NAME]   = { "NAME",    0.25, TT_FL_TREE | TT_FL_NOEXTREMES, N_("device name") },
+	[COL_NAME]   = { "NAME",    0.25, SCOLS_FL_TREE | SCOLS_FL_NOEXTREMES, N_("device name") },
 	[COL_KNAME]  = { "KNAME",   0.3, 0, N_("internal kernel device name") },
 	[COL_PKNAME] = { "PKNAME",   0.3, 0, N_("internal parent kernel device name") },
-	[COL_MAJMIN] = { "MAJ:MIN", 6, 0, N_("major:minor device number") },
-	[COL_FSTYPE] = { "FSTYPE",  0.1, TT_FL_TRUNC, N_("filesystem type") },
-	[COL_TARGET] = { "MOUNTPOINT", 0.10, TT_FL_TRUNC, N_("where the device is mounted") },
+	[COL_MAJMIN] = { "MAJ:MIN", 6, 0, N_("major:minor device number"), SORT_U64 },
+	[COL_FSTYPE] = { "FSTYPE",  0.1, SCOLS_FL_TRUNC, N_("filesystem type") },
+	[COL_TARGET] = { "MOUNTPOINT", 0.10, SCOLS_FL_TRUNC, N_("where the device is mounted") },
 	[COL_LABEL]  = { "LABEL",   0.1, 0, N_("filesystem LABEL") },
 	[COL_UUID]   = { "UUID",    36,  0, N_("filesystem UUID") },
 
+	[COL_PARTTYPE]  = { "PARTTYPE",  36,  0, N_("partition type UUID") },
 	[COL_PARTLABEL] = { "PARTLABEL", 0.1, 0, N_("partition LABEL") },
 	[COL_PARTUUID]  = { "PARTUUID",  36,  0, N_("partition UUID") },
+	[COL_PARTFLAGS] = { "PARTFLAGS",  36,  0, N_("partition flags") },
 
-	[COL_RA]     = { "RA",      3, TT_FL_RIGHT, N_("read-ahead of the device") },
-	[COL_RO]     = { "RO",      1, TT_FL_RIGHT, N_("read-only device") },
-	[COL_RM]     = { "RM",      1, TT_FL_RIGHT, N_("removable device") },
-	[COL_ROTA]   = { "ROTA",    1, TT_FL_RIGHT, N_("rotational device") },
-	[COL_RAND]   = { "RAND",    1, TT_FL_RIGHT, N_("adds randomness") },
-	[COL_MODEL]  = { "MODEL",   0.1, TT_FL_TRUNC, N_("device identifier") },
-	[COL_SERIAL] = { "SERIAL",  0.1, TT_FL_TRUNC, N_("disk serial number") },
-	[COL_SIZE]   = { "SIZE",    5, TT_FL_RIGHT, N_("size of the device") },
-	[COL_STATE]  = { "STATE",   7, TT_FL_TRUNC, N_("state of the device") },
-	[COL_OWNER]  = { "OWNER",   0.1, TT_FL_TRUNC, N_("user name"), },
-	[COL_GROUP]  = { "GROUP",   0.1, TT_FL_TRUNC, N_("group name") },
+	[COL_RA]     = { "RA",      3, SCOLS_FL_RIGHT, N_("read-ahead of the device"), SORT_U64 },
+	[COL_RO]     = { "RO",      1, SCOLS_FL_RIGHT, N_("read-only device") },
+	[COL_RM]     = { "RM",      1, SCOLS_FL_RIGHT, N_("removable device") },
+	[COL_ROTA]   = { "ROTA",    1, SCOLS_FL_RIGHT, N_("rotational device") },
+	[COL_RAND]   = { "RAND",    1, SCOLS_FL_RIGHT, N_("adds randomness") },
+	[COL_MODEL]  = { "MODEL",   0.1, SCOLS_FL_TRUNC, N_("device identifier") },
+	[COL_SERIAL] = { "SERIAL",  0.1, SCOLS_FL_TRUNC, N_("disk serial number") },
+	[COL_SIZE]   = { "SIZE",    5, SCOLS_FL_RIGHT, N_("size of the device"), SORT_U64 },
+	[COL_STATE]  = { "STATE",   7, SCOLS_FL_TRUNC, N_("state of the device") },
+	[COL_OWNER]  = { "OWNER",   0.1, SCOLS_FL_TRUNC, N_("user name"), },
+	[COL_GROUP]  = { "GROUP",   0.1, SCOLS_FL_TRUNC, N_("group name") },
 	[COL_MODE]   = { "MODE",    10,   0, N_("device node permissions") },
-	[COL_ALIOFF] = { "ALIGNMENT", 6, TT_FL_RIGHT, N_("alignment offset") },
-	[COL_MINIO]  = { "MIN-IO",  6, TT_FL_RIGHT, N_("minimum I/O size") },
-	[COL_OPTIO]  = { "OPT-IO",  6, TT_FL_RIGHT, N_("optimal I/O size") },
-	[COL_PHYSEC] = { "PHY-SEC", 7, TT_FL_RIGHT, N_("physical sector size") },
-	[COL_LOGSEC] = { "LOG-SEC", 7, TT_FL_RIGHT, N_("logical sector size") },
+	[COL_ALIOFF] = { "ALIGNMENT", 6, SCOLS_FL_RIGHT, N_("alignment offset"), SORT_U64 },
+	[COL_MINIO]  = { "MIN-IO",  6, SCOLS_FL_RIGHT, N_("minimum I/O size"), SORT_U64 },
+	[COL_OPTIO]  = { "OPT-IO",  6, SCOLS_FL_RIGHT, N_("optimal I/O size"), SORT_U64 },
+	[COL_PHYSEC] = { "PHY-SEC", 7, SCOLS_FL_RIGHT, N_("physical sector size"), SORT_U64 },
+	[COL_LOGSEC] = { "LOG-SEC", 7, SCOLS_FL_RIGHT, N_("logical sector size"), SORT_U64 },
 	[COL_SCHED]  = { "SCHED",   0.1, 0, N_("I/O scheduler name") },
-	[COL_RQ_SIZE]= { "RQ-SIZE", 5, TT_FL_RIGHT, N_("request queue size") },
+	[COL_RQ_SIZE]= { "RQ-SIZE", 5, SCOLS_FL_RIGHT, N_("request queue size"), SORT_U64 },
 	[COL_TYPE]   = { "TYPE",    4, 0, N_("device type") },
-	[COL_DALIGN] = { "DISC-ALN", 6, TT_FL_RIGHT, N_("discard alignment offset") },
-	[COL_DGRAN]  = { "DISC-GRAN", 6, TT_FL_RIGHT, N_("discard granularity") },
-	[COL_DMAX]   = { "DISC-MAX", 6, TT_FL_RIGHT, N_("discard max bytes") },
-	[COL_DZERO]  = { "DISC-ZERO", 1, TT_FL_RIGHT, N_("discard zeroes data") },
-	[COL_WSAME]  = { "WSAME",   6, TT_FL_RIGHT, N_("write same max bytes") },
+	[COL_DALIGN] = { "DISC-ALN", 6, SCOLS_FL_RIGHT, N_("discard alignment offset"), SORT_U64 },
+	[COL_DGRAN]  = { "DISC-GRAN", 6, SCOLS_FL_RIGHT, N_("discard granularity"), SORT_U64 },
+	[COL_DMAX]   = { "DISC-MAX", 6, SCOLS_FL_RIGHT, N_("discard max bytes"), SORT_U64 },
+	[COL_DZERO]  = { "DISC-ZERO", 1, SCOLS_FL_RIGHT, N_("discard zeroes data") },
+	[COL_WSAME]  = { "WSAME",   6, SCOLS_FL_RIGHT, N_("write same max bytes"), SORT_U64 },
 	[COL_WWN]    = { "WWN",     18, 0, N_("unique storage identifier") },
 	[COL_HCTL]   = { "HCTL", 10, 0, N_("Host:Channel:Target:Lun for SCSI") },
 	[COL_TRANSPORT] = { "TRAN", 6, 0, N_("device transport type") },
-	[COL_REV]    = { "REV",   4, TT_FL_RIGHT, N_("device revision") },
-	[COL_VENDOR] = { "VENDOR", 0.1, TT_FL_TRUNC, N_("device vendor") },
+	[COL_REV]    = { "REV",   4, SCOLS_FL_RIGHT, N_("device revision") },
+	[COL_VENDOR] = { "VENDOR", 0.1, SCOLS_FL_TRUNC, N_("device vendor") },
 };
 
 struct lsblk {
-	struct tt *tt;			/* output table */
+	struct libscols_table *table;	/* output table */
+	struct libscols_column *sort_col;/* sort output by this colum */
+	int sort_id;
+
 	unsigned int all_devices:1;	/* print all devices, including empty */
 	unsigned int bytes:1;		/* print SIZE in bytes */
 	unsigned int inverse:1;		/* print inverse dependencies */
@@ -172,9 +195,24 @@ struct lsblk {
 
 struct lsblk *lsblk;	/* global handler */
 
-#define NCOLS ARRAY_SIZE(infos)
-static int columns[NCOLS];/* enabled columns */
-static int ncolumns;		/* number of enabled columns */
+/* columns[] array specifies all currently wanted output column. The columns
+ * are defined by infos[] array and you can specify (on command line) each
+ * column twice. That's enough, dynamically allocated array of the columns is
+ * unnecessary overkill and over-engineering in this case */
+static int columns[ARRAY_SIZE(infos) * 2];
+static int ncolumns;
+
+static inline size_t err_columns_index(size_t arysz, size_t idx)
+{
+	if (idx >= arysz)
+		errx(EXIT_FAILURE, _("too many columns specified, "
+				     "the limit is %zu columns"),
+				arysz - 1);
+	return idx;
+}
+
+#define add_column(ary, n, id)	\
+		((ary)[ err_columns_index(ARRAY_SIZE(ary), (n)) ] = (id))
 
 static int excludes[256];
 static size_t nexcludes;
@@ -192,7 +230,7 @@ struct udev *udev;
 struct blkdev_cxt {
 	struct blkdev_cxt *parent;
 
-	struct tt_line *tt_line;
+	struct libscols_line *scols_line;
 	struct stat	st;
 
 	char *name;		/* kernel name in /sys/block */
@@ -208,8 +246,10 @@ struct blkdev_cxt {
 	char *fstype;		/* detected fs, NULL or "?" if cannot detect */
 	char *uuid;		/* filesystem UUID (or stack uuid) */
 	char *label;		/* filesystem label */
+	char *parttype;		/* partiton type UUID */
 	char *partuuid;		/* partition UUID */
 	char *partlabel;	/* partiton label */
+	char *partflags;	/* partition flags */
 	char *wwn;		/* storage WWN */
 	char *serial;		/* disk serial number */
 
@@ -256,9 +296,8 @@ static int is_maj_included(int maj)
 /* array with IDs of enabled columns */
 static int get_column_id(int num)
 {
-	assert(ARRAY_SIZE(columns) == NCOLS);
 	assert(num < ncolumns);
-	assert(columns[num] < (int) NCOLS);
+	assert(columns[num] < (int) ARRAY_SIZE(infos));
 	return columns[num];
 }
 
@@ -271,13 +310,23 @@ static int column_name_to_id(const char *name, size_t namesz)
 {
 	size_t i;
 
-	for (i = 0; i < NCOLS; i++) {
+	for (i = 0; i < ARRAY_SIZE(infos); i++) {
 		const char *cn = infos[i].name;
 
 		if (!strncasecmp(name, cn, namesz) && !*(cn + namesz))
 			return i;
 	}
 	warnx(_("unknown column: %s"), name);
+	return -1;
+}
+
+static int column_id_to_number(int id)
+{
+	size_t i;
+
+	for (i = 0; i < (size_t) ncolumns; i++)
+		if (columns[i] == id)
+			return i;
 	return -1;
 }
 
@@ -291,6 +340,7 @@ static void reset_blkdev_cxt(struct blkdev_cxt *cxt)
 	free(cxt->fstype);
 	free(cxt->uuid);
 	free(cxt->label);
+	free(cxt->parttype);
 	free(cxt->partuuid);
 	free(cxt->partlabel);
 	free(cxt->wwn);
@@ -441,8 +491,12 @@ static int get_udev_properties(struct blkdev_cxt *cxt)
 		}
 		if ((data = udev_device_get_property_value(dev, "ID_FS_TYPE")))
 			cxt->fstype = xstrdup(data);
+		if ((data = udev_device_get_property_value(dev, "ID_PART_ENTRY_TYPE")))
+			cxt->parttype = xstrdup(data);
 		if ((data = udev_device_get_property_value(dev, "ID_PART_ENTRY_UUID")))
 			cxt->partuuid = xstrdup(data);
+		if ((data = udev_device_get_property_value(dev, "ID_PART_ENTRY_FLAGS")))
+			cxt->partflags = xstrdup(data);
 		if ((data = udev_device_get_property_value(dev, "ID_WWN")))
 			cxt->wwn = xstrdup(data);
 		if ((data = udev_device_get_property_value(dev, "ID_SERIAL_SHORT")))
@@ -496,11 +550,14 @@ static void probe_device(struct blkdev_cxt *cxt)
 			cxt->uuid = xstrdup(data);
 		if (!blkid_probe_lookup_value(pr, "LABEL", &data, NULL))
 			cxt->label = xstrdup(data);
+		if (!blkid_probe_lookup_value(pr, "PART_ENTRY_TYPE", &data, NULL))
+			cxt->parttype = xstrdup(data);
 		if (!blkid_probe_lookup_value(pr, "PART_ENTRY_UUID", &data, NULL))
 			cxt->partuuid = xstrdup(data);
 		if (!blkid_probe_lookup_value(pr, "PART_ENTRY_NAME", &data, NULL))
 			cxt->partlabel = xstrdup(data);
-
+		if (!blkid_probe_lookup_value(pr, "PART_ENTRY_FLAGS", &data, NULL))
+			cxt->partflags = xstrdup(data);
 	}
 
 	blkid_free_probe(pr);
@@ -649,8 +706,8 @@ static char *get_transport(struct blkdev_cxt *cxt)
 	return trans ? xstrdup(trans) : NULL;
 }
 
-#define is_parsable(_l)	(((_l)->tt->flags & TT_FL_RAW) || \
-			 ((_l)->tt->flags & TT_FL_EXPORT))
+#define is_parsable(_l)	(scols_table_is_raw((_l)->table) || \
+			 scols_table_is_export((_l)->table))
 
 static char *mk_name(const char *name)
 {
@@ -676,40 +733,86 @@ static char *mk_dm_name(const char *name)
 	return p;
 }
 
-static void set_tt_data(struct blkdev_cxt *cxt, int col, int id, struct tt_line *ln)
+/* stores data to scols cell userdata (invisible and independent on output)
+ * to make the original values accessible for sort functions
+ */
+static void set_sortdata_u64(struct libscols_line *ln, int col, uint64_t x)
 {
-	char *p = NULL;
-	int st_rc = 0;
+	struct libscols_cell *ce = scols_line_get_cell(ln, col);
+	uint64_t *data;
+
+	if (!ce)
+		return;
+	data = xmalloc(sizeof(uint64_t));
+	*data = x;
+	scols_cell_set_userdata(ce, data);
+}
+
+static void set_sortdata_u64_from_string(struct libscols_line *ln, int col, const char *str)
+{
+	uint64_t x;
+
+	if (!str || sscanf(str, "%"SCNu64, &x) != 1)
+		return;
+
+	set_sortdata_u64(ln, col, x);
+}
+
+static void unref_sortdata(struct libscols_table *tb)
+{
+	struct libscols_iter *itr;
+	struct libscols_line *ln;
+
+	if (!tb || !lsblk->sort_col)
+		return;
+	itr = scols_new_iter(SCOLS_ITER_FORWARD);
+	if (!itr)
+		return;
+	while (scols_table_next_line(tb, itr, &ln) == 0) {
+		struct libscols_cell *ce = scols_line_get_column_cell(ln,
+								lsblk->sort_col);
+		void *data = scols_cell_get_userdata(ce);
+		free(data);
+	}
+
+	scols_free_iter(itr);
+}
+
+static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libscols_line *ln)
+{
+	int sort = 0, st_rc = 0;
+	char *str = NULL;
 
 	if (!cxt->st.st_rdev && (id == COL_OWNER || id == COL_GROUP ||
 				 id == COL_MODE))
 		st_rc = stat(cxt->filename, &cxt->st);
 
+	if (lsblk->sort_id == id)
+		sort = 1;
+
 	switch(id) {
 	case COL_NAME:
-		tt_line_set_data(ln, col, cxt->dm_name ?
-				mk_dm_name(cxt->dm_name) :
-				mk_name(cxt->name));
+		str = cxt->dm_name ? mk_dm_name(cxt->dm_name) :	mk_name(cxt->name);
 		break;
 	case COL_KNAME:
-		tt_line_set_data(ln, col, mk_name(cxt->name));
+		str = mk_name(cxt->name);
 		break;
 	case COL_PKNAME:
 		if (cxt->parent)
-			tt_line_set_data(ln, col, mk_name(cxt->parent->name));
+			str = mk_name(cxt->parent->name);
 		break;
 	case COL_OWNER:
 	{
 		struct passwd *pw = st_rc ? NULL : getpwuid(cxt->st.st_uid);
 		if (pw)
-			tt_line_set_data(ln, col, xstrdup(pw->pw_name));
+			str = xstrdup(pw->pw_name);
 		break;
 	}
 	case COL_GROUP:
 	{
 		struct group *gr = st_rc ? NULL : getgrgid(cxt->st.st_gid);
 		if (gr)
-			tt_line_set_data(ln, col, xstrdup(gr->gr_name));
+			str = xstrdup(gr->gr_name);
 		break;
 	}
 	case COL_MODE:
@@ -718,249 +821,243 @@ static void set_tt_data(struct blkdev_cxt *cxt, int col, int id, struct tt_line 
 
 		if (!st_rc) {
 			strmode(cxt->st.st_mode, md);
-			tt_line_set_data(ln, col, xstrdup(md));
+			str = xstrdup(md);
 		}
 		break;
 	}
 	case COL_MAJMIN:
 		if (is_parsable(lsblk))
-			xasprintf(&p, "%u:%u", cxt->maj, cxt->min);
+			xasprintf(&str, "%u:%u", cxt->maj, cxt->min);
 		else
-			xasprintf(&p, "%3u:%-3u", cxt->maj, cxt->min);
-		tt_line_set_data(ln, col, p);
+			xasprintf(&str, "%3u:%-3u", cxt->maj, cxt->min);
+		if (sort)
+			set_sortdata_u64(ln, col, makedev(cxt->maj, cxt->min));
 		break;
 	case COL_FSTYPE:
 		probe_device(cxt);
 		if (cxt->fstype)
-			tt_line_set_data(ln, col, xstrdup(cxt->fstype));
+			str = xstrdup(cxt->fstype);
 		break;
 	case COL_TARGET:
-		if (!(cxt->nholders + cxt->npartitions)) {
-			if ((p = get_device_mountpoint(cxt)))
-				tt_line_set_data(ln, col, p);
-		}
+		if (!(cxt->nholders + cxt->npartitions))
+			str = get_device_mountpoint(cxt);
 		break;
 	case COL_LABEL:
 		probe_device(cxt);
-		if (!cxt->label)
-			break;
-
-		tt_line_set_data(ln, col, xstrdup(cxt->label));
+		if (cxt->label)
+			str = xstrdup(cxt->label);
 		break;
 	case COL_UUID:
 		probe_device(cxt);
 		if (cxt->uuid)
-			tt_line_set_data(ln, col, xstrdup(cxt->uuid));
+			str = xstrdup(cxt->uuid);
+		break;
+	case COL_PARTTYPE:
+		probe_device(cxt);
+		if (cxt->parttype)
+			str = xstrdup(cxt->parttype);
 		break;
 	case COL_PARTLABEL:
 		probe_device(cxt);
-		if (!cxt->partlabel)
-			break;
-
-		tt_line_set_data(ln, col, xstrdup(cxt->partlabel));
+		if (cxt->partlabel)
+			str = xstrdup(cxt->partlabel);
 		break;
 	case COL_PARTUUID:
 		probe_device(cxt);
 		if (cxt->partuuid)
-			tt_line_set_data(ln, col, xstrdup(cxt->partuuid));
+			str = xstrdup(cxt->partuuid);
+		break;
+	case COL_PARTFLAGS:
+		probe_device(cxt);
+		if (cxt->partflags)
+			str = xstrdup(cxt->partflags);
 		break;
 	case COL_WWN:
 		get_udev_properties(cxt);
 		if (cxt->wwn)
-			tt_line_set_data(ln, col, xstrdup(cxt->wwn));
+			str = xstrdup(cxt->wwn);
 		break;
 	case COL_RA:
-		p = sysfs_strdup(&cxt->sysfs, "queue/read_ahead_kb");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/read_ahead_kb");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_RO:
-		tt_line_set_data(ln, col, is_readonly_device(cxt) ?
-					xstrdup("1") : xstrdup("0"));
+		str = xstrdup(is_readonly_device(cxt) ? "1" : "0");
 		break;
 	case COL_RM:
-		p = sysfs_strdup(&cxt->sysfs, "removable");
-		if (!p && cxt->sysfs.parent)
-			p = sysfs_strdup(cxt->sysfs.parent, "removable");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "removable");
+		if (!str && cxt->sysfs.parent)
+			str = sysfs_strdup(cxt->sysfs.parent, "removable");
 		break;
 	case COL_ROTA:
-		p = sysfs_strdup(&cxt->sysfs, "queue/rotational");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/rotational");
 		break;
 	case COL_RAND:
-		p = sysfs_strdup(&cxt->sysfs, "queue/add_random");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/add_random");
 		break;
 	case COL_MODEL:
-		if (!cxt->partition && cxt->nslaves == 0) {
-			p = sysfs_strdup(&cxt->sysfs, "device/model");
-			if (p)
-				tt_line_set_data(ln, col, p);
-		}
+		if (!cxt->partition && cxt->nslaves == 0)
+			str = sysfs_strdup(&cxt->sysfs, "device/model");
 		break;
 	case COL_SERIAL:
 		if (!cxt->partition && cxt->nslaves == 0) {
 			get_udev_properties(cxt);
 			if (cxt->serial)
-				tt_line_set_data(ln, col, xstrdup(cxt->serial));
+				str = xstrdup(cxt->serial);
 		}
 		break;
 	case COL_REV:
-		if (!cxt->partition && cxt->nslaves == 0) {
-			p = sysfs_strdup(&cxt->sysfs, "device/rev");
-			if (p)
-				tt_line_set_data(ln, col, p);
-		}
+		if (!cxt->partition && cxt->nslaves == 0)
+			str = sysfs_strdup(&cxt->sysfs, "device/rev");
 		break;
 	case COL_VENDOR:
-		if (!cxt->partition && cxt->nslaves == 0) {
-			p = sysfs_strdup(&cxt->sysfs, "device/vendor");
-			if (p)
-				tt_line_set_data(ln, col, p);
-		}
+		if (!cxt->partition && cxt->nslaves == 0)
+			str = sysfs_strdup(&cxt->sysfs, "device/vendor");
 		break;
 	case COL_SIZE:
-		if (cxt->size) {
-			if (lsblk->bytes)
-				xasprintf(&p, "%jd", cxt->size);
-			else
-				p = size_to_human_string(SIZE_SUFFIX_1LETTER, cxt->size);
-			if (p)
-				tt_line_set_data(ln, col, p);
-		}
+		if (!cxt->size)
+			break;
+		if (lsblk->bytes)
+			xasprintf(&str, "%jd", cxt->size);
+		else
+			str = size_to_human_string(SIZE_SUFFIX_1LETTER, cxt->size);
+		if (sort)
+			set_sortdata_u64(ln, col, cxt->size);
 		break;
 	case COL_STATE:
-		if (!cxt->partition && !cxt->dm_name) {
-			p = sysfs_strdup(&cxt->sysfs, "device/state");
-		} else if (cxt->dm_name) {
+		if (!cxt->partition && !cxt->dm_name)
+			str = sysfs_strdup(&cxt->sysfs, "device/state");
+		else if (cxt->dm_name) {
 			int x = 0;
 			if (sysfs_read_int(&cxt->sysfs, "dm/suspended", &x) == 0)
-				p = x ? xstrdup("suspended") : xstrdup("running");
+				str = xstrdup(x ? "suspended" : "running");
 		}
-		if (p)
-			tt_line_set_data(ln, col, p);
 		break;
 	case COL_ALIOFF:
-		p = sysfs_strdup(&cxt->sysfs, "alignment_offset");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "alignment_offset");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_MINIO:
-		p = sysfs_strdup(&cxt->sysfs, "queue/minimum_io_size");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/minimum_io_size");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_OPTIO:
-		p = sysfs_strdup(&cxt->sysfs, "queue/optimal_io_size");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/optimal_io_size");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_PHYSEC:
-		p = sysfs_strdup(&cxt->sysfs, "queue/physical_block_size");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/physical_block_size");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_LOGSEC:
-		p = sysfs_strdup(&cxt->sysfs, "queue/logical_block_size");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/logical_block_size");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_SCHED:
-		p = get_scheduler(cxt);
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = get_scheduler(cxt);
 		break;
 	case COL_RQ_SIZE:
-		p = sysfs_strdup(&cxt->sysfs, "queue/nr_requests");
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = sysfs_strdup(&cxt->sysfs, "queue/nr_requests");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_TYPE:
-		p = get_type(cxt);
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = get_type(cxt);
 		break;
 	case COL_HCTL:
 	{
 		int h, c, t, l;
-		if (sysfs_scsi_get_hctl(&cxt->sysfs, &h, &c, &t, &l) == 0) {
-			xasprintf(&p, "%d:%d:%d:%d", h, c, t, l);
-			tt_line_set_data(ln, col, p);
-		}
+		if (sysfs_scsi_get_hctl(&cxt->sysfs, &h, &c, &t, &l) == 0)
+			xasprintf(&str, "%d:%d:%d:%d", h, c, t, l);
 		break;
 	}
 	case COL_TRANSPORT:
-		p = get_transport(cxt);
-		if (p)
-			tt_line_set_data(ln, col, p);
+		str = get_transport(cxt);
 		break;
 	case COL_DALIGN:
-		p = sysfs_strdup(&cxt->sysfs, "discard_alignment");
-		if (cxt->discard && p)
-			tt_line_set_data(ln, col, p);
-		else
-			tt_line_set_data(ln, col, xstrdup("0"));
+		if (cxt->discard)
+			str = sysfs_strdup(&cxt->sysfs, "discard_alignment");
+		if (!str)
+			str = xstrdup("0");
+		if (sort)
+			set_sortdata_u64_from_string(ln, col, str);
 		break;
 	case COL_DGRAN:
-		if (lsblk->bytes)
-			p = sysfs_strdup(&cxt->sysfs, "queue/discard_granularity");
-		else {
+		if (lsblk->bytes) {
+			str = sysfs_strdup(&cxt->sysfs, "queue/discard_granularity");
+			if (sort)
+				set_sortdata_u64_from_string(ln, col, str);
+		} else {
 			uint64_t x;
-
 			if (sysfs_read_u64(&cxt->sysfs,
-					   "queue/discard_granularity", &x) == 0)
-				p = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+					   "queue/discard_granularity", &x) == 0) {
+				str = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+				if (sort)
+					set_sortdata_u64(ln, col, x);
+			}
 		}
-		if (p)
-			tt_line_set_data(ln, col, p);
 		break;
 	case COL_DMAX:
-		if (lsblk->bytes)
-			p = sysfs_strdup(&cxt->sysfs, "queue/discard_max_bytes");
-		else {
+		if (lsblk->bytes) {
+			str = sysfs_strdup(&cxt->sysfs, "queue/discard_max_bytes");
+			if (sort)
+				set_sortdata_u64_from_string(ln, col, str);
+		} else {
 			uint64_t x;
-
 			if (sysfs_read_u64(&cxt->sysfs,
-					   "queue/discard_max_bytes", &x) == 0)
-				p = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+					   "queue/discard_max_bytes", &x) == 0) {
+				str = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+				if (sort)
+					set_sortdata_u64(ln, col, x);
+			}
 		}
-		if (p)
-			tt_line_set_data(ln, col, p);
 		break;
 	case COL_DZERO:
-		p = sysfs_strdup(&cxt->sysfs, "queue/discard_zeroes_data");
-		if (cxt->discard && p)
-			tt_line_set_data(ln, col, p);
-		else
-			tt_line_set_data(ln, col, xstrdup("0"));
+		if (cxt->discard)
+			str = sysfs_strdup(&cxt->sysfs, "queue/discard_zeroes_data");
+		if (!str)
+			str = xstrdup("0");
 		break;
 	case COL_WSAME:
-		if (lsblk->bytes)
-			p = sysfs_strdup(&cxt->sysfs, "queue/write_same_max_bytes");
-		else {
+		if (lsblk->bytes) {
+			str = sysfs_strdup(&cxt->sysfs, "queue/write_same_max_bytes");
+			if (sort)
+				set_sortdata_u64_from_string(ln, col, str);
+		} else {
 			uint64_t x;
 
 			if (sysfs_read_u64(&cxt->sysfs,
-					   "queue/write_same_max_bytes", &x) == 0)
-				p = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+					   "queue/write_same_max_bytes", &x) == 0) {
+				str = size_to_human_string(SIZE_SUFFIX_1LETTER, x);
+				if (sort)
+					set_sortdata_u64(ln, col, x);
+			}
 		}
-		tt_line_set_data(ln, col, p ? p : xstrdup("0"));
+		if (!str)
+			str = xstrdup("0");
 		break;
 	};
+
+	if (str)
+		scols_line_refer_data(ln, col, str);
 }
 
-static void print_device(struct blkdev_cxt *cxt, struct tt_line *tt_parent)
+static void fill_table_line(struct blkdev_cxt *cxt, struct libscols_line *scols_parent)
 {
 	int i;
 
-	cxt->tt_line = tt_add_line(lsblk->tt, tt_parent);
+	cxt->scols_line = scols_table_new_line(lsblk->table, scols_parent);
+	if (!cxt->scols_line)
+		return;
 
 	for (i = 0; i < ncolumns; i++)
-		set_tt_data(cxt, i, get_column_id(i), cxt->tt_line);
+		set_scols_data(cxt, i, get_column_id(i), cxt->scols_line);
 }
 
 static int set_cxt(struct blkdev_cxt *cxt,
@@ -1084,7 +1181,7 @@ static int list_partitions(struct blkdev_cxt *wholedisk_cxt, struct blkdev_cxt *
 				goto next;
 
 			wholedisk_cxt->parent = &part_cxt;
-			print_device(&part_cxt, parent_cxt ? parent_cxt->tt_line : NULL);
+			fill_table_line(&part_cxt, parent_cxt ? parent_cxt->scols_line : NULL);
 			if (!lsblk->nodeps)
 				process_blkdev(wholedisk_cxt, &part_cxt, 0, NULL);
 		} else {
@@ -1098,7 +1195,7 @@ static int list_partitions(struct blkdev_cxt *wholedisk_cxt, struct blkdev_cxt *
 
 			/* Print whole disk only once */
 			if (r)
-				print_device(wholedisk_cxt, parent_cxt ? parent_cxt->tt_line : NULL);
+				fill_table_line(wholedisk_cxt, parent_cxt ? parent_cxt->scols_line : NULL);
 			if (ps == 0 && !lsblk->nodeps)
 				process_blkdev(&part_cxt, wholedisk_cxt, 0, NULL);
 		}
@@ -1187,7 +1284,7 @@ static int process_blkdev(struct blkdev_cxt *cxt, struct blkdev_cxt *parent,
 	if (do_partitions && cxt->npartitions)
 		return list_partitions(cxt, parent, part_name);
 
-	print_device(cxt, parent ? parent->tt_line : NULL);
+	fill_table_line(cxt, parent ? parent->scols_line : NULL);
 	return list_deps(cxt);
 }
 
@@ -1359,6 +1456,25 @@ static void parse_includes(const char *str0)
 	}
 }
 
+/*
+ * see set_sortdata_u64() and columns initialization in main()
+ */
+static int cmp_u64_cells(struct libscols_cell *a,
+			 struct libscols_cell *b,
+			 __attribute__((__unused__)) void *data)
+{
+	uint64_t *adata = (uint64_t *) scols_cell_get_userdata(a),
+		 *bdata = (uint64_t *) scols_cell_get_userdata(b);
+
+	if (adata == NULL && bdata == NULL)
+		return 0;
+	if (adata == NULL)
+		return -1;
+	if (bdata == NULL)
+		return 1;
+	return *adata == *bdata ? 0 : *adata >= *bdata ? 1 : -1;
+}
+
 static void __attribute__((__noreturn__)) help(FILE *out)
 {
 	size_t i;
@@ -1378,19 +1494,21 @@ static void __attribute__((__noreturn__)) help(FILE *out)
 	fputs(_(" -m, --perms          output info about permissions\n"), out);
 	fputs(_(" -n, --noheadings     don't print headings\n"), out);
 	fputs(_(" -o, --output <list>  output columns\n"), out);
+	fputs(_(" -O, --output-all     output all columns\n"), out);
 	fputs(_(" -p, --paths          print complete device path\n"), out);
 	fputs(_(" -P, --pairs          use key=\"value\" output format\n"), out);
 	fputs(_(" -r, --raw            use raw output format\n"), out);
 	fputs(_(" -s, --inverse        inverse dependencies\n"), out);
 	fputs(_(" -S, --scsi           output info about SCSI devices\n"), out);
 	fputs(_(" -t, --topology       output info about topology\n"), out);
+	fputs(_(" -x, --sort <column>  sort output by <column>\n"), out);
 	fputs(USAGE_SEPARATOR, out);
 	fputs(USAGE_HELP, out);
 	fputs(USAGE_VERSION, out);
 
 	fprintf(out, _("\nAvailable columns (for --output):\n"));
 
-	for (i = 0; i < NCOLS; i++)
+	for (i = 0; i < ARRAY_SIZE(infos); i++)
 		fprintf(out, " %11s  %s\n", infos[i].name, _(infos[i].help));
 
 	fprintf(out, USAGE_MAN_TAIL("lsblk(8)"));
@@ -1407,8 +1525,8 @@ static void check_sysdevblock(void)
 
 int main(int argc, char *argv[])
 {
-	struct lsblk _ls;
-	int tt_flags = TT_FL_TREE;
+	struct lsblk _ls = { .sort_id = -1 };
+	int scols_flags = LSBLK_TREE;
 	int i, c, status = EXIT_FAILURE;
 	char *outarg = NULL;
 
@@ -1419,6 +1537,7 @@ int main(int argc, char *argv[])
 		{ "discard",    0, 0, 'D' },
 		{ "help",	0, 0, 'h' },
 		{ "output",     1, 0, 'o' },
+		{ "output-all", 0, 0, 'O' },
 		{ "perms",      0, 0, 'm' },
 		{ "noheadings",	0, 0, 'n' },
 		{ "list",       0, 0, 'l' },
@@ -1432,12 +1551,18 @@ int main(int argc, char *argv[])
 		{ "paths",      0, 0, 'p' },
 		{ "pairs",      0, 0, 'P' },
 		{ "scsi",       0, 0, 'S' },
+		{ "sort",	1, 0, 'x' },
 		{ "version",    0, 0, 'V' },
 		{ NULL, 0, 0, 0 },
 	};
 
 	static const ul_excl_t excl[] = {       /* rows and cols in in ASCII order */
+		{ 'D','O' },
 		{ 'I','e' },
+		{ 'O','S' },
+		{ 'O','f' },
+		{ 'O','m' },
+		{ 'O','t' },
 		{ 'P','l','r' },
 		{ 0 }
 	};
@@ -1449,10 +1574,9 @@ int main(int argc, char *argv[])
 	atexit(close_stdout);
 
 	lsblk = &_ls;
-	memset(lsblk, 0, sizeof(*lsblk));
 
 	while((c = getopt_long(argc, argv,
-			       "abdDe:fhlnmo:pPiI:rstVS", longopts, NULL)) != -1) {
+			       "abdDe:fhlnmo:OpPiI:rstVSx:", longopts, NULL)) != -1) {
 
 		err_exclusive_options(c, longopts, excl, excl_st);
 
@@ -1467,11 +1591,11 @@ int main(int argc, char *argv[])
 			lsblk->nodeps = 1;
 			break;
 		case 'D':
-			columns[ncolumns++] = COL_NAME;
-			columns[ncolumns++] = COL_DALIGN;
-			columns[ncolumns++] = COL_DGRAN;
-			columns[ncolumns++] = COL_DMAX;
-			columns[ncolumns++] = COL_DZERO;
+			add_column(columns, ncolumns++, COL_NAME);
+			add_column(columns, ncolumns++, COL_DALIGN);
+			add_column(columns, ncolumns++, COL_DGRAN);
+			add_column(columns, ncolumns++, COL_DMAX);
+			add_column(columns, ncolumns++, COL_DZERO);
 			break;
 		case 'e':
 			parse_excludes(optarg);
@@ -1480,75 +1604,85 @@ int main(int argc, char *argv[])
 			help(stdout);
 			break;
 		case 'l':
-			tt_flags &= ~TT_FL_TREE; /* disable the default */
+			scols_flags &= ~LSBLK_TREE; /* disable the default */
 			break;
 		case 'n':
-			tt_flags |= TT_FL_NOHEADINGS;
+			scols_flags |= LSBLK_NOHEADINGS;
 			break;
 		case 'o':
 			outarg = optarg;
+			break;
+		case 'O':
+			for (ncolumns = 0 ; ncolumns < (int) ARRAY_SIZE(infos); ncolumns++)
+				columns[ncolumns] = ncolumns;
 			break;
 		case 'p':
 			lsblk->paths = 1;
 			break;
 		case 'P':
-			tt_flags |= TT_FL_EXPORT;
-			tt_flags &= ~TT_FL_TREE;	/* disable the default */
+			scols_flags |= LSBLK_EXPORT;
+			scols_flags &= ~LSBLK_TREE;	/* disable the default */
 			break;
 		case 'i':
-			tt_flags |= TT_FL_ASCII;
+			scols_flags |= LSBLK_ASCII;
 			break;
 		case 'I':
 			parse_includes(optarg);
 			break;
 		case 'r':
-			tt_flags &= ~TT_FL_TREE;	/* disable the default */
-			tt_flags |= TT_FL_RAW;		/* enable raw */
+			scols_flags &= ~LSBLK_TREE;	/* disable the default */
+			scols_flags |= LSBLK_RAW;		/* enable raw */
 			break;
 		case 's':
 			lsblk->inverse = 1;
 			break;
 		case 'f':
-			columns[ncolumns++] = COL_NAME;
-			columns[ncolumns++] = COL_FSTYPE;
-			columns[ncolumns++] = COL_LABEL;
-			columns[ncolumns++] = COL_UUID;
-			columns[ncolumns++] = COL_TARGET;
+			add_column(columns, ncolumns++, COL_NAME);
+			add_column(columns, ncolumns++, COL_FSTYPE);
+			add_column(columns, ncolumns++, COL_LABEL);
+			add_column(columns, ncolumns++, COL_UUID);
+			add_column(columns, ncolumns++, COL_TARGET);
 			break;
 		case 'm':
-			columns[ncolumns++] = COL_NAME;
-			columns[ncolumns++] = COL_SIZE;
-			columns[ncolumns++] = COL_OWNER;
-			columns[ncolumns++] = COL_GROUP;
-			columns[ncolumns++] = COL_MODE;
+			add_column(columns, ncolumns++, COL_NAME);
+			add_column(columns, ncolumns++, COL_SIZE);
+			add_column(columns, ncolumns++, COL_OWNER);
+			add_column(columns, ncolumns++, COL_GROUP);
+			add_column(columns, ncolumns++, COL_MODE);
 			break;
 		case 't':
-			columns[ncolumns++] = COL_NAME;
-			columns[ncolumns++] = COL_ALIOFF;
-			columns[ncolumns++] = COL_MINIO;
-			columns[ncolumns++] = COL_OPTIO;
-			columns[ncolumns++] = COL_PHYSEC;
-			columns[ncolumns++] = COL_LOGSEC;
-			columns[ncolumns++] = COL_ROTA;
-			columns[ncolumns++] = COL_SCHED;
-			columns[ncolumns++] = COL_RQ_SIZE;
-			columns[ncolumns++] = COL_RA;
-			columns[ncolumns++] = COL_WSAME;
+			add_column(columns, ncolumns++, COL_NAME);
+			add_column(columns, ncolumns++, COL_ALIOFF);
+			add_column(columns, ncolumns++, COL_MINIO);
+			add_column(columns, ncolumns++, COL_OPTIO);
+			add_column(columns, ncolumns++, COL_PHYSEC);
+			add_column(columns, ncolumns++, COL_LOGSEC);
+			add_column(columns, ncolumns++, COL_ROTA);
+			add_column(columns, ncolumns++, COL_SCHED);
+			add_column(columns, ncolumns++, COL_RQ_SIZE);
+			add_column(columns, ncolumns++, COL_RA);
+			add_column(columns, ncolumns++, COL_WSAME);
 			break;
 		case 'S':
 			lsblk->nodeps = 1;
 			lsblk->scsi = 1;
-			columns[ncolumns++] = COL_NAME;
-			columns[ncolumns++] = COL_HCTL;
-			columns[ncolumns++] = COL_TYPE;
-			columns[ncolumns++] = COL_VENDOR;
-			columns[ncolumns++] = COL_MODEL;
-			columns[ncolumns++] = COL_REV;
-			columns[ncolumns++] = COL_TRANSPORT;
+			add_column(columns, ncolumns++, COL_NAME);
+			add_column(columns, ncolumns++, COL_HCTL);
+			add_column(columns, ncolumns++, COL_TYPE);
+			add_column(columns, ncolumns++, COL_VENDOR);
+			add_column(columns, ncolumns++, COL_MODEL);
+			add_column(columns, ncolumns++, COL_REV);
+			add_column(columns, ncolumns++, COL_TRANSPORT);
 			break;
 		case 'V':
 			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
+		case 'x':
+			scols_flags &= ~LSBLK_TREE; /* disable the default */
+			lsblk->sort_id = column_name_to_id(optarg, strlen(optarg));
+			if (lsblk->sort_id >= 0)
+				break;
+			/* fallthrough */
 		default:
 			help(stderr);
 		}
@@ -1557,13 +1691,13 @@ int main(int argc, char *argv[])
 	check_sysdevblock();
 
 	if (!ncolumns) {
-		columns[ncolumns++] = COL_NAME;
-		columns[ncolumns++] = COL_MAJMIN;
-		columns[ncolumns++] = COL_RM;
-		columns[ncolumns++] = COL_SIZE;
-		columns[ncolumns++] = COL_RO;
-		columns[ncolumns++] = COL_TYPE;
-		columns[ncolumns++] = COL_TARGET;
+		add_column(columns, ncolumns++, COL_NAME);
+		add_column(columns, ncolumns++, COL_MAJMIN);
+		add_column(columns, ncolumns++, COL_RM);
+		add_column(columns, ncolumns++, COL_SIZE);
+		add_column(columns, ncolumns++, COL_RO);
+		add_column(columns, ncolumns++, COL_TYPE);
+		add_column(columns, ncolumns++, COL_TARGET);
 	}
 
 	if (outarg && string_add_to_idarray(outarg, columns, ARRAY_SIZE(columns),
@@ -1573,24 +1707,40 @@ int main(int argc, char *argv[])
 	if (nexcludes == 0 && nincludes == 0)
 		excludes[nexcludes++] = 1;	/* default: ignore RAM disks */
 
+	if (lsblk->sort_id >= 0 && column_id_to_number(lsblk->sort_id) < 0)
+		errx(EXIT_FAILURE, _("the sort column has to be among the output columns"));
+
 	mnt_init_debug(0);
+	scols_init_debug(0);
 
 	/*
 	 * initialize output columns
 	 */
-	if (!(lsblk->tt = tt_new_table(tt_flags | TT_FL_FREEDATA)))
+	if (!(lsblk->table = scols_new_table()))
 		errx(EXIT_FAILURE, _("failed to initialize output table"));
+	scols_table_enable_raw(lsblk->table, !!(scols_flags & LSBLK_RAW));
+	scols_table_enable_export(lsblk->table, !!(scols_flags & LSBLK_EXPORT));
+	scols_table_enable_ascii(lsblk->table, !!(scols_flags & LSBLK_ASCII));
+	scols_table_enable_noheadings(lsblk->table, !!(scols_flags & LSBLK_NOHEADINGS));
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *ci = get_column_info(i);
-		int fl = ci->flags;
+		struct libscols_column *cl;
+		int id = get_column_id(i), fl = ci->flags;
 
-		if (!(tt_flags & TT_FL_TREE) && get_column_id(i) == COL_NAME)
-			fl &= ~TT_FL_TREE;
+		if (!(scols_flags & LSBLK_TREE) && id == COL_NAME)
+			fl &= ~SCOLS_FL_TREE;
 
-		if (!tt_define_column(lsblk->tt, ci->name, ci->whint, fl)) {
+		cl = scols_table_new_column(lsblk->table, ci->name, ci->whint, fl);
+		if (!cl) {
 			warn(_("failed to initialize output column"));
 			goto leave;
+		}
+		if (!lsblk->sort_col && lsblk->sort_id == id) {
+			lsblk->sort_col = cl;
+			scols_column_set_cmpfunc(cl,
+				ci->sort_type == SORT_STRING ?
+				scols_cmpstr_cells : cmp_u64_cells, NULL);
 		}
 	}
 
@@ -1599,10 +1749,16 @@ int main(int argc, char *argv[])
 	else while (optind < argc)
 		status = process_one_device(argv[optind++]);
 
-	tt_print_table(lsblk->tt);
+	if (lsblk->sort_col)
+		scols_sort_table(lsblk->table, lsblk->sort_col);
+
+	scols_print_table(lsblk->table);
 
 leave:
-	tt_free_table(lsblk->tt);
+	if (lsblk->sort_col)
+		unref_sortdata(lsblk->table);
+
+	scols_unref_table(lsblk->table);
 
 	mnt_unref_table(mtab);
 	mnt_unref_table(swaps);

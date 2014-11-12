@@ -12,15 +12,13 @@
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 
-TS_TOPDIR="$(dirname $0)/../.."
+TS_TOPDIR="${0%/*}/../.."
 TS_DESC="line"
 
 . $TS_TOPDIR/functions.sh
 ts_init "$*"
 
-if [ ! -x "$TS_CMD_LINE" ]; then
-	ts_skip "line disabled"
-fi
+ts_check_test_command "$TS_CMD_LINE"
 
 printf "a\nb\n" |
 	$TS_CMD_LINE > $TS_OUTPUT 2>&1

@@ -60,6 +60,7 @@
 #include <errno.h>
 #include <getopt.h>
 #include <limits.h>
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -90,6 +91,11 @@ static int hwaudit_on;
 struct clock_ops *ur;
 
 #define FLOOR(arg) ((arg >= 0 ? (int) arg : ((int) arg) - 1));
+
+/* Maximal clock adjustment in seconds per day.
+   (adjtime() glibc call has 2145 seconds limit on i386, so it is good enough for us as well,
+   43219 is a maximal safe value preventing exact_adjustment overflow.) */
+#define MAX_DRIFT 2145.0
 
 const char *adj_file_name = NULL;
 
@@ -984,7 +990,7 @@ adjust_drift_factor(struct adjtime *adjtime_p,
 				 "calibration time is zero,\n"
 				 "so history is bad and calibration startover "
 				 "is necessary.\n"));
-	} else if ((hclocktime - adjtime_p->last_calib_time) < 23 * 60 * 60) {
+	} else if ((hclocktime - adjtime_p->last_calib_time) < 24 * 60 * 60) {
 		if (debug)
 			printf(_("Not adjusting drift factor because it has "
 				 "been less than a day since the last "
@@ -1008,6 +1014,7 @@ adjust_drift_factor(struct adjtime *adjtime_p,
 		double adj_days, cal_days;
 		double exp_drift, unc_drift;
 		double factor_adjust;
+		double drift_factor;
 
 		/* Adjusted time units per hardware time unit */
 		atime_per_htime = 1.0 + adjtime_p->drift_factor / sec_per_day;
@@ -1033,16 +1040,28 @@ adjust_drift_factor(struct adjtime *adjtime_p,
 		/* Amount to add to previous drift factor */
 		factor_adjust = unc_drift / cal_days;
 
-		if (debug)
-			printf(_("Clock drifted %.1f seconds in the past "
-				 "%d seconds in spite of a drift factor of "
-				 "%f seconds/day.\n"
-				 "Adjusting drift factor by %f seconds/day\n"),
-			       unc_drift,
-			       (int)(nowtime - adjtime_p->last_calib_time),
-			       adjtime_p->drift_factor, factor_adjust);
+		/* New drift factor */
+		drift_factor = adjtime_p->drift_factor + factor_adjust;
 
-		adjtime_p->drift_factor += factor_adjust;
+		if (fabs(drift_factor) > MAX_DRIFT) {
+			if (debug)
+				printf(_("Clock drift factor was calculated as "
+					 "%f seconds/day.\n"
+					 "It is far too much. Resetting to zero.\n"),
+				       drift_factor);
+			drift_factor = 0;
+		} else {
+			if (debug)
+				printf(_("Clock drifted %.1f seconds in the past "
+					 "%d seconds in spite of a drift factor of "
+					 "%f seconds/day.\n"
+					 "Adjusting drift factor by %f seconds/day\n"),
+				       unc_drift,
+				       (int)(nowtime - adjtime_p->last_calib_time),
+				       adjtime_p->drift_factor, factor_adjust);
+		}
+
+		adjtime_p->drift_factor = drift_factor;
 	}
 	adjtime_p->last_calib_time = nowtime;
 
@@ -1080,10 +1099,15 @@ calculate_adjustment(const double factor,
 
 	*retro_p = exact_adjustment - (double)*adjustment_p;
 	if (debug) {
-		printf(_("Time since last adjustment is %d seconds\n"),
+		printf(P_("Time since last adjustment is %d second\n",
+			"Time since last adjustment is %d seconds\n",
+		       (int)(systime - last_time)),
 		       (int)(systime - last_time));
-		printf(_("Need to insert %d seconds and refer time back "
-			 "%.6f seconds ago\n"), *adjustment_p, *retro_p);
+		printf(P_("Need to insert %d second and refer time back "
+			 "%.6f seconds ago\n",
+			 "Need to insert %d seconds and refer time back "
+			 "%.6f seconds ago\n", *adjustment_p),
+			 *adjustment_p, *retro_p);
 	}
 }
 
@@ -1190,9 +1214,12 @@ do_adjustment(struct adjtime *adjtime_p,
 		adjtime_p->dirty = TRUE;
 	} else if (adjtime_p->last_adj_time == 0) {
 		if (debug)
-			printf(_
-			       ("Not setting clock because last adjustment time is zero, "
-				"so history is bad."));
+			printf(_("Not setting clock because last adjustment time is zero, "
+				 "so history is bad.\n"));
+	} else if (fabs(adjtime_p->drift_factor) > MAX_DRIFT) {
+		if (debug)
+			printf(_("Not setting clock because drift factor %f is far too high.\n"),
+				adjtime_p->drift_factor);
 	} else {
 		int adjustment;
 		/* Number of seconds we must insert in the Hardware Clock */
@@ -1238,7 +1265,7 @@ static void determine_clock_access_method(const bool user_requests_ISA)
 
 	if (debug) {
 		if (ur)
-			printf(_("Using %s.\n"), ur->interface_name);
+			puts(_(ur->interface_name));
 		else
 			printf(_("No usable clock interface found.\n"));
 	}
@@ -1468,6 +1495,9 @@ static int compare_clock (const bool utc, const bool local_opt)
 	time_t time1_hw, time2_hw;
 	bool hclock_valid = FALSE, universal, first_pass = TRUE;
 	int rc;
+
+	if (ur->get_permissions())
+		return EX_NOPERM;
 
 	/* dummy call for increased precision */
 	gettimeofday(&tv, NULL);
@@ -1867,7 +1897,7 @@ int main(int argc, char **argv)
 	}
 
 	if (!(show | set | systohc | hctosys | systz | adjust | getepoch
-	      | setepoch | predict))
+	      | setepoch | predict | compare))
 		show = 1;	/* default to show */
 
 	if (getuid() == 0)
