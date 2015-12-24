@@ -18,7 +18,7 @@ Release:        0
 #!BuildIgnore:  pwdutils
 Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
-License:        GPL-2.0+
+License:        GPL-2.0
 Group:          Base/Utilities
 Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.25/%{name}-%{version}.tar.gz
 Source1:        util-linux-rpmlintrc
@@ -124,7 +124,7 @@ Requires:       libsmartcols = %{version}
 Files to develop applications using the libsmartcols library.
 
 %prep
-%setup -q -n %{name}-%{version} 
+%setup -q -n %{name}-%{version}
 cp %{SOURCE1001} .
 #
 # nologin
