@@ -88,7 +88,6 @@ void mnt_free_context(struct libmnt_context *cxt)
 	mnt_unref_table(cxt->fstab);
 	mnt_unref_cache(cxt->cache);
 
-	mnt_context_clear_loopdev(cxt);
 	mnt_free_lock(cxt->lock);
 	mnt_free_update(cxt->update);
 
@@ -127,6 +126,8 @@ int mnt_reset_context(struct libmnt_context *cxt)
 
 	DBG(CXT, ul_debugobj(cxt, "<---- reset [status=%d] ---->",
 				mnt_context_get_status(cxt)));
+
+	mnt_context_clear_loopdev(cxt); /* this _has_ to be called before cxt->fs gets freed */
 
 	fl = cxt->flags;
 
