@@ -9,7 +9,7 @@ BuildRequires:  pam-devel
 BuildRequires:  pkg-config
 BuildRequires:  readline-devel
 BuildRequires:  zlib-devel
-Release:        0
+Release:        1
 # util-linux is a base package and uuidd pre-requiring pwdutils pulls
 # that into the core build cycle.  pwdutils also pulls in the whole
 # ldap stack into it.  Avoid this whole mess which is done only to
