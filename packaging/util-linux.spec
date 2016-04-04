@@ -131,6 +131,9 @@ cp %{SOURCE1001} .
 cp %{S:2} %{S:3}   .
 
 %build
+export CFLAGS+=" -fvisibility=hidden"
+  export CXXFLAGS+=" -fvisibility=hidden"
+  
 autoreconf -fi
 export SUID_CFLAGS="-fpie"
 export SUID_LDFLAGS="-pie"
