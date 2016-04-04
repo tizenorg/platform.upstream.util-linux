@@ -153,7 +153,7 @@ export SUID_LDFLAGS="-pie"
 #
 make %{?_smp_mflags}
 #
-%{__cc} -fwhole-program %{optflags} -o nologin nologin.c
+%{__cc} -fwhole-program %{optflags} -fvisibility=hidden -o nologin nologin.c
 
 %install
 mkdir -p %{buildroot}{/etc/pam.d,%{_mandir}/man{1,8},/usr/bin,/usr/sbin,%{_infodir}}
