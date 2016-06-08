@@ -146,7 +146,9 @@ export SUID_LDFLAGS="-pie"
   --disable-use-tty-group \
   --disable-static \
   --disable-silent-rules \
-  --disable-rpath
+  --disable-rpath \
+  --without-python
+
 #
 make %{?_smp_mflags}
 #
