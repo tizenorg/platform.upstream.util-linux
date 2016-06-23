@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2010-2014 Karel Zak <kzak@redhat.com>
  * Copyright (C) 2014 Ondrej Oprala <ooprala@redhat.com>
+ * Copytight (C) 2016 Igor Gnatenko <i.gnatenko.brain@gmail.com>
  *
  * This file may be redistributed under the terms of the
  * GNU Lesser General Public License.
@@ -11,7 +12,7 @@
 /**
  * SECTION: table
  * @title: Table
- * @short_description: table data API
+ * @short_description: container for rows and columns
  *
  * Table data manipulation API.
  */
@@ -87,10 +88,54 @@ void scols_unref_table(struct libscols_table *tb)
 		scols_table_remove_lines(tb);
 		scols_table_remove_columns(tb);
 		scols_unref_symbols(tb->symbols);
+		scols_reset_cell(&tb->title);
 		free(tb->linesep);
 		free(tb->colsep);
+		free(tb->name);
 		free(tb);
 	}
+}
+
+
+/**
+ * scols_table_set_name:
+ * @tb: a pointer to a struct libscols_table instance
+ * @name: a name
+ *
+ * The table name is used for example for JSON top level object name.
+ *
+ * Returns: 0, a negative number in case of an error.
+ *
+ * Since: 2.27
+ */
+int scols_table_set_name(struct libscols_table *tb, const char *name)
+{
+	char *p = NULL;
+
+	if (!tb)
+		return -EINVAL;
+
+	if (name) {
+		p = strdup(name);
+		if (!p)
+			return -ENOMEM;
+	}
+	free(tb->name);
+	tb->name = p;
+	return 0;
+}
+
+/**
+ * scols_table_get_title:
+ * @tb: a pointer to a struct libscols_table instance
+ *
+ * Returns: Title of the table, or %NULL in case of blank title.
+ *
+ * Since: 2.28
+ */
+struct libscols_cell *scols_table_get_title(struct libscols_table *tb)
+{
+	return &tb->title;
 }
 
 /**
@@ -98,16 +143,14 @@ void scols_unref_table(struct libscols_table *tb)
  * @tb: a pointer to a struct libscols_table instance
  * @cl: a pointer to a struct libscols_column instance
  *
- * Adds @cl to @tb's column list.
+ * Adds @cl to @tb's column list. The column cannot be shared between more
+ * tables.
  *
  * Returns: 0, a negative number in case of an error.
  */
 int scols_table_add_column(struct libscols_table *tb, struct libscols_column *cl)
 {
-	assert(tb);
-	assert(cl);
-
-	if (!tb || !cl || !list_empty(&tb->tb_lines))
+	if (!tb || !cl || !list_empty(&tb->tb_lines) || cl->table)
 		return -EINVAL;
 
 	if (cl->flags & SCOLS_FL_TREE)
@@ -116,6 +159,7 @@ int scols_table_add_column(struct libscols_table *tb, struct libscols_column *cl
 	DBG(TAB, ul_debugobj(tb, "add column %p", cl));
 	list_add_tail(&cl->cl_columns, &tb->tb_columns);
 	cl->seqnum = tb->ncols++;
+	cl->table = tb;
 	scols_ref_column(cl);
 
 	/* TODO:
@@ -139,9 +183,6 @@ int scols_table_add_column(struct libscols_table *tb, struct libscols_column *cl
 int scols_table_remove_column(struct libscols_table *tb,
 			      struct libscols_column *cl)
 {
-	assert(tb);
-	assert(cl);
-
 	if (!tb || !cl || !list_empty(&tb->tb_lines))
 		return -EINVAL;
 
@@ -151,6 +192,7 @@ int scols_table_remove_column(struct libscols_table *tb,
 	DBG(TAB, ul_debugobj(tb, "remove column %p", cl));
 	list_del_init(&cl->cl_columns);
 	tb->ncols--;
+	cl->table = NULL;
 	scols_unref_column(cl);
 	return 0;
 }
@@ -165,8 +207,6 @@ int scols_table_remove_column(struct libscols_table *tb,
  */
 int scols_table_remove_columns(struct libscols_table *tb)
 {
-	assert(tb);
-
 	if (!tb || !list_empty(&tb->tb_lines))
 		return -EINVAL;
 
@@ -193,17 +233,19 @@ int scols_table_remove_columns(struct libscols_table *tb)
  *   scols_column_set_....(cl, ...);
  *   scols_table_add_column(tb, cl);
  *
- * The column width is possible to define by three ways:
+ * The column width is possible to define by:
  *
  *  @whint = 0..1    : relative width, percent of terminal width
  *
- *  @whint = 1..N    : absolute width, empty colum will be truncated to
- *                     the column header width
+ *  @whint = 1..N    : absolute width, empty column will be truncated to
+ *                     the column header width if no specified STRICTWIDTH flag
  *
- *  @whint = 1..N
+ * Note that if table has disabled "maxout" flag (disabled by default) than
+ * relative width is used as a hint only. It's possible that column will be
+ * narrow if the specified size is too large for column data.
  *
- * The column is necessary to address by
- * sequential number. The first defined column has the colnum = 0. For example:
+ * The column is necessary to address by sequential number. The first defined
+ * column has the colnum = 0. For example:
  *
  *	scols_table_new_column(tab, "FOO", 0.5, 0);		// colnum = 0
  *	scols_table_new_column(tab, "BAR", 0.5, 0);		// colnum = 1
@@ -222,7 +264,6 @@ struct libscols_column *scols_table_new_column(struct libscols_table *tb,
 	struct libscols_column *cl;
 	struct libscols_cell *hr;
 
-	assert (tb);
 	if (!tb)
 		return NULL;
 
@@ -291,8 +332,7 @@ int scols_table_next_column(struct libscols_table *tb,
  */
 int scols_table_get_ncols(struct libscols_table *tb)
 {
-	assert(tb);
-	return tb ? tb->ncols : -EINVAL;
+	return tb ? (int)tb->ncols : -EINVAL;
 }
 
 /**
@@ -303,8 +343,7 @@ int scols_table_get_ncols(struct libscols_table *tb)
  */
 int scols_table_get_nlines(struct libscols_table *tb)
 {
-	assert(tb);
-	return tb ? tb->nlines : -EINVAL;
+	return tb ? (int)tb->nlines : -EINVAL;
 }
 
 /**
@@ -337,7 +376,6 @@ int scols_table_set_stream(struct libscols_table *tb, FILE *stream)
  */
 FILE *scols_table_get_stream(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb ? tb->out: NULL;
 }
 
@@ -346,13 +384,16 @@ FILE *scols_table_get_stream(struct libscols_table *tb)
  * @tb: table
  * @reduce: width
  *
- * Reduce the output width to @reduce.
+ * If necessary then libsmartcols use all terminal width, the @reduce setting
+ * provides extra space (for example for borders in ncurses applications).
+ *
+ * The @reduce must be smaller than terminal width, otherwise it's sillently
+ * ignored. The reduction is not applied when STDOUT_FILENO is not terminal.
  *
  * Returns: 0, a negative value in case of an error.
  */
 int scols_table_reduce_termwidth(struct libscols_table *tb, size_t reduce)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 
@@ -374,7 +415,6 @@ struct libscols_column *scols_table_get_column(struct libscols_table *tb,
 	struct libscols_iter itr;
 	struct libscols_column *cl;
 
-	assert(tb);
 	if (!tb)
 		return NULL;
 	if (n >= tb->ncols)
@@ -400,10 +440,6 @@ struct libscols_column *scols_table_get_column(struct libscols_table *tb,
  */
 int scols_table_add_line(struct libscols_table *tb, struct libscols_line *ln)
 {
-
-	assert(tb);
-	assert(ln);
-
 	if (!tb || !ln)
 		return -EINVAL;
 
@@ -433,9 +469,6 @@ int scols_table_add_line(struct libscols_table *tb, struct libscols_line *ln)
 int scols_table_remove_line(struct libscols_table *tb,
 			    struct libscols_line *ln)
 {
-	assert(tb);
-	assert(ln);
-
 	if (!tb || !ln)
 		return -EINVAL;
 
@@ -517,9 +550,6 @@ struct libscols_line *scols_table_new_line(struct libscols_table *tb,
 {
 	struct libscols_line *ln;
 
-	assert(tb);
-	assert(tb->ncols);
-
 	if (!tb || !tb->ncols)
 		return NULL;
 
@@ -544,13 +574,7 @@ err:
  * @tb: table
  * @n: column number (0..N)
  *
- * This is a shortcut for
- *
- *   ln = scols_new_line();
- *   scols_line_set_....(cl, ...);
- *   scols_table_add_line(tb, ln);
- *
- * Returns: a newly allocate line
+ * Returns: a line or NULL
  */
 struct libscols_line *scols_table_get_line(struct libscols_table *tb,
 					   size_t n)
@@ -558,7 +582,6 @@ struct libscols_line *scols_table_get_line(struct libscols_table *tb,
 	struct libscols_iter itr;
 	struct libscols_line *ln;
 
-	assert(tb);
 	if (!tb)
 		return NULL;
 	if (n >= tb->nlines)
@@ -588,7 +611,6 @@ struct libscols_table *scols_copy_table(struct libscols_table *tb)
 	struct libscols_column *cl;
 	struct libscols_iter itr;
 
-	assert(tb);
 	if (!tb)
 		return NULL;
 	ret = scols_new_table();
@@ -654,8 +676,6 @@ err:
 int scols_table_set_symbols(struct libscols_table *tb,
 			    struct libscols_symbols *sy)
 {
-	assert(tb);
-
 	if (!tb)
 		return -EINVAL;
 
@@ -683,10 +703,33 @@ int scols_table_set_symbols(struct libscols_table *tb,
 			scols_symbols_set_vertical(tb->symbols, "| ");
 			scols_symbols_set_right(tb->symbols, "`-");
 		}
+		scols_symbols_set_title_padding(tb->symbols, " ");
 	}
 
 	return 0;
 }
+
+/**
+ * scols_table_enable_nolinesep
+ * @tb: table
+ * @enable: 1 or 0
+ *
+ * Enable/disable line separator printing. This is usefull if you want to
+ * re-printing the same line more than once (e.g. progress bar). Don't use it
+ * if you're not sure.
+ *
+ * Returns: 0 on success, negative number in case of an error.
+ */
+int scols_table_enable_nolinesep(struct libscols_table *tb, int enable)
+{
+	if (!tb)
+		return -EINVAL;
+
+	DBG(TAB, ul_debugobj(tb, "nolinesep: %s", enable ? "ENABLE" : "DISABLE"));
+	tb->no_linesep = enable;
+	return 0;
+}
+
 /**
  * scols_table_enable_colors:
  * @tb: table
@@ -698,7 +741,6 @@ int scols_table_set_symbols(struct libscols_table *tb,
  */
 int scols_table_enable_colors(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 
@@ -706,19 +748,19 @@ int scols_table_enable_colors(struct libscols_table *tb, int enable)
 	tb->colors_wanted = enable;
 	return 0;
 }
+
 /**
  * scols_table_enable_raw:
  * @tb: table
  * @enable: 1 or 0
  *
  * Enable/disable raw output format. The parsable output formats
- * (export and raw) are mutually exclusive.
+ * (export, raw, JSON, ...) are mutually exclusive.
  *
  * Returns: 0 on success, negative number in case of an error.
  */
 int scols_table_enable_raw(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 
@@ -726,6 +768,31 @@ int scols_table_enable_raw(struct libscols_table *tb, int enable)
 	if (enable)
 		tb->format = SCOLS_FMT_RAW;
 	else if (tb->format == SCOLS_FMT_RAW)
+		tb->format = 0;
+	return 0;
+}
+
+/**
+ * scols_table_enable_json:
+ * @tb: table
+ * @enable: 1 or 0
+ *
+ * Enable/disable JSON output format. The parsable output formats
+ * (export, raw, JSON, ...) are mutually exclusive.
+ *
+ * Returns: 0 on success, negative number in case of an error.
+ *
+ * Since: 2.27
+ */
+int scols_table_enable_json(struct libscols_table *tb, int enable)
+{
+	if (!tb)
+		return -EINVAL;
+
+	DBG(TAB, ul_debugobj(tb, "json: %s", enable ? "ENABLE" : "DISABLE"));
+	if (enable)
+		tb->format = SCOLS_FMT_JSON;
+	else if (tb->format == SCOLS_FMT_JSON)
 		tb->format = 0;
 	return 0;
 }
@@ -742,7 +809,6 @@ int scols_table_enable_raw(struct libscols_table *tb, int enable)
  */
 int scols_table_enable_export(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 
@@ -771,7 +837,6 @@ int scols_table_enable_export(struct libscols_table *tb, int enable)
  */
 int scols_table_enable_ascii(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 
@@ -791,7 +856,6 @@ int scols_table_enable_ascii(struct libscols_table *tb, int enable)
  */
 int scols_table_enable_noheadings(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 	DBG(TAB, ul_debugobj(tb, "noheading: %s", enable ? "ENABLE" : "DISABLE"));
@@ -811,11 +875,30 @@ int scols_table_enable_noheadings(struct libscols_table *tb, int enable)
  */
 int scols_table_enable_maxout(struct libscols_table *tb, int enable)
 {
-	assert(tb);
 	if (!tb)
 		return -EINVAL;
 	DBG(TAB, ul_debugobj(tb, "maxout: %s", enable ? "ENABLE" : "DISABLE"));
 	tb->maxout = enable ? 1 : 0;
+	return 0;
+}
+
+/**
+ * scols_table_enable_nowrap:
+ * @tb: table
+ * @enable: 1 or 0
+ *
+ * Never continue on next line, remove last column(s) when too large, truncate last column.
+ *
+ * Returns: 0 on success, negative number in case of an error.
+ *
+ * Since: 2.28
+ */
+int scols_table_enable_nowrap(struct libscols_table *tb, int enable)
+{
+	if (!tb)
+		return -EINVAL;
+	DBG(TAB, ul_debugobj(tb, "nowrap: %s", enable ? "ENABLE" : "DISABLE"));
+	tb->no_wrap = enable ? 1 : 0;
 	return 0;
 }
 
@@ -827,7 +910,6 @@ int scols_table_enable_maxout(struct libscols_table *tb, int enable)
  */
 int scols_table_colors_wanted(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->colors_wanted;
 }
 
@@ -839,7 +921,6 @@ int scols_table_colors_wanted(struct libscols_table *tb)
  */
 int scols_table_is_empty(struct libscols_table *tb)
 {
-	assert(tb);
 	return !tb || !tb->nlines;
 }
 
@@ -851,7 +932,6 @@ int scols_table_is_empty(struct libscols_table *tb)
  */
 int scols_table_is_ascii(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->ascii;
 }
 
@@ -863,7 +943,6 @@ int scols_table_is_ascii(struct libscols_table *tb)
  */
 int scols_table_is_noheadings(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->no_headings;
 }
 
@@ -875,7 +954,6 @@ int scols_table_is_noheadings(struct libscols_table *tb)
  */
 int scols_table_is_export(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->format == SCOLS_FMT_EXPORT;
 }
 
@@ -887,8 +965,20 @@ int scols_table_is_export(struct libscols_table *tb)
  */
 int scols_table_is_raw(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->format == SCOLS_FMT_RAW;
+}
+
+/**
+ * scols_table_is_json:
+ * @tb: table
+ *
+ * Returns: 1 if JSON output format is enabled.
+ *
+ * Since: 2.27
+ */
+int scols_table_is_json(struct libscols_table *tb)
+{
+	return tb && tb->format == SCOLS_FMT_JSON;
 }
 
 
@@ -900,7 +990,6 @@ int scols_table_is_raw(struct libscols_table *tb)
  */
 int scols_table_is_maxout(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->maxout;
 }
 
@@ -912,7 +1001,6 @@ int scols_table_is_maxout(struct libscols_table *tb)
  */
 int scols_table_is_tree(struct libscols_table *tb)
 {
-	assert(tb);
 	return tb && tb->ntreecols > 0;
 }
 
@@ -930,11 +1018,8 @@ int scols_table_set_column_separator(struct libscols_table *tb, const char *sep)
 {
 	char *p = NULL;
 
-	assert (tb);
-
 	if (!tb)
 		return -EINVAL;
-
 	if (sep) {
 		p = strdup(sep);
 		if (!p)
@@ -960,8 +1045,6 @@ int scols_table_set_line_separator(struct libscols_table *tb, const char *sep)
 {
 	char *p = NULL;
 
-	assert (tb);
-
 	if (!tb)
 		return -EINVAL;
 
@@ -985,8 +1068,6 @@ int scols_table_set_line_separator(struct libscols_table *tb, const char *sep)
  */
 char *scols_table_get_column_separator(struct libscols_table *tb)
 {
-	assert (tb);
-
 	if (!tb)
 		return NULL;
 	return tb->colsep;
@@ -1000,8 +1081,6 @@ char *scols_table_get_column_separator(struct libscols_table *tb)
  */
 char *scols_table_get_line_separator(struct libscols_table *tb)
 {
-	assert (tb);
-
 	if (!tb)
 		return NULL;
 	return tb->linesep;
@@ -1037,10 +1116,7 @@ static int cells_cmp_wrapper(struct list_head *a, struct list_head *b, void *dat
  */
 int scols_sort_table(struct libscols_table *tb, struct libscols_column *cl)
 {
-	assert(tb);
-	assert(cl);
-
-	if (!tb || !cl)
+	if (!tb || !cl || !cl->cmpfunc)
 		return -EINVAL;
 
 	DBG(TAB, ul_debugobj(tb, "sorting table"));

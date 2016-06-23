@@ -43,9 +43,8 @@ static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)
 			const char *filename, int line)
 {
 	if (filename)
-		warnx(_("%s: parse error: ignore entry at line %d."),
-							filename, line);
-	return 0;
+		warnx(_("%s: parse error at line %d -- ignored"), filename, line);
+	return 1;
 }
 
 
@@ -77,6 +76,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 		" %1$s -a [options]\n"
 		" %1$s [options] <source> | <directory>\n"),
 		program_invocation_short_name);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("Unmount filesystems.\n"), out);
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -a, --all               unmount all filesystems\n"), out);

@@ -218,11 +218,7 @@ static void print_all_signals(FILE *fp, int pretty)
 	}
 
 	/* pretty print */
-	width = get_terminal_width();
-	if (width == 0)
-		width = KILL_OUTPUT_WIDTH;
-	else
-		width -= 1;
+	width = get_terminal_width(KILL_OUTPUT_WIDTH + 1) - 1;
 	for (n = 0; n < ARRAY_SIZE(sys_signame); n++)
 		pretty_print_signal(fp, width, &lpos,
 				    sys_signame[n].val, sys_signame[n].name);
@@ -304,6 +300,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 {
 	fputs(USAGE_HEADER, out);
 	fprintf(out, _(" %s [options] <pid>|<name>...\n"), program_invocation_short_name);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("Forcibly terminate a process.\n"), out);
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -a, --all              do not restrict the name-to-pid conversion to processes\n"

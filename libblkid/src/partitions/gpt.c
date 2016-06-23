@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <limits.h>
 
 #include "partitions.h"
 #include "crc32.h"
@@ -101,9 +102,10 @@ struct gpt_entry {
 /*
  * EFI uses crc32 with ~0 seed and xor's with ~0 at the end.
  */
-static inline uint32_t count_crc32(const unsigned char *buf, size_t len)
+static inline uint32_t count_crc32(const unsigned char *buf, size_t len,
+				   size_t exclude_off, size_t exclude_len)
 {
-	return (crc32(~0L, buf, len) ^ ~0L);
+	return (crc32_exclude_offset(~0L, buf, len, exclude_off, exclude_len) ^ ~0L);
 }
 
 static inline unsigned char *get_lba_buffer(blkid_probe pr,
@@ -131,7 +133,7 @@ static void swap_efi_guid(efi_guid_t *uid)
 
 static int last_lba(blkid_probe pr, uint64_t *lba)
 {
-	blkid_loff_t sz = blkid_probe_get_size(pr);
+	uint64_t sz = blkid_probe_get_size(pr);
 	unsigned int ssz = blkid_probe_get_sectorsize(pr);
 
 	if (sz < ssz)
@@ -206,7 +208,7 @@ static struct gpt_header *get_gpt_header(
 				uint64_t lastlba)
 {
 	struct gpt_header *h;
-	uint32_t crc, orgcrc;
+	uint32_t crc;
 	uint64_t lu, fu;
 	size_t esz;
 	uint32_t hsz, ssz;
@@ -230,12 +232,11 @@ static struct gpt_header *get_gpt_header(
 		return NULL;
 
 	/* Header has to be verified when header_crc32 is zero */
-	orgcrc = h->header_crc32;
-	h->header_crc32 = 0;
-	crc = count_crc32((unsigned char *) h, hsz);
-	h->header_crc32 = orgcrc;
+	crc = count_crc32((unsigned char *) h, hsz,
+			offsetof(struct gpt_header, header_crc32),
+			sizeof(h->header_crc32));
 
-	if (crc != le32_to_cpu(orgcrc)) {
+	if (crc != le32_to_cpu(h->header_crc32)) {
 		DBG(LOWPROBE, ul_debug("GPT header corrupted"));
 		return NULL;
 	}
@@ -263,13 +264,16 @@ static struct gpt_header *get_gpt_header(
 		return NULL;
 	}
 
-	/* Size of blocks with GPT entries */
-	esz = le32_to_cpu(h->num_partition_entries) *
-			le32_to_cpu(h->sizeof_partition_entry);
-	if (!esz) {
+	if (le32_to_cpu(h->num_partition_entries) == 0 ||
+	    le32_to_cpu(h->sizeof_partition_entry) == 0 ||
+	    ULONG_MAX / le32_to_cpu(h->num_partition_entries) < le32_to_cpu(h->sizeof_partition_entry)) {
 		DBG(LOWPROBE, ul_debug("GPT entries undefined"));
 		return NULL;
 	}
+
+	/* Size of blocks with GPT entries */
+	esz = le32_to_cpu(h->num_partition_entries) *
+			le32_to_cpu(h->sizeof_partition_entry);
 
 	/* The header seems valid, save it
 	 * (we don't care about zeros in hdr->reserved2 area) */
@@ -285,7 +289,7 @@ static struct gpt_header *get_gpt_header(
 	}
 
 	/* Validate entries */
-	crc = count_crc32((unsigned char *) *ents, esz);
+	crc = count_crc32((unsigned char *) *ents, esz, 0, 0);
 	if (crc != le32_to_cpu(h->partition_entry_array_crc32)) {
 		DBG(LOWPROBE, ul_debug("GPT entries corrupted"));
 		return NULL;

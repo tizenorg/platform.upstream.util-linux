@@ -34,7 +34,7 @@ blkid_dev blkid_new_dev(void)
 {
 	blkid_dev dev;
 
-	if (!(dev = (blkid_dev) calloc(1, sizeof(struct blkid_struct_dev))))
+	if (!(dev = calloc(1, sizeof(struct blkid_struct_dev))))
 		return NULL;
 
 	INIT_LIST_HEAD(&dev->bid_devs);
@@ -208,7 +208,7 @@ extern char *optarg;
 extern int optind;
 #endif
 
-void __attribute__((__noreturn__)) usage(char *prog)
+static void __attribute__((__noreturn__)) usage(char *prog)
 {
 	fprintf(stderr, "Usage: %s [-f blkid_file] [-m debug_mask]\n", prog);
 	fprintf(stderr, "\tList all devices and exit\n");

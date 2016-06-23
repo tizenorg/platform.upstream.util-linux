@@ -101,9 +101,8 @@ static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)
 			const char *filename, int line)
 {
 	if (filename)
-		warnx(_("%s: parse error: ignore entry at line %d."),
-							filename, line);
-	return 0;
+		warnx(_("%s: parse error at line %d -- ignored"), filename, line);
+	return 1;
 }
 
 static char *encrypt_pass_get(struct libmnt_context *cxt)
@@ -600,7 +599,10 @@ try_readonly:
 		break;
 
 	case ENODEV:
-		warnx(_("unknown filesystem type '%s'"), mnt_context_get_fstype(cxt));
+		if (mnt_context_get_fstype(cxt))
+			warnx(_("unknown filesystem type '%s'"), mnt_context_get_fstype(cxt));
+		else
+			warnx(_("unknown filesystem type"));
 		break;
 
 	case ENOTBLK:
@@ -636,6 +638,9 @@ try_readonly:
 		else if (mflags & MS_REMOUNT)
 			warnx(_("cannot remount %s read-write, is write-protected"), src);
 
+		else if (mflags & MS_BIND)
+			warn(_("mount %s on %s failed"), src, tgt);
+
 		else {
 			warnx(_("%s is write-protected, mounting read-only"), src);
 
@@ -650,6 +655,9 @@ try_readonly:
 		break;
 
 	case ENOMEDIUM:
+		if (uflags & MNT_MS_NOFAIL)
+			return MOUNT_EX_SUCCESS;
+
 		warnx(_("no medium found on %s"), src);
 		break;
 
@@ -743,6 +751,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 		" %1$s <operation> <mountpoint> [<target>]\n"),
 		program_invocation_short_name);
 
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("Mount a filesystem.\n"), out);
+
 	fputs(USAGE_OPTIONS, out);
 	fprintf(out, _(
 	" -a, --all               mount all filesystems mentioned in fstab\n"
@@ -751,9 +762,10 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	" -F, --fork              fork off for each device (use with -a)\n"
 	" -T, --fstab <path>      alternative file to /etc/fstab\n"));
 	fprintf(out, _(
-	" -h, --help              display this help text and exit\n"
-	" -i, --internal-only     don't call the mount.<type> helpers\n"
-	" -l, --show-labels       lists all mounts with LABELs\n"
+	" -i, --internal-only     don't call the mount.<type> helpers\n"));
+	fprintf(out, _(
+	" -l, --show-labels       show also filesystem labels\n"));
+	fprintf(out, _(
 	" -n, --no-mtab           don't write to /etc/mtab\n"));
 	fprintf(out, _(
 	" -o, --options <list>    comma-separated list of mount options\n"
@@ -765,8 +777,8 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	"     --source <src>      explicitly specifies source (path, label, uuid)\n"
 	"     --target <target>   explicitly specifies mountpoint\n"));
 	fprintf(out, _(
-	" -v, --verbose           say what is being done\n"
-	" -V, --version           display version information and exit\n"
+	" -v, --verbose           say what is being done\n"));
+	fprintf(out, _(
 	" -w, --rw, --read-write  mount the filesystem read-write (default)\n"));
 
 	fputs(USAGE_SEPARATOR, out);
