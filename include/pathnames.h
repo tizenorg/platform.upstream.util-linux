@@ -69,7 +69,9 @@
 
 /* used in term-utils/agetty.c */
 #define _PATH_ISSUE		"/etc/issue"
-#define _PATH_OS_RELEASE	"/etc/os-release"
+#define _PATH_OS_RELEASE_ETC	"/etc/os-release"
+#define _PATH_OS_RELEASE_USR	"/usr/lib/os-release"
+
 #define _PATH_NUMLOCK_ON	_PATH_LOCALSTATEDIR "/numlock-on"
 
 #define _PATH_LOGINDEFS		"/etc/login.defs"
@@ -192,6 +194,9 @@
 
 /* kernel command line */
 #define _PATH_PROC_CMDLINE	"/proc/cmdline"
+
+/* logger paths */
+#define _PATH_DEVLOG		"/dev/log"
 
 #endif /* PATHNAMES_H */
 

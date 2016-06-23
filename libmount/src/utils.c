@@ -271,6 +271,7 @@ int mnt_fstype_is_pseudofs(const char *type)
 		"mqueue",
 		"nfsd",
 		"none",
+		"overlay",
 		"pipefs",
 		"proc",
 		"pstore",
@@ -960,6 +961,10 @@ int mnt_open_uniq_filename(const char *filename, char **name)
  * This function finds the mountpoint that a given path resides in. @path
  * should be canonicalized. The returned pointer should be freed by the caller.
  *
+ * WARNING: the function compares st_dev of the @path elements. This traditional
+ * way maybe be insufficient on filesystems like Linux "overlay". See also
+ * mnt_table_find_target().
+ *
  * Returns: allocated string with the target of the mounted device or NULL on error
  */
 char *mnt_get_mountpoint(const char *path)
@@ -1004,28 +1009,6 @@ done:
 err:
 	free(mnt);
 	return NULL;
-}
-
-char *mnt_get_fs_root(const char *path, const char *mnt)
-{
-	char *m = (char *) mnt, *res;
-	const char *p;
-	size_t sz;
-
-	if (!m)
-		m = mnt_get_mountpoint(path);
-	if (!m)
-		return NULL;
-
-	sz = strlen(m);
-	p = sz > 1 ? path + sz : path;
-
-	if (m != mnt)
-		free(m);
-
-	res = *p ? strdup(p) : strdup("/");
-	DBG(UTILS, ul_debug("%s fs-root is %s", path, res));
-	return res;
 }
 
 /*
@@ -1172,17 +1155,6 @@ int test_mountpoint(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_fsroot(struct libmnt_test *ts, int argc, char *argv[])
-{
-	char *path = canonicalize_path(argv[1]),
-	     *mnt = path ? mnt_get_fs_root(path, NULL) : NULL;
-
-	printf("%s: %s\n", argv[1], mnt ? : "unknown");
-	free(mnt);
-	free(path);
-	return 0;
-}
-
 int test_filesystems(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char **filesystems = NULL;
@@ -1273,7 +1245,6 @@ int main(int argc, char *argv[])
 	{ "--ends-with",     test_endswith,        "<string> <prefix>" },
 	{ "--append-string", test_appendstr,       "<string> <appendix>" },
 	{ "--mountpoint",    test_mountpoint,      "<path>" },
-	{ "--fs-root",       test_fsroot,          "<path>" },
 	{ "--cd-parent",     test_chdir,           "<path>" },
 	{ "--kernel-cmdline",test_kernel_cmdline,  "<option> | <option>=" },
 	{ "--mkdir",         test_mkdir,           "<path>" },

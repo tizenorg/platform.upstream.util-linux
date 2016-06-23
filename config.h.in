@@ -280,6 +280,9 @@
 /* Define to 1 if you have the <net/if.h> header file. */
 #undef HAVE_NET_IF_H
 
+/* Define to 1 if you have the `ntp_gettime' function. */
+#undef HAVE_NTP_GETTIME
+
 /* Define to 1 if you have the `openat' function. */
 #undef HAVE_OPENAT
 
@@ -613,6 +616,9 @@
 
 /* Fallback syscall number for unshare */
 #undef SYS_unshare
+
+/* Enables colorized output from utils by default */
+#undef USE_COLORS_BY_DEFAULT
 
 /* Define to 1 if want to ignore mtab in all situations. */
 #undef USE_LIBMOUNT_FORCE_MOUNTINFO
