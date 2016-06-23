@@ -194,7 +194,7 @@ endif
 if BUILD_LOSETUP
 sbin_PROGRAMS += losetup
 dist_man_MANS += sys-utils/losetup.8
-losetup_SOURCES = sys-utils/losetup.c
+losetup_SOURCES = sys-utils/losetup1.c sys-utils/loop.c libmount/src/sha512.c libmount/src/rmd160.c libmount/src/aes.c
 losetup_LDADD = $(LDADD) libcommon.la libsmartcols.la
 losetup_CFLAGS = $(AM_CFLAGS) -I$(ul_libsmartcols_incdir)
 
@@ -289,6 +289,8 @@ dist_man_MANS += \
 
 swapon_SOURCES = \
 	sys-utils/swapon.c \
+	sys-utils/loop.c \
+	libmount/src/sha512.c \
 	sys-utils/swapon-common.c \
 	sys-utils/swapon-common.h \
 	lib/swapprober.c \
@@ -305,6 +307,7 @@ swapon_LDADD = $(LDADD) \
 
 swapoff_SOURCES = \
 	sys-utils/swapoff.c \
+	sys-utils/loop.c \
 	sys-utils/swapon-common.c \
 	sys-utils/swapon-common.h \
 	lib/swapprober.c \
