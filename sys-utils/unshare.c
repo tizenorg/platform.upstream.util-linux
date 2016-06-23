@@ -41,6 +41,9 @@
 #include "pathnames.h"
 #include "all-io.h"
 
+/* synchronize parent and child by pipe */
+#define PIPE_SYNC_BYTE	0x06
+
 /* 'private' is kernel default */
 #define UNSHARE_PROPAGATION_DEFAULT	(MS_REC | MS_PRIVATE)
 
@@ -50,12 +53,13 @@ static struct namespace_file {
 	const char	*name;		/* ns/<type> */
 	const char	*target;	/* user specified target for bind mount */
 } namespace_files[] = {
-	{ .type = CLONE_NEWUSER, .name = "ns/user" },
-	{ .type = CLONE_NEWIPC,  .name = "ns/ipc"  },
-	{ .type = CLONE_NEWUTS,  .name = "ns/uts"  },
-	{ .type = CLONE_NEWNET,  .name = "ns/net"  },
-	{ .type = CLONE_NEWPID,  .name = "ns/pid"  },
-	{ .type = CLONE_NEWNS,   .name = "ns/mnt"  },
+	{ .type = CLONE_NEWUSER,  .name = "ns/user" },
+	{ .type = CLONE_NEWCGROUP,.name = "ns/cgroup" },
+	{ .type = CLONE_NEWIPC,   .name = "ns/ipc"  },
+	{ .type = CLONE_NEWUTS,   .name = "ns/uts"  },
+	{ .type = CLONE_NEWNET,   .name = "ns/net"  },
+	{ .type = CLONE_NEWPID,   .name = "ns/pid"  },
+	{ .type = CLONE_NEWNS,    .name = "ns/mnt"  },
 	{ .name = NULL }
 };
 
@@ -199,27 +203,37 @@ static ino_t get_mnt_ino(pid_t pid)
 	return st.st_ino;
 }
 
-static void bind_ns_files_from_child(pid_t *child)
+static void bind_ns_files_from_child(pid_t *child, int fds[2])
 {
+	char ch;
 	pid_t ppid = getpid();
 	ino_t ino = get_mnt_ino(ppid);
 
+	if (pipe(fds) < 0)
+		err(EXIT_FAILURE, _("pipe failed"));
+
 	*child = fork();
 
-	switch(*child) {
+	switch (*child) {
 	case -1:
 		err(EXIT_FAILURE, _("fork failed"));
+
 	case 0:	/* child */
-		do {
-			/* wait until parent unshare() */
-			ino_t new_ino = get_mnt_ino(ppid);
-			if (ino != new_ino)
-				break;
-		} while (1);
+		close(fds[1]);
+		fds[1] = -1;
+
+		/* wait for parent */
+		if (read_all(fds[0], &ch, 1) != 1 && ch != PIPE_SYNC_BYTE)
+			err(EXIT_FAILURE, _("failed to read pipe"));
+		if (get_mnt_ino(ppid) == ino)
+			exit(EXIT_FAILURE);
 		bind_ns_files(ppid);
 		exit(EXIT_SUCCESS);
 		break;
+
 	default: /* parent */
+		close(fds[0]);
+		fds[0] = -1;
 		break;
 	}
 }
@@ -242,6 +256,7 @@ static void usage(int status)
 	fputs(_(" -n, --net[=<file>]        unshare network namespace\n"), out);
 	fputs(_(" -p, --pid[=<file>]        unshare pid namespace\n"), out);
 	fputs(_(" -U, --user[=<file>]       unshare user namespace\n"), out);
+	fputs(_(" -C, --cgroup[=<file>]     unshare cgroup namespace\n"), out);
 	fputs(_(" -f, --fork                fork before launching <program>\n"), out);
 	fputs(_("     --mount-proc[=<dir>]  mount proc filesystem first (implies --mount)\n"), out);
 	fputs(_(" -r, --map-root-user       map current user to root (implies --user)\n"), out);
@@ -268,12 +283,13 @@ int main(int argc, char *argv[])
 		{ "help", no_argument, 0, 'h' },
 		{ "version", no_argument, 0, 'V'},
 
-		{ "mount", optional_argument, 0, 'm' },
-		{ "uts",   optional_argument, 0, 'u' },
-		{ "ipc",   optional_argument, 0, 'i' },
-		{ "net",   optional_argument, 0, 'n' },
-		{ "pid",   optional_argument, 0, 'p' },
-		{ "user",  optional_argument, 0, 'U' },
+		{ "mount",  optional_argument, 0, 'm' },
+		{ "uts",    optional_argument, 0, 'u' },
+		{ "ipc",    optional_argument, 0, 'i' },
+		{ "net",    optional_argument, 0, 'n' },
+		{ "pid",    optional_argument, 0, 'p' },
+		{ "user",   optional_argument, 0, 'U' },
+		{ "cgroup", optional_argument, 0, 'C' },
 
 		{ "fork", no_argument, 0, 'f' },
 		{ "mount-proc", optional_argument, 0, OPT_MOUNTPROC },
@@ -288,6 +304,7 @@ int main(int argc, char *argv[])
 	int c, forkit = 0, maproot = 0;
 	const char *procmnt = NULL;
 	pid_t pid = 0;
+	int fds[2];
 	int status;
 	unsigned long propagation = UNSHARE_PROPAGATION_DEFAULT;
 	uid_t real_euid = geteuid();
@@ -298,7 +315,7 @@ int main(int argc, char *argv[])
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "+fhVmuinpUr", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "+fhVmuinpCUr", longopts, NULL)) != -1) {
 		switch (c) {
 		case 'f':
 			forkit = 1;
@@ -338,6 +355,11 @@ int main(int argc, char *argv[])
 			if (optarg)
 				set_ns_target(CLONE_NEWUSER, optarg);
 			break;
+		case 'C':
+			unshare_flags |= CLONE_NEWCGROUP;
+			if (optarg)
+				set_ns_target(CLONE_NEWCGROUP, optarg);
+			break;
 		case OPT_MOUNTPROC:
 			unshare_flags |= CLONE_NEWNS;
 			procmnt = optarg ? optarg : "/proc";
@@ -358,16 +380,22 @@ int main(int argc, char *argv[])
 	}
 
 	if (npersists && (unshare_flags & CLONE_NEWNS))
-		bind_ns_files_from_child(&pid);
+		bind_ns_files_from_child(&pid, fds);
 
 	if (-1 == unshare(unshare_flags))
 		err(EXIT_FAILURE, _("unshare failed"));
 
 	if (npersists) {
 		if (pid && (unshare_flags & CLONE_NEWNS)) {
-			/* wait for bind_ns_files_from_child() */
 			int rc;
+			char ch = PIPE_SYNC_BYTE;
 
+			/* signal child we are ready */
+			write_all(fds[1], &ch, 1);
+			close(fds[1]);
+			fds[1] = -1;
+
+			/* wait for bind_ns_files_from_child() */
 			do {
 				rc = waitpid(pid, &status, 0);
 				if (rc < 0) {

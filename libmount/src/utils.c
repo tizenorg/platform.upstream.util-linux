@@ -25,6 +25,7 @@
 #include "match.h"
 #include "fileutils.h"
 #include "statfs_magic.h"
+#include "sysfs.h"
 
 int append_string(char **a, const char *b)
 {
@@ -115,6 +116,15 @@ static int fstype_cmp(const void *v1, const void *v2)
 	const char *s2 = *(const char **)v2;
 
 	return strcmp(s1, s2);
+}
+
+int mnt_stat_mountpoint(const char *target, struct stat *st)
+{
+#ifdef AT_NO_AUTOMOUNT
+	return fstatat(-1, target, st, AT_NO_AUTOMOUNT);
+#else
+	return stat(target, st);
+#endif
 }
 
 /*
@@ -257,6 +267,7 @@ int mnt_fstype_is_pseudofs(const char *type)
 		"bdev",
 		"binfmt_misc",
 		"cgroup",
+		"cgroup2",
 		"configfs",
 		"cpuset",
 		"debugfs",
@@ -625,16 +636,6 @@ int mnt_get_filesystems(char ***filesystems, const char *pattern)
 	return rc;
 }
 
-static size_t get_pw_record_size(void)
-{
-#ifdef _SC_GETPW_R_SIZE_MAX
-	long sz = sysconf(_SC_GETPW_R_SIZE_MAX);
-	if (sz > 0)
-		return sz;
-#endif
-	return 16384;
-}
-
 /*
  * Returns an allocated string with username or NULL.
  */
@@ -642,14 +643,13 @@ char *mnt_get_username(const uid_t uid)
 {
         struct passwd pwd;
 	struct passwd *res;
-	size_t sz = get_pw_record_size();
 	char *buf, *username = NULL;
 
-	buf = malloc(sz);
+	buf = malloc(UL_GETPW_BUFSIZ);
 	if (!buf)
 		return NULL;
 
-	if (!getpwuid_r(uid, &pwd, buf, sz, &res) && res)
+	if (!getpwuid_r(uid, &pwd, buf, UL_GETPW_BUFSIZ, &res) && res)
 		username = strdup(pwd.pw_name);
 
 	free(buf);
@@ -661,17 +661,16 @@ int mnt_get_uid(const char *username, uid_t *uid)
 	int rc = -1;
         struct passwd pwd;
 	struct passwd *pw;
-	size_t sz = get_pw_record_size();
 	char *buf;
 
 	if (!username || !uid)
 		return -EINVAL;
 
-	buf = malloc(sz);
+	buf = malloc(UL_GETPW_BUFSIZ);
 	if (!buf)
 		return -ENOMEM;
 
-	if (!getpwnam_r(username, &pwd, buf, sz, &pw) && pw) {
+	if (!getpwnam_r(username, &pwd, buf, UL_GETPW_BUFSIZ, &pw) && pw) {
 		*uid= pw->pw_uid;
 		rc = 0;
 	} else {
@@ -689,17 +688,16 @@ int mnt_get_gid(const char *groupname, gid_t *gid)
 	int rc = -1;
         struct group grp;
 	struct group *gr;
-	size_t sz = get_pw_record_size();
 	char *buf;
 
 	if (!groupname || !gid)
 		return -EINVAL;
 
-	buf = malloc(sz);
+	buf = malloc(UL_GETPW_BUFSIZ);
 	if (!buf)
 		return -ENOMEM;
 
-	if (!getgrnam_r(groupname, &grp, buf, sz, &gr) && gr) {
+	if (!getgrnam_r(groupname, &grp, buf, UL_GETPW_BUFSIZ, &gr) && gr) {
 		*gid= gr->gr_gid;
 		rc = 0;
 	} else {
@@ -788,6 +786,7 @@ int mnt_has_regular_mtab(const char **mtab, int *writable)
 		if (S_ISREG(st.st_mode)) {
 			if (writable)
 				*writable = !try_write(filename);
+			DBG(UTILS, ul_debug("%s: writable", filename));
 			return 1;
 		}
 		goto done;
@@ -796,8 +795,10 @@ int mnt_has_regular_mtab(const char **mtab, int *writable)
 	/* try to create the file */
 	if (writable) {
 		*writable = !try_write(filename);
-		if (*writable)
+		if (*writable) {
+			DBG(UTILS, ul_debug("%s: writable", filename));
 			return 1;
+		}
 	}
 
 done:
@@ -982,7 +983,7 @@ char *mnt_get_mountpoint(const char *path)
 	if (*mnt == '/' && *(mnt + 1) == '\0')
 		goto done;
 
-	if (stat(mnt, &st))
+	if (mnt_stat_mountpoint(mnt, &st))
 		goto err;
 	base = st.st_dev;
 
@@ -991,7 +992,7 @@ char *mnt_get_mountpoint(const char *path)
 
 		if (!p)
 			break;
-		if (stat(*mnt ? mnt : "/", &st))
+		if (mnt_stat_mountpoint(*mnt ? mnt : "/", &st))
 			goto err;
 		dir = st.st_dev;
 		if (dir != base) {
@@ -1095,8 +1096,94 @@ char *mnt_get_kernel_cmdline_option(const char *name)
 	return res;
 }
 
+/*
+ * Converts @devno to the real device name if devno major number is greater
+ * than zero, otherwise use root= kernel cmdline option to get device name.
+ *
+ * The function uses /sys to convert devno to device name.
+ *
+ * Returns: 0 = success, 1 = not found, <0 = error
+ */
+int mnt_guess_system_root(dev_t devno, struct libmnt_cache *cache, char **path)
+{
+	char buf[PATH_MAX];
+	char *dev = NULL, *spec;
+	unsigned int x, y;
+	int allocated = 0;
+
+	assert(path);
+
+	DBG(UTILS, ul_debug("guessing system root [devno %u:%u]", major(devno), minor(devno)));
+
+	/* The pseudo-fs, net-fs or btrfs devno is useless, otherwise it
+	 * usually matches with the source device, let's try to use it.
+	 */
+	if (major(devno) > 0) {
+		dev = sysfs_devno_to_devpath(devno, buf, sizeof(buf));
+		if (dev) {
+			DBG(UTILS, ul_debug("  devno converted to %s", dev));
+			goto done;
+		}
+	}
+
+	/* Let's try to use root= kernel command line option
+	 */
+	spec = mnt_get_kernel_cmdline_option("root=");
+	if (!spec)
+		goto done;
+
+	/* maj:min notation */
+	if (sscanf(spec, "%u:%u", &x, &y) == 2) {
+		dev = sysfs_devno_to_devpath(makedev(x, y), buf, sizeof(buf));
+		if (dev) {
+			DBG(UTILS, ul_debug("  root=%s converted to %s", spec, dev));
+			goto done;
+		}
+
+	/* hexhex notation */
+	} else if (isxdigit_string(spec)) {
+		char *end = NULL;
+		uint32_t n;
+
+		errno = 0;
+		n = strtoul(spec, &end, 16);
+
+		if (errno || spec == end || (end && *end))
+			DBG(UTILS, ul_debug("  failed to parse root='%s'", spec));
+		else {
+			/* kernel new_decode_dev() */
+			x = (n & 0xfff00) >> 8;
+			y = (n & 0xff) | ((n >> 12) & 0xfff00);
+			dev = sysfs_devno_to_devpath(makedev(x, y), buf, sizeof(buf));
+			if (dev) {
+				DBG(UTILS, ul_debug("  root=%s converted to %s", spec, dev));
+				goto done;
+			}
+		}
+
+	/* devname or PARTUUID= etc. */
+	} else {
+		DBG(UTILS, ul_debug("  converting root='%s'", spec));
+
+		dev = mnt_resolve_spec(spec, cache);
+		if (dev && !cache)
+			allocated = 1;
+	}
+	free(spec);
+done:
+	if (dev) {
+		*path = allocated ? dev : strdup(dev);
+		if (!path)
+			return -ENOMEM;
+		return 0;
+	}
+
+	return 1;
+}
+
+
 #ifdef TEST_PROGRAM
-int test_match_fstype(struct libmnt_test *ts, int argc, char *argv[])
+static int test_match_fstype(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *type = argv[1];
 	char *pattern = argv[2];
@@ -1105,7 +1192,7 @@ int test_match_fstype(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_match_options(struct libmnt_test *ts, int argc, char *argv[])
+static int test_match_options(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *optstr = argv[1];
 	char *pattern = argv[2];
@@ -1114,7 +1201,7 @@ int test_match_options(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_startswith(struct libmnt_test *ts, int argc, char *argv[])
+static int test_startswith(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *optstr = argv[1];
 	char *pattern = argv[2];
@@ -1123,7 +1210,7 @@ int test_startswith(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_endswith(struct libmnt_test *ts, int argc, char *argv[])
+static int test_endswith(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *optstr = argv[1];
 	char *pattern = argv[2];
@@ -1132,7 +1219,7 @@ int test_endswith(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_appendstr(struct libmnt_test *ts, int argc, char *argv[])
+static int test_appendstr(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *str = strdup(argv[1]);
 	const char *ap = argv[2];
@@ -1144,7 +1231,7 @@ int test_appendstr(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_mountpoint(struct libmnt_test *ts, int argc, char *argv[])
+static int test_mountpoint(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *path = canonicalize_path(argv[1]),
 	     *mnt = path ? mnt_get_mountpoint(path) :  NULL;
@@ -1155,7 +1242,7 @@ int test_mountpoint(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_filesystems(struct libmnt_test *ts, int argc, char *argv[])
+static int test_filesystems(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char **filesystems = NULL;
 	int rc;
@@ -1170,7 +1257,7 @@ int test_filesystems(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
-int test_chdir(struct libmnt_test *ts, int argc, char *argv[])
+static int test_chdir(struct libmnt_test *ts, int argc, char *argv[])
 {
 	int rc;
 	char *path = canonicalize_path(argv[1]),
@@ -1189,7 +1276,7 @@ int test_chdir(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
-int test_kernel_cmdline(struct libmnt_test *ts, int argc, char *argv[])
+static int test_kernel_cmdline(struct libmnt_test *ts, int argc, char *argv[])
 {
 	char *name = argv[1];
 	char *res;
@@ -1207,7 +1294,34 @@ int test_kernel_cmdline(struct libmnt_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_mkdir(struct libmnt_test *ts, int argc, char *argv[])
+
+static int test_guess_root(struct libmnt_test *ts, int argc, char *argv[])
+{
+	int rc;
+	char *real;
+	dev_t devno = 0;
+
+	if (argc) {
+		unsigned int x, y;
+
+		if (sscanf(argv[1], "%u:%u", &x, &y) != 2)
+			return -EINVAL;
+		devno = makedev(x, y);
+	}
+
+	rc = mnt_guess_system_root(devno, NULL, &real);
+	if (rc < 0)
+		return rc;
+	if (rc == 1)
+		fputs("not found\n", stdout);
+	else {
+		printf("%s\n", real);
+		free(real);
+	}
+	return 0;
+}
+
+static int test_mkdir(struct libmnt_test *ts, int argc, char *argv[])
 {
 	int rc;
 
@@ -1219,7 +1333,7 @@ int test_mkdir(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
-int test_statfs_type(struct libmnt_test *ts, int argc, char *argv[])
+static int test_statfs_type(struct libmnt_test *ts, int argc, char *argv[])
 {
 	struct statfs vfs;
 	int rc;
@@ -1247,6 +1361,7 @@ int main(int argc, char *argv[])
 	{ "--mountpoint",    test_mountpoint,      "<path>" },
 	{ "--cd-parent",     test_chdir,           "<path>" },
 	{ "--kernel-cmdline",test_kernel_cmdline,  "<option> | <option>=" },
+	{ "--guess-root",    test_guess_root,      "[<maj:min>]" },
 	{ "--mkdir",         test_mkdir,           "<path>" },
 	{ "--statfs-type",   test_statfs_type,     "<path>" },
 

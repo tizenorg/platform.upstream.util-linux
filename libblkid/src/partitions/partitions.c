@@ -163,7 +163,7 @@ const struct blkid_chaindrv partitions_drv = {
 /* exported as opaque type "blkid_parttable" */
 struct blkid_struct_parttable {
 	const char	*type;		/* partition table type */
-	blkid_loff_t	offset;		/* begin of the partition table (in bytes) */
+	uint64_t	offset;		/* begin of the partition table (in bytes) */
 	int		nparts;		/* number of partitions */
 	blkid_partition	parent;		/* parent of nested partition table */
 	char		id[37];		/* PT identifier (e.g. UUID for GPT) */
@@ -173,8 +173,8 @@ struct blkid_struct_parttable {
 
 /* exported as opaque type "blkid_partition" */
 struct blkid_struct_partition {
-	blkid_loff_t	start;		/* begin of the partition (512-bytes sectors) */
-	blkid_loff_t	size;		/* size of the partitions (512-bytes sectors) */
+	uint64_t	start;		/* begin of the partition (512-bytes sectors) */
+	uint64_t	size;		/* size of the partitions (512-bytes sectors) */
 
 	int		type;		/* partition type */
 	char		typestr[37];	/* partition type string (GPT and Mac) */
@@ -404,7 +404,7 @@ static void partitions_free_data(blkid_probe pr __attribute__((__unused__)),
 }
 
 blkid_parttable blkid_partlist_new_parttable(blkid_partlist ls,
-				const char *type, blkid_loff_t offset)
+				const char *type, uint64_t offset)
 {
 	blkid_parttable tab;
 
@@ -450,8 +450,7 @@ static blkid_partition new_partition(blkid_partlist ls, blkid_parttable tab)
 }
 
 blkid_partition blkid_partlist_add_partition(blkid_partlist ls,
-					blkid_parttable tab,
-					blkid_loff_t start, blkid_loff_t size)
+					blkid_parttable tab, uint64_t start, uint64_t size)
 {
 	blkid_partition par = new_partition(ls, tab);
 
@@ -462,7 +461,7 @@ blkid_partition blkid_partlist_add_partition(blkid_partlist ls,
 	par->size = size;
 
 	DBG(LOWPROBE, ul_debug("parts: add partition (%p start=%"
-		PRId64 ", size=%" PRId64 ", table=%p)",
+		PRIu64 ", size=%" PRIu64 ", table=%p)",
 		par, par->start, par->size, tab));
 	return par;
 }
@@ -482,7 +481,7 @@ int blkid_partlist_increment_partno(blkid_partlist ls)
 }
 
 /* allows to set "parent" for the next nested partition */
-int blkid_partlist_set_parent(blkid_partlist ls, blkid_partition par)
+static int blkid_partlist_set_parent(blkid_partlist ls, blkid_partition par)
 {
 	if (!ls)
 		return -1;
@@ -514,10 +513,10 @@ int blkid_partitions_get_flags(blkid_probe pr)
 
 /* check if @start and @size are within @par partition */
 int blkid_is_nested_dimension(blkid_partition par,
-			blkid_loff_t start, blkid_loff_t size)
+			uint64_t start, uint64_t size)
 {
-	blkid_loff_t pstart;
-	blkid_loff_t psize;
+	uint64_t pstart;
+	uint64_t psize;
 
 	if (!par)
 		return 0;
@@ -535,10 +534,10 @@ static int idinfo_probe(blkid_probe pr, const struct blkid_idinfo *id,
 			struct blkid_chain *chn)
 {
 	const struct blkid_idmag *mag = NULL;
-	blkid_loff_t off;
+	uint64_t off;
 	int rc = BLKID_PROBE_NONE;		/* default is nothing */
 
-	if (pr->size <= 0 || (id->minsz && id->minsz > pr->size))
+	if (pr->size <= 0 || (id->minsz && (unsigned)id->minsz > pr->size))
 		goto nothing;	/* the device is too small */
 	if (pr->flags & BLKID_FL_NOSCAN_DEV)
 		goto nothing;
@@ -667,7 +666,7 @@ int blkid_partitions_do_subprobe(blkid_probe pr, blkid_partition parent,
 	blkid_probe prc;
 	int rc;
 	blkid_partlist ls;
-	blkid_loff_t sz, off;
+	uint64_t sz, off;
 
 	DBG(LOWPROBE, ul_debug(
 		"parts: ----> %s subprobe requested (parent=%p)",
@@ -679,8 +678,8 @@ int blkid_partitions_do_subprobe(blkid_probe pr, blkid_partition parent,
 		return BLKID_PROBE_NONE;
 
 	/* range defined by parent */
-	sz = ((blkid_loff_t) parent->size) << 9;
-	off = ((blkid_loff_t) parent->start) << 9;
+	sz = parent->size << 9;
+	off = parent->start << 9;
 
 	if (off < pr->off || pr->off + pr->size < off + sz) {
 		DBG(LOWPROBE, ul_debug(
@@ -790,9 +789,9 @@ static int blkid_partitions_probe_partition(blkid_probe pr)
 				"%d", blkid_partition_get_partno(par));
 
 		blkid_probe_sprintf_value(pr, "PART_ENTRY_OFFSET", "%jd",
-				blkid_partition_get_start(par));
+				(intmax_t)blkid_partition_get_start(par));
 		blkid_probe_sprintf_value(pr, "PART_ENTRY_SIZE", "%jd",
-				blkid_partition_get_size(par));
+				(intmax_t)blkid_partition_get_size(par));
 
 		blkid_probe_sprintf_value(pr, "PART_ENTRY_DISK", "%u:%u",
 				major(disk), minor(disk));
@@ -813,15 +812,15 @@ nothing:
  * @size is covered by any partition.
  */
 int blkid_probe_is_covered_by_pt(blkid_probe pr,
-				 blkid_loff_t offset, blkid_loff_t size)
+				 uint64_t offset, uint64_t size)
 {
 	blkid_probe prc = NULL;
 	blkid_partlist ls = NULL;
-	blkid_loff_t start, end;
+	uint64_t start, end;
 	int nparts, i, rc = 0;
 
 	DBG(LOWPROBE, ul_debug(
-		"=> checking if off=%jd size=%jd covered by PT",
+		"=> checking if off=%"PRIu64" size=%"PRIu64" covered by PT",
 		offset, size));
 
 	if (pr->flags & BLKID_FL_NOSCAN_DEV)
@@ -1041,8 +1040,8 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 			 if (partno != blkid_partition_get_partno(par))
 				 continue;
 
-			 if ((blkid_loff_t) size == blkid_partition_get_size(par) ||
-			     (blkid_partition_is_extended(par) && size <= 1024))
+			 if (size == (uint64_t)blkid_partition_get_size(par) ||
+			     (blkid_partition_is_extended(par) && size <= 1024ULL))
 				 return par;
 
 		 }
@@ -1054,13 +1053,13 @@ blkid_partition blkid_partlist_devno_to_partition(blkid_partlist ls, dev_t devno
 	for (i = 0; i < ls->nparts; i++) {
 		blkid_partition par = &ls->parts[i];
 
-		if (blkid_partition_get_start(par) == (blkid_loff_t) start &&
-		    blkid_partition_get_size(par) == (blkid_loff_t) size)
+		if ((uint64_t)blkid_partition_get_start(par) == start &&
+		    (uint64_t)blkid_partition_get_size(par) == size)
 			return par;
 
 		/* exception for extended dos partitions */
-		if (blkid_partition_get_start(par) == (blkid_loff_t) start &&
-		    blkid_partition_is_extended(par) && size <= 1024)
+		if ((uint64_t)blkid_partition_get_start(par) == start &&
+		    blkid_partition_is_extended(par) && size <= 1024ULL)
 			return par;
 
 	}
@@ -1197,7 +1196,7 @@ blkid_partition blkid_parttable_get_parent(blkid_parttable tab)
  */
 blkid_loff_t blkid_parttable_get_offset(blkid_parttable tab)
 {
-	return tab ? tab->offset : -1;
+	return tab ? (blkid_loff_t)tab->offset : -1;
 }
 
 /**
@@ -1408,7 +1407,7 @@ int blkid_partition_get_partno(blkid_partition par)
  */
 blkid_loff_t blkid_partition_get_start(blkid_partition par)
 {
-	return par ? par->start : -1;
+	return par ? (blkid_loff_t)par->start : -1;
 }
 
 /**
@@ -1429,7 +1428,7 @@ blkid_loff_t blkid_partition_get_start(blkid_partition par)
  */
 blkid_loff_t blkid_partition_get_size(blkid_partition par)
 {
-	return par ? par->size : -1;
+	return par ? (blkid_loff_t)par->size : -1;
 }
 
 /**

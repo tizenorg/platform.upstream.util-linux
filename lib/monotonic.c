@@ -4,7 +4,9 @@
  */
 #include <time.h>
 #include <signal.h>
+#ifdef HAVE_SYSINFO
 #include <sys/sysinfo.h>
+#endif
 #include <sys/time.h>
 
 #include "c.h"
@@ -51,7 +53,7 @@ int gettime_monotonic(struct timeval *tv)
 	struct timespec ts;
 
 # ifdef CLOCK_MONOTONIC_RAW
-	/* Linux specific, cant slew */
+	/* Linux specific, can't slew */
 	if (!(ret = clock_gettime(CLOCK_MONOTONIC_RAW, &ts))) {
 # else
 	if (!(ret = clock_gettime(CLOCK_MONOTONIC, &ts))) {

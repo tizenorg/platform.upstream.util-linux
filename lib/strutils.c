@@ -91,7 +91,7 @@ int parse_size(const char *str, uintmax_t *res, int *power)
 
 	if (p == str ||
 	    (errno != 0 && (x == UINTMAX_MAX || x == 0))) {
-		rc = errno ? -errno : -1;
+		rc = errno ? -errno : -EINVAL;
 		goto err;
 	}
 	if (!p || !*p)
@@ -119,7 +119,7 @@ check_suffix:
 			frac = strtoumax(fstr, &p, 0);
 			if (p == fstr ||
 			    (errno != 0 && (frac == UINTMAX_MAX || frac == 0))) {
-				rc = errno ? -errno : -1;
+				rc = errno ? -errno : -EINVAL;
 				goto err;
 			}
 			if (frac && (!p  || !*p)) {
@@ -164,6 +164,8 @@ check_suffix:
 done:
 	*res = x;
 err:
+	if (rc < 0)
+		errno = -rc;
 	return rc;
 }
 
@@ -177,6 +179,15 @@ int isdigit_string(const char *str)
 	const char *p;
 
 	for (p = str; p && *p && isdigit((unsigned char) *p); p++);
+
+	return p && p > str && !*p;
+}
+
+int isxdigit_string(const char *str)
+{
+	const char *p;
+
+	for (p = str; p && *p && isxdigit((unsigned char) *p); p++);
 
 	return p && p > str && !*p;
 }
@@ -245,7 +256,7 @@ char *strnchr(const char *s, size_t maxlen, int c)
 char *strndup(const char *s, size_t n)
 {
 	size_t len = strnlen(s, n);
-	char *new = (char *) malloc((len + 1) * sizeof(char));
+	char *new = malloc((len + 1) * sizeof(char));
 	if (!new)
 		return NULL;
 	new[len] = '\0';
@@ -257,9 +268,10 @@ int16_t strtos16_or_err(const char *str, const char *errmesg)
 {
 	int32_t num = strtos32_or_err(str, errmesg);
 
-	if (num < INT16_MIN || num > INT16_MAX)
-		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
-
+	if (num < INT16_MIN || num > INT16_MAX) {
+		errno = ERANGE;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+	}
 	return num;
 }
 
@@ -267,9 +279,10 @@ uint16_t strtou16_or_err(const char *str, const char *errmesg)
 {
 	uint32_t num = strtou32_or_err(str, errmesg);
 
-	if (num > UINT16_MAX)
-		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
-
+	if (num > UINT16_MAX) {
+		errno = ERANGE;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+	}
 	return num;
 }
 
@@ -277,9 +290,10 @@ int32_t strtos32_or_err(const char *str, const char *errmesg)
 {
 	int64_t num = strtos64_or_err(str, errmesg);
 
-	if (num < INT32_MIN || num > INT32_MAX)
-		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
-
+	if (num < INT32_MIN || num > INT32_MAX) {
+		errno = ERANGE;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+	}
 	return num;
 }
 
@@ -287,9 +301,10 @@ uint32_t strtou32_or_err(const char *str, const char *errmesg)
 {
 	uint64_t num = strtou64_or_err(str, errmesg);
 
-	if (num > UINT32_MAX)
-		errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
-
+	if (num > UINT32_MAX) {
+		errno = ERANGE;
+		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+	}
 	return num;
 }
 
@@ -298,9 +313,9 @@ int64_t strtos64_or_err(const char *str, const char *errmesg)
 	int64_t num;
 	char *end = NULL;
 
+	errno = 0;
 	if (str == NULL || *str == '\0')
 		goto err;
-	errno = 0;
 	num = strtoimax(str, &end, 10);
 
 	if (errno || str == end || (end && *end))
@@ -308,7 +323,7 @@ int64_t strtos64_or_err(const char *str, const char *errmesg)
 
 	return num;
 err:
-	if (errno)
+	if (errno == ERANGE)
 		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 
 	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
@@ -319,9 +334,9 @@ uint64_t strtou64_or_err(const char *str, const char *errmesg)
 	uintmax_t num;
 	char *end = NULL;
 
+	errno = 0;
 	if (str == NULL || *str == '\0')
 		goto err;
-	errno = 0;
 	num = strtoumax(str, &end, 10);
 
 	if (errno || str == end || (end && *end))
@@ -329,7 +344,7 @@ uint64_t strtou64_or_err(const char *str, const char *errmesg)
 
 	return num;
 err:
-	if (errno)
+	if (errno == ERANGE)
 		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 
 	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
@@ -341,9 +356,9 @@ double strtod_or_err(const char *str, const char *errmesg)
 	double num;
 	char *end = NULL;
 
+	errno = 0;
 	if (str == NULL || *str == '\0')
 		goto err;
-	errno = 0;
 	num = strtod(str, &end);
 
 	if (errno || str == end || (end && *end))
@@ -351,7 +366,7 @@ double strtod_or_err(const char *str, const char *errmesg)
 
 	return num;
 err:
-	if (errno)
+	if (errno == ERANGE)
 		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 
 	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
@@ -362,9 +377,9 @@ long strtol_or_err(const char *str, const char *errmesg)
 	long num;
 	char *end = NULL;
 
+	errno = 0;
 	if (str == NULL || *str == '\0')
 		goto err;
-	errno = 0;
 	num = strtol(str, &end, 10);
 
 	if (errno || str == end || (end && *end))
@@ -372,8 +387,9 @@ long strtol_or_err(const char *str, const char *errmesg)
 
 	return num;
 err:
-	if (errno)
+	if (errno == ERANGE)
 		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
+
 	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 }
 
@@ -382,9 +398,9 @@ unsigned long strtoul_or_err(const char *str, const char *errmesg)
 	unsigned long num;
 	char *end = NULL;
 
+	errno = 0;
 	if (str == NULL || *str == '\0')
 		goto err;
-	errno = 0;
 	num = strtoul(str, &end, 10);
 
 	if (errno || str == end || (end && *end))
@@ -392,7 +408,7 @@ unsigned long strtoul_or_err(const char *str, const char *errmesg)
 
 	return num;
 err:
-	if (errno)
+	if (errno == ERANGE)
 		err(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
 
 	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, str);
@@ -425,7 +441,7 @@ void strtotimeval_or_err(const char *str, struct timeval *tv, const char *errmes
  * Converts stat->st_mode to ls(1)-like mode string. The size of "str" must
  * be 11 bytes.
  */
-void strmode(mode_t mode, char *str)
+void xstrmode(mode_t mode, char *str)
 {
 	unsigned short i = 0;
 
@@ -519,7 +535,7 @@ char *size_to_human_string(int options, uint64_t bytes)
 
 		if (!dp || !*dp)
 			dp = ".";
-		snprintf(buf, sizeof(buf), "%d%s%jd%s", dec, dp, frac, suffix);
+		snprintf(buf, sizeof(buf), "%d%s%" PRIu64 "%s", dec, dp, frac, suffix);
 	} else
 		snprintf(buf, sizeof(buf), "%d%s", dec, suffix);
 
@@ -718,7 +734,7 @@ int parse_range(const char *str, int *lower, int *upper, int def)
 			return -1;
 
 		if (*end == ':' && !*(end + 1))		/* <M:> */
-			*upper = 0;
+			*upper = def;
 		else if (*end == '-' || *end == ':') {	/* <M:N> <M-N> */
 			str = end + 1;
 			end = NULL;
@@ -867,7 +883,7 @@ const char *split(const char **state, size_t *l, const char *separator, int quot
 /* Rewind file pointer forward to new line.  */
 int skip_fline(FILE *fp)
 {
-	char ch;
+	int ch;
 
 	do {
 		if ((ch = fgetc(fp)) == EOF)

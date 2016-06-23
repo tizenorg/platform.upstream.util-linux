@@ -25,7 +25,6 @@
  */
 
 #include <errno.h>
-#include <features.h>
 #include <getopt.h>
 #include <sys/time.h>
 #include <unistd.h>
@@ -579,7 +578,7 @@ static void do_sem(int id, struct lsipc_control *ctl, struct libscols_table *tb)
 					xasprintf(&arg, "%#o", semdsp->sem_perm.mode & 0777);
 				else {
 					arg = xmalloc(11);
-					strmode(semdsp->sem_perm.mode & 0777, arg);
+					xstrmode(semdsp->sem_perm.mode & 0777, arg);
 				}
 				rc = scols_line_refer_data(ln, n, arg);
 				break;
@@ -776,7 +775,7 @@ static void do_msg(int id, struct lsipc_control *ctl, struct libscols_table *tb)
 					xasprintf(&arg, "%#o", msgdsp->msg_perm.mode & 0777);
 				else {
 					arg = xmalloc(11);
-					strmode(msgdsp->msg_perm.mode & 0777, arg);
+					xstrmode(msgdsp->msg_perm.mode & 0777, arg);
 					rc = scols_line_refer_data(ln, n, arg);
 				}
 				break;
@@ -928,7 +927,7 @@ static void do_shm(int id, struct lsipc_control *ctl, struct libscols_table *tb)
 					xasprintf(&arg, "%#o", shmdsp->shm_perm.mode & 0777);
 				else {
 					arg = xmalloc(11);
-					strmode(shmdsp->shm_perm.mode & 0777, arg);
+					xstrmode(shmdsp->shm_perm.mode & 0777, arg);
 				}
 				rc = scols_line_refer_data(ln, n, arg);
 				break;
@@ -1072,14 +1071,13 @@ static void do_shm_global(struct libscols_table *tb)
 			++nsegs;
 			sum_segsz += shmdsp->shm_segsz;
 		}
+		ipc_shm_free_info(shmds);
 	}
 
 	global_set_data(tb, "SHMMNI", _("Shared memory segments"), nsegs, lim.shmmni, 1);
 	global_set_data(tb, "SHMALL", _("Shared memory pages"), sum_segsz / getpagesize(), lim.shmall, 1);
 	global_set_data(tb, "SHMMAX", _("Max size of shared memory segment (bytes)"), 0, lim.shmmax, 0);
 	global_set_data(tb, "SHMMIN", _("Min size of shared memory segment (bytes)"), 0, lim.shmmin, 0);
-
-	ipc_shm_free_info(shmds);
 }
 
 int main(int argc, char *argv[])

@@ -44,6 +44,7 @@
 #include "c.h"
 #include "widechar.h"
 #include "ttyutils.h"
+#include "color-names.h"
 
 #ifdef HAVE_SYS_PARAM_H
 # include <sys/param.h>
@@ -151,7 +152,7 @@ static int netlink_fd = AGETTY_RELOAD_FDNONE;
 
 struct options {
 	int flags;			/* toggle switches, see below */
-	int timeout;			/* time-out period */
+	unsigned int timeout;			/* time-out period */
 	char *autolog;			/* login the user automatically */
 	char *chdir;			/* Chdir before the login */
 	char *chroot;			/* Chroot before the login */
@@ -165,7 +166,7 @@ struct options {
 	char *erasechars;		/* string with erase chars */
 	char *killchars;		/* string with kill chars */
 	char *osrelease;		/* /etc/os-release data */
-	int delay;			/* Sleep seconds before prompt */
+	unsigned int delay;			/* Sleep seconds before prompt */
 	int nice;			/* Run login with this priority */
 	int numspeed;			/* number of baud rates to try */
 	int clocal;			/* CLOCAL_MODE_* */
@@ -420,7 +421,7 @@ int main(int argc, char **argv)
 
 	/* Set the optional timer. */
 	if (options.timeout)
-		alarm((unsigned) options.timeout);
+		alarm(options.timeout);
 
 	/* Optionally wait for CR or LF before writing /etc/issue */
 	if (serial_tty_option(&options, F_WAITCRLF)) {
@@ -680,7 +681,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 			op->chdir = optarg;
 			break;
 		case 'd':
-			op->delay = atoi(optarg);
+			op->delay = strtou32_or_err(optarg,  _("invalid delay argument"));
 			break;
 		case 'E':
 			op->flags |= F_REMOTE;
@@ -738,7 +739,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 			op->flags |= F_LOGINPAUSE;
 			break;
 		case 'P':
-			op->nice = atoi(optarg);
+			op->nice = strtos32_or_err(optarg,  _("invalid nice argument"));
 			break;
 		case 'r':
 			op->chroot = optarg;
@@ -750,8 +751,7 @@ static void parse_args(int argc, char **argv, struct options *op)
 			op->flags |= F_KEEPSPEED;
 			break;
 		case 't':
-			if ((op->timeout = atoi(optarg)) <= 0)
-				log_err(_("bad timeout value: %s"), optarg);
+			op->timeout = strtou32_or_err(optarg,  _("invalid timeout argument"));
 			break;
 		case 'U':
 			op->flags |= F_LCUC;
@@ -1000,8 +1000,12 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 		if ((gr = getgrnam("tty")))
 			gid = gr->gr_gid;
 
-		if (((len = snprintf(buf, sizeof(buf), "/dev/%s", tty)) >=
-		     (int)sizeof(buf)) || (len < 0))
+		len = snprintf(buf, sizeof(buf), "/dev/%s", tty);
+		if (len < 0 || (size_t)len >= sizeof(buf))
+			log_err(_("/dev/%s: cannot open as standard input: %m"), tty);
+
+		/* Open the tty as standard input. */
+		if ((fd = open(buf, O_RDWR|O_NOCTTY|O_NONBLOCK, 0)) < 0)
 			log_err(_("/dev/%s: cannot open as standard input: %m"), tty);
 
 		/*
@@ -1010,16 +1014,12 @@ static void open_tty(char *tty, struct termios *tp, struct options *op)
 		 * Linux login(1) will change tty permissions. Use root owner and group
 		 * with permission -rw------- for the period between getty and login.
 		 */
-		if (chown(buf, 0, gid) || chmod(buf, (gid ? 0620 : 0600))) {
+		if (fchown(fd, 0, gid) || fchmod(fd, (gid ? 0620 : 0600))) {
 			if (errno == EROFS)
 				log_warn("%s: %m", buf);
 			else
 				log_err("%s: %m", buf);
 		}
-
-		/* Open the tty as standard input. */
-		if ((fd = open(buf, O_RDWR|O_NOCTTY|O_NONBLOCK, 0)) < 0)
-			log_err(_("/dev/%s: cannot open as standard input: %m"), tty);
 
 		/* Sanity checks... */
 		if (fstat(fd, &st) < 0)
@@ -1637,16 +1637,22 @@ static int wait_for_term_input(int fd)
 	}
 
 	while (1) {
+		int nfds = fd;
+
 		FD_ZERO(&rfds);
 		FD_SET(fd, &rfds);
 
-		if (inotify_fd >= 0)
+		if (inotify_fd >= 0) {
 			FD_SET(inotify_fd, &rfds);
-		if (netlink_fd >= 0)
+			nfds = max(nfds, inotify_fd);
+		}
+		if (netlink_fd >= 0) {
 			FD_SET(netlink_fd, &rfds);
+			nfds = max(nfds, netlink_fd);
+		}
 
 		/* If waiting fails, just fall through, presumably reading input will fail */
-		if (select(max(fd, inotify_fd) + 1, &rfds, NULL, NULL, NULL) < 0)
+		if (select(nfds + 1, &rfds, NULL, NULL, NULL) < 0)
 			return 1;
 
 		if (FD_ISSET(fd, &rfds)) {
@@ -1963,7 +1969,7 @@ static char *get_logname(struct options *op, struct termios *tp, struct chardata
 		if (len < 0)
 			log_err(_("%s: invalid character conversion for login name"), op->tty);
 
-		wcs = (wchar_t *) malloc((len + 1) * sizeof(wchar_t));
+		wcs = malloc((len + 1) * sizeof(wchar_t));
 		if (!wcs)
 			log_err(_("failed to allocate memory: %m"));
 
@@ -2333,6 +2339,18 @@ static void output_special_char(unsigned char c, struct options *op,
 	uname(&uts);
 
 	switch (c) {
+	case 'e':
+	{
+		char escname[UL_COLORNAME_MAXSZ];
+
+		if (get_escape_argument(fp, escname, sizeof(escname))) {
+			const char *esc = color_sequence_from_colorname(escname);
+			if (esc)
+				fputs(esc, stdout);
+		} else
+			fputs("\033", stdout);
+		break;
+	}
 	case 's':
 		printf("%s", uts.sysname);
 		break;

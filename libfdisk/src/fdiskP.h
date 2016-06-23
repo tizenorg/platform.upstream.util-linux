@@ -355,7 +355,10 @@ struct fdisk_context {
 		     display_in_cyl_units : 1,	/* for obscure labels */
 		     display_details : 1,	/* expert display mode */
 		     protect_bootbits : 1,	/* don't zeroize fll irst sector */
+		     wipe_device : 1,		/* wipe device before write */
 		     listonly : 1;		/* list partition, nothing else */
+
+	char *collision;			/* name of already existing FS/PT */
 
 	int sizeunit;				/* SIZE fields, FDISK_SIZEUNIT_* */
 
@@ -386,10 +389,7 @@ struct fdisk_context {
 	struct fdisk_script	*script;	/* what we want to follow */
 };
 
-/* partition.c */
-int fdisk_partition_next_partno(struct fdisk_partition *pa,
-				       struct fdisk_context *cxt,
-				       size_t *n);
+int fdisk_wipe_collisions(struct fdisk_context *cxt);
 
 /* context.c */
 extern int __fdisk_switch_label(struct fdisk_context *cxt,
@@ -410,7 +410,6 @@ extern void fdisk_zeroize_device_properties(struct fdisk_context *cxt);
 extern int fdisk_init_firstsector_buffer(struct fdisk_context *cxt,
 			unsigned int protect_off, unsigned int protect_size);
 extern int fdisk_read_firstsector(struct fdisk_context *cxt);
-extern char *fdisk_partname(const char *dev, size_t partno);
 
 /* label.c */
 extern int fdisk_probe_labels(struct fdisk_context *cxt);

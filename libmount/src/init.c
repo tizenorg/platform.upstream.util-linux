@@ -25,11 +25,13 @@ UL_DEBUG_DEFINE_MASKNAMES(libmount) =
 	{ "fs", MNT_DEBUG_FS,		"FS abstraction" },
 	{ "help", MNT_DEBUG_HELP,	"this help" },
 	{ "locks", MNT_DEBUG_LOCKS,	"mtab and utab locking" },
+	{ "loop", MNT_DEBUG_LOOP,	"loop devices routines" },
 	{ "options", MNT_DEBUG_OPTIONS,	"mount options parsing" },
 	{ "tab", MNT_DEBUG_TAB,		"fstab, mtab, mounninfo routines" },
 	{ "update", MNT_DEBUG_UPDATE,	"mtab, utab updates" },
 	{ "utils", MNT_DEBUG_UTILS,	"misc library utils" },
 	{ "monitor", MNT_DEBUG_MONITOR,	"mount tables monitor" },
+	{ "btrfs", MNT_DEBUG_BTRFS,	"btrfs specific routines" },
 
 	{ NULL, 0 }
 };

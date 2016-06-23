@@ -29,6 +29,7 @@
 #include <getopt.h>
 #include <string.h>
 #include <limits.h>
+#include <libgen.h>
 
 #include <blkid.h>
 
@@ -83,7 +84,7 @@ print_pretty(struct wipe_desc *wp, int line)
 		printf("----------------------------------------------------------------\n");
 	}
 
-	printf("0x%-17jx  %s   [%s]", wp->offset, wp->type, _(wp->usage));
+	printf("0x%-17jx  %s   [%s]", (intmax_t)wp->offset, wp->type, _(wp->usage));
 
 	if (wp->label && *wp->label)
 		printf("\n%27s %s", "LABEL:", wp->label);
@@ -100,7 +101,7 @@ print_parsable(struct wipe_desc *wp, int line)
 	if (!line)
 		printf("# offset,uuid,label,type\n");
 
-	printf("0x%jx,", wp->offset);
+	printf("0x%jx,", (intmax_t)wp->offset);
 
 	if (wp->uuid) {
 		blkid_encode_string(wp->uuid, enc, sizeof(enc));
@@ -310,7 +311,7 @@ static void do_wipe_real(blkid_probe pr, const char *devname,
 
 	if (blkid_do_wipe(pr, (flags & WP_FL_NOACT) != 0))
 		warn(_("%s: failed to erase %s magic string at offset 0x%08jx"),
-		     devname, w->type, w->offset);
+		     devname, w->type, (intmax_t)w->offset);
 
 	if (flags & WP_FL_QUIET)
 		return;
@@ -318,7 +319,7 @@ static void do_wipe_real(blkid_probe pr, const char *devname,
 	printf(P_("%s: %zd byte was erased at offset 0x%08jx (%s): ",
 		  "%s: %zd bytes were erased at offset 0x%08jx (%s): ",
 		  w->len),
-	       devname, w->len, w->offset, w->type);
+	       devname, w->len, (intmax_t)w->offset, w->type);
 
 	for (i = 0; i < w->len; i++) {
 		printf("%02x", w->magic[i]);
@@ -333,7 +334,7 @@ static void do_backup(struct wipe_desc *wp, const char *base)
 	char *fname = NULL;
 	int fd;
 
-	xasprintf(&fname, "%s0x%08jx.bak", base, wp->offset);
+	xasprintf(&fname, "%s0x%08jx.bak", base, (intmax_t)wp->offset);
 
 	fd = open(fname, O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
 	if (fd < 0)
@@ -378,9 +379,12 @@ do_wipe(struct wipe_desc *wp, const char *devname, int flags)
 
 	if (zap && (flags & WP_FL_BACKUP)) {
 		const char *home = getenv ("HOME");
+		char *tmp = xstrdup(devname);
+
 		if (!home)
 			errx(EXIT_FAILURE, _("failed to create a signature backup, $HOME undefined"));
-		xasprintf (&backup, "%s/wipefs-%s-", home, basename(devname));
+		xasprintf (&backup, "%s/wipefs-%s-", home, basename(tmp));
+		free(tmp);
 	}
 
 	wp0 = clone_offset(wp);
@@ -424,7 +428,7 @@ do_wipe(struct wipe_desc *wp, const char *devname, int flags)
 
 	for (w = wp0; w != NULL; w = w->next) {
 		if (!w->on_disk && !(flags & WP_FL_QUIET))
-			warnx(_("%s: offset 0x%jx not found"), devname, w->offset);
+			warnx(_("%s: offset 0x%jx not found"), devname, (uintmax_t)w->offset);
 	}
 
 	if (need_force)
@@ -504,7 +508,7 @@ main(int argc, char **argv)
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "afhno:pqt:V", longopts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "abfhno:pqt:V", longopts, NULL)) != -1) {
 
 		err_exclusive_options(c, longopts, excl, excl_st);
 

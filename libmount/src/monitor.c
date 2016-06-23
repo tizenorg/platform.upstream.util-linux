@@ -313,7 +313,7 @@ static int userspace_event_verify(struct libmnt_monitor *mn,
 
 	DBG(MONITOR, ul_debugobj(mn, "drain and verify userspace monitor inotify"));
 
-	/* the 'fd' is non-blocking */
+	/* the me->fd is non-blocking */
 	do {
 		ssize_t len;
 		char *p;
@@ -326,7 +326,7 @@ static int userspace_event_verify(struct libmnt_monitor *mn,
 		for (p = buf; p < buf + len;
 		     p += sizeof(struct inotify_event) + e->len) {
 
-			int fd;
+			int fd = -1;
 
 			e = (const struct inotify_event *) p;
 			DBG(MONITOR, ul_debugobj(mn, " inotify event 0x%x [%s]\n", e->mask, e->len ? e->name : ""));
@@ -345,7 +345,7 @@ static int userspace_event_verify(struct libmnt_monitor *mn,
 		}
 	} while (1);
 
-	DBG(MONITOR, ul_debugobj(mn, status == 1 ? " success" : " nothing"));
+	DBG(MONITOR, ul_debugobj(mn, "%s", status == 1 ? " success" : " nothing"));
 	return status;
 }
 
@@ -863,7 +863,7 @@ err:
 /*
  * create a monitor and add the monitor fd to epoll
  */
-int __test_epoll(struct libmnt_test *ts, int argc, char *argv[], int cleanup)
+static int __test_epoll(struct libmnt_test *ts, int argc, char *argv[], int cleanup)
 {
 	int fd, efd = -1, rc = -1;
 	struct epoll_event ev;
@@ -927,12 +927,12 @@ done:
 /*
  * create a monitor and add the monitor fd to epoll
  */
-int test_epoll(struct libmnt_test *ts, int argc, char *argv[])
+static int test_epoll(struct libmnt_test *ts, int argc, char *argv[])
 {
 	return __test_epoll(ts, argc, argv, 0);
 }
 
-int test_epoll_cleanup(struct libmnt_test *ts, int argc, char *argv[])
+static int test_epoll_cleanup(struct libmnt_test *ts, int argc, char *argv[])
 {
 	return __test_epoll(ts, argc, argv, 1);
 }
@@ -940,7 +940,7 @@ int test_epoll_cleanup(struct libmnt_test *ts, int argc, char *argv[])
 /*
  * create a monitor and wait for a change
  */
-int test_wait(struct libmnt_test *ts, int argc, char *argv[])
+static int test_wait(struct libmnt_test *ts, int argc, char *argv[])
 {
 	const char *filename;
 	struct libmnt_monitor *mn = create_test_monitor(argc, argv);

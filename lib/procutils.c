@@ -18,12 +18,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <ctype.h>
 
 #include "procutils.h"
-#include "at.h"
+#include "fileutils.h"
 #include "all-io.h"
 #include "c.h"
 
@@ -97,15 +98,15 @@ int proc_next_tid(struct proc_tasks *tasks, pid_t *tid)
 	return 0;
 }
 
-/* returns process command name, use free() for result */
-char *proc_get_command(pid_t pid)
+/* returns process command path, use free() for result */
+static char *proc_file_strdup(pid_t pid, const char *name)
 {
 	char buf[BUFSIZ], *res = NULL;
 	ssize_t sz = 0;
 	size_t i;
 	int fd;
 
-	snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int) pid);
+	snprintf(buf, sizeof(buf), "/proc/%d/%s", (int) pid, name);
 	fd = open(buf, O_RDONLY);
 	if (fd < 0)
 		goto done;
@@ -125,6 +126,18 @@ done:
 	if (fd >= 0)
 		close(fd);
 	return res;
+}
+
+/* returns process command path, use free() for result */
+char *proc_get_command(pid_t pid)
+{
+	return proc_file_strdup(pid, "cmdline");
+}
+
+/* returns process command name, use free() for result */
+char *proc_get_command_name(pid_t pid)
+{
+	return proc_file_strdup(pid, "comm");
 }
 
 struct proc_processes *proc_open_processes(void)
@@ -187,7 +200,7 @@ int proc_next_pid(struct proc_processes *ps, pid_t *pid)
 		if (ps->has_fltr_uid) {
 			struct stat st;
 
-			if (fstat_at(dirfd(ps->dir), "/proc", d->d_name, &st, 0))
+			if (fstatat(dirfd(ps->dir), d->d_name, &st, 0))
 				continue;
 			if (ps->fltr_uid != st.st_uid)
 				continue;
@@ -199,8 +212,7 @@ int proc_next_pid(struct proc_processes *ps, pid_t *pid)
 			FILE *f;
 
 			snprintf(buf, sizeof(buf), "%s/stat", d->d_name);
-			f = fopen_at(dirfd(ps->dir), "/proc", buf,
-						O_CLOEXEC|O_RDONLY, "r");
+			f = fopen_at(dirfd(ps->dir), buf, O_CLOEXEC|O_RDONLY, "r");
 			if (!f)
 				continue;
 

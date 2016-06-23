@@ -48,7 +48,6 @@ systemdsystemunit_DATA =
 dist_bashcompletion_DATA =
 check_PROGRAMS =
 dist_check_SCRIPTS =
-TESTS =
 
 PATHFILES =
 
@@ -97,6 +96,14 @@ include bash-completion/Makemodule.am
 
 include tests/Makemodule.am
 
+# pylibmountexec module must be installed after usrlib_exec libraries,
+# otherwise the libtool relink step will fail to find libmount.la and
+# will try -lmount which is possibly not available.
+#
+# So introduce this dependency rule:
+# install-pylibmountexecLTLIBRARIES: install-usrlib_execLTLIBRARIES
+@verbatim_pylibmount_dependency@
+
 #
 # Don't rely on configure.ac AC_CONFIG_FILES for install paths.
 #
@@ -137,7 +144,7 @@ EXTRA_DIST += $(PATHFILES:=.in)
 
 $(PATHFILES): Makefile
 	@ rm -f $@ $@.tmp
-	$(AM_V_at) test -d $(dir $@) || mkdir -p $(dir $@)
+	$(AM_V_at) $(MKDIR_P) $$(dirname $@)
 	$(AM_V_GEN) srcdir=''; \
 		test -f ./$@.in || srcdir=$(srcdir)/; \
 		$(edit_cmd) $${srcdir}$@.in >$@.tmp
@@ -173,6 +180,9 @@ checkxalloc:
 
 checkdecl:
 	@ $(top_srcdir)/tools/checkdecl.sh
+
+checkcompletion:
+	@ $(top_srcdir)/tools/checkcompletion.sh $(top_srcdir)
 
 DISTCHECK_CONFIGURE_FLAGS = \
 	--disable-use-tty-group \

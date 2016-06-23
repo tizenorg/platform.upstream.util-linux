@@ -354,6 +354,7 @@ static char *table_to_string(struct cfdisk *cf, struct fdisk_table *tb)
 	if (!table)
 		goto done;
 	scols_table_enable_maxout(table, 1);
+	scols_table_enable_nowrap(table, 1);
 
 	/* headers */
 	for (i = 0; i < cf->nfields; i++) {
@@ -497,23 +498,12 @@ static int lines_refresh(struct cfdisk *cf)
 	cf->lines = xcalloc(cf->nlines, sizeof(struct cfdisk_line));
 
 	for (p = cf->linesbuf, i = 0; p && i < cf->nlines; i++) {
-		char *begin = p;
-		size_t sz;
-
-		cf->lines[i].data = begin;
-		p = strchr(begin, '\n');
-		sz = p ? (size_t) (p - begin) : strlen(begin);
+		cf->lines[i].data = p;
+		p = strchr(p, '\n');
 		if (p) {
 			*p = '\0';
 			p++;
 		}
-		/* libsmartcols reduces columns width as much as possible to
-		 * fit terminal width, but for very small terminals it preffers
-		 * long lines rather than remove columns from output. This is fine
-		 * for normal utils, but it's problematic for ncurses -- so we
-		 * manually cut the end of the line to fit terminal width. */
-		if (sz + ARROW_CURSOR_WIDTH > ui_cols)
-			*(begin + (ui_cols - ARROW_CURSOR_WIDTH)) = '\0';
 		cf->lines[i].extra = scols_new_table();
 		scols_table_enable_noheadings(cf->lines[i].extra, 1);
 		scols_table_new_column(cf->lines[i].extra, NULL, 0, SCOLS_FL_RIGHT);
@@ -2444,6 +2434,14 @@ static int ui_run(struct cfdisk *cf)
 	ui_lines = LINES;
 	ui_cols = COLS;
 	DBG(UI, ul_debug("start cols=%zu, lines=%zu", ui_cols, ui_lines));
+
+	if (fdisk_get_collision(cf->cxt)) {
+		ui_warnx(_("Device already contains a %s signature; it will be removed by a write command."),
+				fdisk_get_collision(cf->cxt));
+		fdisk_enable_wipe(cf->cxt, 1);
+		ui_hint(_("Press a key to continue."));
+		getch();
+	}
 
 	if (!fdisk_has_label(cf->cxt) || cf->zero_start) {
 		rc = ui_create_label(cf);

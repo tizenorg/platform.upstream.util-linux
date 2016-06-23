@@ -21,6 +21,10 @@
 # include <err.h>
 #endif
 
+#ifdef HAVE_SYS_SYSMACROS_H
+# include <sys/sysmacros.h>     /* for major, minor */
+#endif
+
 /*
  * Compiler-specific stuff
  */
@@ -344,6 +348,23 @@ static inline int xusleep(useconds_t usec)
 # endif
 #else
 # define UL_ASAN_BLACKLIST	/* nothing */
+#endif
+
+
+
+/*
+ * Note that sysconf(_SC_GETPW_R_SIZE_MAX) returns *initial* suggested size for
+ * pwd buffer and in some cases it is not large enough. See POSIX and
+ * getpwnam_r man page for more details.
+ */
+#define UL_GETPW_BUFSIZ	(16 * 1024)
+
+/*
+ * Darwin or other BSDs may only have MAP_ANON. To get it on Darwin we must
+ * define _DARWIN_C_SOURCE before including sys/mman.h. We do this in config.h.
+ */
+#if !defined MAP_ANONYMOUS && defined MAP_ANON
+# define MAP_ANONYMOUS  (MAP_ANON)
 #endif
 
 #endif /* UTIL_LINUX_C_H */

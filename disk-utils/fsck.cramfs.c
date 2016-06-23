@@ -49,12 +49,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
-#include <sys/sysmacros.h>	/* for major, minor */
 
+#include "c.h"
 #include "cramfs.h"
 #include "nls.h"
 #include "blkdev.h"
-#include "c.h"
 #include "exitcodes.h"
 #include "strutils.h"
 #include "closestream.h"

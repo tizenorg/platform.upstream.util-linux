@@ -112,14 +112,14 @@ fdisk_sector_t fdisk_align_lba(struct fdisk_context *cxt, fdisk_sector_t lba, in
 	}
 
 	if (lba != res)
-		DBG(CXT, ul_debugobj(cxt, "LBA %ju -aligned-%s-> %ju [grain=%jus]",
+		DBG(CXT, ul_debugobj(cxt, "LBA %ju -aligned-%s-> %ju [grain=%lus]",
 				(uintmax_t) lba,
 				direction == FDISK_ALIGN_UP ? "up" :
 				direction == FDISK_ALIGN_DOWN ? "down" : "near",
 				(uintmax_t) res,
 				cxt->grain / cxt->sector_size));
 	else
-		DBG(CXT, ul_debugobj(cxt, "LBA %ju -unchanged-", lba));
+		DBG(CXT, ul_debugobj(cxt, "LBA %ju -unchanged-", (uintmax_t)lba));
 
 	return res;
 }

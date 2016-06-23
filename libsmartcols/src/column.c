@@ -70,6 +70,7 @@ void scols_unref_column(struct libscols_column *cl)
 		list_del(&cl->cl_columns);
 		scols_reset_cell(&cl->header);
 		free(cl->color);
+		free(cl->pending_data_buf);
 		free(cl);
 	}
 }
@@ -118,7 +119,7 @@ err:
  * @cl: a pointer to a struct libscols_column instance
  * @whint: a width hint
  *
- * Sets the width hint of column @cl to @whint.
+ * Sets the width hint of column @cl to @whint. See scols_table_new_column().
  *
  * Returns: 0, a negative value in case of an error.
  */
@@ -156,6 +157,13 @@ int scols_column_set_flags(struct libscols_column *cl, int flags)
 {
 	if (!cl)
 		return -EINVAL;
+
+	if (cl->table) {
+		if (!(cl->flags & SCOLS_FL_TREE) && (flags & SCOLS_FL_TREE))
+			cl->table->ntreecols++;
+		else if ((cl->flags & SCOLS_FL_TREE) && !(flags & SCOLS_FL_TREE))
+			cl->table->ntreecols--;
+	}
 
 	cl->flags = flags;
 	return 0;
@@ -259,6 +267,23 @@ int scols_column_set_cmpfunc(struct libscols_column *cl,
 }
 
 /**
+ * scols_column_is_hidden:
+ * @cl: a pointer to a struct libscols_column instance
+ *
+ * Gets the value of @cl's flag hidden.
+ *
+ * Returns: hidden flag value, negative value in case of an error.
+ *
+ * Since: 2.27
+ */
+int scols_column_is_hidden(struct libscols_column *cl)
+{
+	if (!cl)
+		return -EINVAL;
+	return cl->flags & SCOLS_FL_HIDDEN;
+}
+
+/**
  * scols_column_is_trunc:
  * @cl: a pointer to a struct libscols_column instance
  *
@@ -327,4 +352,20 @@ int scols_column_is_noextremes(struct libscols_column *cl)
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_NOEXTREMES;
+}
+/**
+ * scols_column_is_wrap:
+ * @cl: a pointer to a struct libscols_column instance
+ *
+ * Gets the value of @cl's flag wrap.
+ *
+ * Returns: wrap flag value, negative value in case of an error.
+ *
+ * Since: 2.28
+ */
+int scols_column_is_wrap(struct libscols_column *cl)
+{
+	if (!cl)
+		return -EINVAL;
+	return cl->flags & SCOLS_FL_WRAP;
 }

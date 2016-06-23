@@ -22,6 +22,9 @@
 /* Define to 1 if you have the <asm/io.h> header file. */
 #undef HAVE_ASM_IO_H
 
+/* Define if btrfs stuff is available */
+#undef HAVE_BTRFS_SUPPORT
+
 /* Define to 1 if you have the <byteswap.h> header file. */
 #undef HAVE_BYTESWAP_H
 
@@ -178,14 +181,14 @@
 /* Define to 1 if you have the `readline' library (-lreadline). */
 #undef HAVE_LIBREADLINE
 
+/* Define if librtas exists */
+#undef HAVE_LIBRTAS
+
 /* Define if SELinux is available */
 #undef HAVE_LIBSELINUX
 
 /* Define if libsystemd is available */
 #undef HAVE_LIBSYSTEMD
-
-/* Define to 1 if you have the `termcap' library (-ltermcap). */
-#undef HAVE_LIBTERMCAP
 
 /* Define if libtinfo available. */
 #undef HAVE_LIBTINFO
@@ -207,6 +210,9 @@
 
 /* Define to 1 if you have the <linux/blkpg.h> header file. */
 #undef HAVE_LINUX_BLKPG_H
+
+/* Define to 1 if you have the <linux/btrfs.h> header file. */
+#undef HAVE_LINUX_BTRFS_H
 
 /* Define to 1 if you have the <linux/cdrom.h> header file. */
 #undef HAVE_LINUX_CDROM_H
@@ -265,6 +271,9 @@
 /* Define to 1 if you have the `mempcpy' function. */
 #undef HAVE_MEMPCPY
 
+/* Define to 1 if you have the `mkostemp' function. */
+#undef HAVE_MKOSTEMP
+
 /* Define to 1 if you have the <mntent.h> header file. */
 #undef HAVE_MNTENT_H
 
@@ -322,6 +331,9 @@
 /* Define to 1 if you have the `qsort_r' function. */
 #undef HAVE_QSORT_R
 
+/* Define to 1 if you have the `reboot' function. */
+#undef HAVE_REBOOT
+
 /* Define if curses library has the resizeterm(). */
 #undef HAVE_RESIZETERM
 
@@ -339,6 +351,12 @@
 
 /* scanf %ms modifier */
 #undef HAVE_SCANF_MS_MODIFIER
+
+/* Define to 1 if you have the `sched_setattr' function. */
+#undef HAVE_SCHED_SETATTR
+
+/* Define to 1 if you have the `sched_setscheduler' function. */
+#undef HAVE_SCHED_SETSCHEDULER
 
 /* Define to 1 if you have the `secure_getenv' function. */
 #undef HAVE_SECURE_GETENV
@@ -358,11 +376,17 @@
 /* Define to 1 if you have the `setns' function. */
 #undef HAVE_SETNS
 
+/* Define to 1 if you have the `setprogname' function. */
+#undef HAVE_SETPROGNAME
+
 /* Define to 1 if you have the `setresgid' function. */
 #undef HAVE_SETRESGID
 
 /* Define to 1 if you have the `setresuid' function. */
 #undef HAVE_SETRESUID
+
+/* Define to 1 if you have the <shadow.h> header file. */
+#undef HAVE_SHADOW_H
 
 /* Define to 1 if the system has the type `sighandler_t'. */
 #undef HAVE_SIGHANDLER_T
@@ -451,17 +475,20 @@
 /* Define to 1 if you have the <sys/mkdev.h> header file. */
 #undef HAVE_SYS_MKDEV_H
 
+/* Define to 1 if you have the <sys/mount.h> header file. */
+#undef HAVE_SYS_MOUNT_H
+
 /* Define to 1 if you have the <sys/param.h> header file. */
 #undef HAVE_SYS_PARAM_H
 
 /* Define to 1 if you have the <sys/prctl.h> header file. */
 #undef HAVE_SYS_PRCTL_H
 
-/* Define to 1 if you have the <sys/queue.h> header file. */
-#undef HAVE_SYS_QUEUE_H
-
 /* Define to 1 if you have the <sys/resource.h> header file. */
 #undef HAVE_SYS_RESOURCE_H
+
+/* Define to 1 if you have the <sys/signalfd.h> header file. */
+#undef HAVE_SYS_SIGNALFD_H
 
 /* Define to 1 if you have the <sys/socket.h> header file. */
 #undef HAVE_SYS_SOCKET_H
@@ -478,6 +505,9 @@
 /* Define to 1 if you have the <sys/syscall.h> header file. */
 #undef HAVE_SYS_SYSCALL_H
 
+/* Define to 1 if you have the <sys/sysmacros.h> header file. */
+#undef HAVE_SYS_SYSMACROS_H
+
 /* Define to 1 if you have the <sys/timex.h> header file. */
 #undef HAVE_SYS_TIMEX_H
 
@@ -490,11 +520,14 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #undef HAVE_SYS_TYPES_H
 
+/* Define to 1 if you have the <sys/ucred.h> header file. */
+#undef HAVE_SYS_UCRED_H
+
 /* Define to 1 if you have the <sys/un.h> header file. */
 #undef HAVE_SYS_UN_H
 
-/* Define to 1 if you have the `timer_createx' function. */
-#undef HAVE_TIMER_CREATEX
+/* Define to 1 if you have the `timer_create' function. */
+#undef HAVE_TIMER_CREATE
 
 /* Define to 1 if the target supports thread-local storage. */
 #undef HAVE_TLS
@@ -525,6 +558,9 @@
 
 /* Define to 1 if you have the `utimensat' function. */
 #undef HAVE_UTIMENSAT
+
+/* Define to 1 if you have the <utmp.h> header file. */
+#undef HAVE_UTMP_H
 
 /* Define to 1 if you want to use uuid daemon. */
 #undef HAVE_UUIDD
@@ -626,6 +662,9 @@
 /* Fallback syscall number for sched_getaffinity */
 #undef SYS_sched_getaffinity
 
+/* Fallback syscall number for sched_setattr */
+#undef SYS_sched_setattr
+
 /* Fallback syscall number for setns */
 #undef SYS_setns
 
@@ -683,6 +722,9 @@
 #  undef WORDS_BIGENDIAN
 # endif
 #endif
+
+/* Enable MAP_ANON in sys/mman.h on Mac OS X */
+#undef _DARWIN_C_SOURCE
 
 /* Enable large inode numbers on Mac OS X 10.5.  */
 #ifndef _DARWIN_USE_64_BIT_INODE

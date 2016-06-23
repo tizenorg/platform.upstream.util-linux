@@ -16,8 +16,7 @@ static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)
 			const char *filename, int line)
 {
 	if (filename)
-		warnx(_("%s: parse error: ignore entry at line %d."),
-							filename, line);
+		warnx(_("%s: parse error at line %d -- ignored"), filename, line);
 	return 1;
 }
 
@@ -86,7 +85,7 @@ static size_t ulct;
 
 void add_label(const char *label)
 {
-	llist = (const char **) xrealloc(llist, (++llct) * sizeof(char *));
+	llist = xrealloc(llist, (++llct) * sizeof(char *));
 	llist[llct - 1] = label;
 }
 
@@ -102,7 +101,7 @@ size_t numof_labels(void)
 
 void add_uuid(const char *uuid)
 {
-	ulist = (const char **) xrealloc(ulist, (++ulct) * sizeof(char *));
+	ulist = xrealloc(ulist, (++ulct) * sizeof(char *));
 	ulist[ulct - 1] = uuid;
 }
 

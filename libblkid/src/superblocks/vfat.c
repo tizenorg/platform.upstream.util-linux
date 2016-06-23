@@ -15,6 +15,7 @@
 #include <errno.h>
 #include <ctype.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "pt-mbr.h"
 #include "superblocks.h"
@@ -125,14 +126,14 @@ static unsigned char *search_fat_label(blkid_probe pr,
 	uint32_t i;
 
 	DBG(LOWPROBE, ul_debug("\tlook for label in root-dir "
-			"(entries: %d, offset: %jd)", entries, offset));
+			"(entries: %"PRIu32", offset: %"PRIu64")", entries, offset));
 
 	if (!blkid_probe_is_tiny(pr)) {
 		/* large disk, read whole root directory */
 		dir = (struct vfat_dir_entry *)
 			blkid_probe_get_buffer(pr,
 					offset,
-					(blkid_loff_t) entries *
+					(uint64_t) entries *
 						sizeof(struct vfat_dir_entry));
 		if (!dir)
 			return NULL;
@@ -147,7 +148,7 @@ static unsigned char *search_fat_label(blkid_probe pr,
 		if (!dir)
 			ent = (struct vfat_dir_entry *)
 				blkid_probe_get_buffer(pr,
-					(blkid_loff_t) offset + (i *
+					(uint64_t) offset + (i *
 						sizeof(struct vfat_dir_entry)),
 					sizeof(struct vfat_dir_entry));
 		else
@@ -261,6 +262,9 @@ static int fat_valid_superblock(blkid_probe pr,
 
 	return 1;	/* valid */
 }
+
+/* function prototype to avoid warnings (duplicate in partitions/dos.c) */
+extern int blkid_probe_is_vfat(blkid_probe pr);
 
 /*
  * This function is used by MBR partition table parser to avoid
@@ -395,7 +399,7 @@ static int probe_vfat(blkid_probe pr, const struct blkid_idmag *mag)
 			struct fat32_fsinfo *fsinfo;
 
 			buf = blkid_probe_get_buffer(pr,
-					(blkid_loff_t) fsinfo_sect * sector_size,
+					(uint64_t) fsinfo_sect * sector_size,
 					sizeof(struct fat32_fsinfo));
 			if (buf == NULL)
 				return errno ? -errno : 1;

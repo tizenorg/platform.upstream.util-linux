@@ -35,6 +35,7 @@ enum {
 	A_SHOW_ONE,		/* print info about one device */
 	A_FIND_FREE,		/* find first unused */
 	A_SET_CAPACITY,		/* set device capacity */
+	A_SET_DIRECT_IO,	/* set accessing backing file by direct io */
 };
 
 enum {
@@ -48,6 +49,7 @@ enum {
 	COL_PARTSCAN,
 	COL_RO,
 	COL_SIZELIMIT,
+	COL_DIO,
 };
 
 /* basic output flags */
@@ -73,6 +75,7 @@ static struct colinfo infos[] = {
 	[COL_RO]          = { "RO",           1, SCOLS_FL_RIGHT, N_("read-only device")},
 	[COL_SIZELIMIT]   = { "SIZELIMIT",    5, SCOLS_FL_RIGHT, N_("size limit of the file in bytes")},
 	[COL_MAJMIN]      = { "MAJ:MIN",      3, 0, N_("loop device major:minor number")},
+	[COL_DIO]         = { "DIO",          1, SCOLS_FL_RIGHT, N_("access backing file with direct-io")},
 };
 
 static int columns[ARRAY_SIZE(infos) * 2] = {-1};
@@ -270,6 +273,9 @@ static int set_scols_data(struct loopdev_cxt *lc, struct libscols_line *ln)
 		case COL_RO:
 			p = loopcxt_is_readonly(lc) ? "1" : "0";
 			break;
+		case COL_DIO:
+			p = loopcxt_is_dio(lc) ? "1" : "0";
+			break;
 		case COL_PARTSCAN:
 			p = loopcxt_is_partscan(lc) ? "1" : "0";
 			break;
@@ -393,6 +399,7 @@ static void usage(FILE *out)
 	fputs(_("     --sizelimit <num>         device is limited to <num> bytes of the file\n"), out);
 	fputs(_(" -P, --partscan                create a partitioned loop device\n"), out);
 	fputs(_(" -r, --read-only               set up a read-only loop device\n"), out);
+	fputs(_("     --direct-io[=<on|off>]    open backing file with O_DIRECT\n"), out);
 	fputs(_("     --show                    print device name after setup (with -f)\n"), out);
 	fputs(_(" -v, --verbose                 verbose mode\n"), out);
 
@@ -446,11 +453,13 @@ int main(int argc, char **argv)
 	int res = 0, showdev = 0, lo_flags = 0;
 	char *outarg = NULL;
 	int list = 0;
+	unsigned long use_dio = 0, set_dio = 0;
 
 	enum {
 		OPT_SIZELIMIT = CHAR_MAX + 1,
 		OPT_SHOW,
-		OPT_RAW
+		OPT_RAW,
+		OPT_DIO
 	};
 	static const struct option longopts[] = {
 		{ "all", 0, 0, 'a' },
@@ -468,6 +477,7 @@ int main(int argc, char **argv)
 		{ "sizelimit", 1, 0, OPT_SIZELIMIT },
 		{ "partscan", 0, 0, 'P' },
 		{ "read-only", 0, 0, 'r' },
+		{ "direct-io", 2, 0, OPT_DIO },
 		{ "raw", 0, 0, OPT_RAW },
 		{ "show", 0, 0, OPT_SHOW },
 		{ "verbose", 0, 0, 'v' },
@@ -557,6 +567,11 @@ int main(int argc, char **argv)
 		case OPT_SHOW:
 			showdev = 1;
 			break;
+		case OPT_DIO:
+			use_dio = set_dio = 1;
+			if (optarg)
+				use_dio = parse_switch(optarg, _("argument error"), "on", "off", NULL);
+			break;
 		case 'v':
 			break;
 		case 'V':
@@ -590,6 +605,7 @@ int main(int argc, char **argv)
 		columns[ncolumns++] = COL_AUTOCLR;
 		columns[ncolumns++] = COL_RO;
 		columns[ncolumns++] = COL_BACK_FILE;
+		columns[ncolumns++] = COL_DIO;
 	}
 
 	if (act == A_FIND_FREE && optind < argc) {
@@ -609,8 +625,13 @@ int main(int argc, char **argv)
 	if (!act && optind + 1 == argc) {
 		/*
 		 * losetup [--list] <device>
+		 * OR
+		 * losetup --direct-io DIO <device>
 		 */
-		act = A_SHOW_ONE;
+		if (!set_dio)
+			act = A_SHOW_ONE;
+		else
+			act = A_SET_DIRECT_IO;
 		if (!is_loopdev(argv[optind]) ||
 		    loopcxt_set_device(&lc, argv[optind]))
 			err(EXIT_FAILURE, _("%s: failed to use device"),
@@ -695,6 +716,8 @@ int main(int argc, char **argv)
 			if (showdev)
 				printf("%s\n", loopcxt_get_device(&lc));
 			warn_size(file, sizelimit);
+			if (set_dio)
+				goto lo_set_dio;
 		}
 		break;
 	}
@@ -745,6 +768,13 @@ int main(int argc, char **argv)
 		res = loopcxt_set_capacity(&lc);
 		if (res)
 			warn(_("%s: set capacity failed"),
+			        loopcxt_get_device(&lc));
+		break;
+	case A_SET_DIRECT_IO:
+ lo_set_dio:
+		res = loopcxt_set_dio(&lc, use_dio);
+		if (res)
+			warn(_("%s: set direct io failed"),
 			        loopcxt_get_device(&lc));
 		break;
 	default:

@@ -316,7 +316,7 @@ static int is_irrotational_disk(dev_t disk)
 			"/sys/dev/block/%d:%d/queue/rotational",
 			major(disk), minor(disk));
 
-	if (rc < 0 || (unsigned int) (rc + 1) > sizeof(path))
+	if (rc < 0 || (unsigned int) rc >= sizeof(path))
 		return 0;
 
 	f = fopen(path, "r");
@@ -470,7 +470,7 @@ static void fs_interpret_type(struct libmnt_fs *fs)
 static int parser_errcb(struct libmnt_table *tb __attribute__ ((__unused__)),
 			const char *filename, int line)
 {
-	warnx(_("%s: parse error at line %d -- ignore"), filename, line);
+	warnx(_("%s: parse error at line %d -- ignored"), filename, line);
 	return 1;
 }
 
@@ -547,14 +547,13 @@ static char *find_fsck(const char *type)
 	const char *tpl;
 	static char prog[256];
 	char *p = xstrdup(fsck_path);
-	struct stat st;
 
 	/* Are we looking for a program or just a type? */
 	tpl = (strncmp(type, "fsck.", 5) ? "%s/fsck.%s" : "%s/%s");
 
 	for(s = strtok(p, ":"); s; s = strtok(NULL, ":")) {
 		sprintf(prog, tpl, s, type);
-		if (stat(prog, &st) == 0)
+		if (access(prog, X_OK) == 0)
 			break;
 	}
 	free(p);
@@ -592,26 +591,26 @@ static void print_stats(struct fsck_instance *inst)
 
 	if (report_stats_file)
 		fprintf(report_stats_file, "%s %d %ld "
-					   "%ld.%06ld %d.%06d %d.%06d\n",
+					   "%ld.%06ld %ld.%06ld %ld.%06ld\n",
 			fs_get_device(inst->fs),
 			inst->exit_status,
 			inst->rusage.ru_maxrss,
-			delta.tv_sec, delta.tv_usec,
-			(int)inst->rusage.ru_utime.tv_sec,
-			(int)inst->rusage.ru_utime.tv_usec,
-			(int)inst->rusage.ru_stime.tv_sec,
-			(int)inst->rusage.ru_stime.tv_usec);
+			(long)delta.tv_sec, (long)delta.tv_usec,
+			(long)inst->rusage.ru_utime.tv_sec,
+			(long)inst->rusage.ru_utime.tv_usec,
+			(long)inst->rusage.ru_stime.tv_sec,
+			(long)inst->rusage.ru_stime.tv_usec);
 	else
 		fprintf(stdout, "%s: status %d, rss %ld, "
-				"real %ld.%06ld, user %d.%06d, sys %d.%06d\n",
+				"real %ld.%06ld, user %ld.%06ld, sys %ld.%06ld\n",
 			fs_get_device(inst->fs),
 			inst->exit_status,
 			inst->rusage.ru_maxrss,
-			delta.tv_sec, delta.tv_usec,
-			(int)inst->rusage.ru_utime.tv_sec,
-			(int)inst->rusage.ru_utime.tv_usec,
-			(int)inst->rusage.ru_stime.tv_sec,
-			(int)inst->rusage.ru_stime.tv_usec);
+			(long)delta.tv_sec, (long)delta.tv_usec,
+			(long)inst->rusage.ru_utime.tv_sec,
+			(long)inst->rusage.ru_utime.tv_usec,
+			(long)inst->rusage.ru_stime.tv_sec,
+			(long)inst->rusage.ru_stime.tv_usec);
 }
 
 /*

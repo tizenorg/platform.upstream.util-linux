@@ -16,7 +16,6 @@
  */
 
 #include <errno.h>
-#include <features.h>
 #include <getopt.h>
 
 #include "c.h"
@@ -200,9 +199,11 @@ static void do_shm (char format, int unit)
 	{
 		struct ipc_limits lim;
 
-		printf (_("------ Shared Memory Limits --------\n"));
-		if (ipc_shm_get_limits(&lim))
+		if (ipc_shm_get_limits(&lim)) {
+			printf (_("unable to fetch shared memory limits\n"));
 			return;
+		}
+		printf (_("------ Shared Memory Limits --------\n"));
 		printf (_("max number of segments = %ju\n"), lim.shmmni);
 		ipc_print_size(unit == IPC_UNIT_DEFAULT ? IPC_UNIT_KB : unit,
 			       _("max seg size"), lim.shmmax, "\n", 0);
@@ -352,9 +353,11 @@ static void do_sem (char format)
 	{
 		struct ipc_limits lim;
 
-		printf (_("------ Semaphore Limits --------\n"));
-		if (ipc_sem_get_limits(&lim))
+		if (ipc_sem_get_limits(&lim)) {
+			printf (_("unable to fetch semaphore limits\n"));
 			return;
+		}
+		printf (_("------ Semaphore Limits --------\n"));
 		printf (_("max number of arrays = %d\n"), lim.semmni);
 		printf (_("max semaphores per array = %d\n"), lim.semmsl);
 		printf (_("max semaphores system wide = %d\n"), lim.semmns);
@@ -452,8 +455,10 @@ static void do_msg (char format, int unit)
 	{
 		struct ipc_limits lim;
 
-		if (ipc_msg_get_limits(&lim))
+		if (ipc_msg_get_limits(&lim)) {
+			printf (_("unable to fetch message limits\n"));
 			return;
+		}
 		printf (_("------ Messages Limits --------\n"));
 		printf (_("max queues system wide = %d\n"), lim.msgmni);
 		ipc_print_size(unit == IPC_UNIT_DEFAULT ? IPC_UNIT_BYTES : unit,
@@ -572,7 +577,7 @@ static void print_shm(int shmid, int unit)
 
 	printf(_("\nShared memory Segment shmid=%d\n"), shmid);
 	printf(_("uid=%u\tgid=%u\tcuid=%u\tcgid=%u\n"),
-	       shmdata->shm_perm.uid, shmdata->shm_perm.uid,
+	       shmdata->shm_perm.uid, shmdata->shm_perm.gid,
 	       shmdata->shm_perm.cuid, shmdata->shm_perm.cgid);
 	printf(_("mode=%#o\taccess_perms=%#o\n"), shmdata->shm_perm.mode,
 	       shmdata->shm_perm.mode & 0777);
@@ -602,7 +607,7 @@ void print_msg(int msgid, int unit)
 
 	printf(_("\nMessage Queue msqid=%d\n"), msgid);
 	printf(_("uid=%u\tgid=%u\tcuid=%u\tcgid=%u\tmode=%#o\n"),
-	       msgdata->msg_perm.uid, msgdata->msg_perm.uid,
+	       msgdata->msg_perm.uid, msgdata->msg_perm.gid,
 	       msgdata->msg_perm.cuid, msgdata->msg_perm.cgid,
 	       msgdata->msg_perm.mode);
 	ipc_print_size(unit, unit == IPC_UNIT_HUMAN ? _("csize=") : _("cbytes="),
@@ -635,7 +640,7 @@ static void print_sem(int semid)
 
 	printf(_("\nSemaphore Array semid=%d\n"), semid);
 	printf(_("uid=%u\t gid=%u\t cuid=%u\t cgid=%u\n"),
-	       semdata->sem_perm.uid, semdata->sem_perm.uid,
+	       semdata->sem_perm.uid, semdata->sem_perm.gid,
 	       semdata->sem_perm.cuid, semdata->sem_perm.cgid);
 	printf(_("mode=%#o, access_perms=%#o\n"),
 	       semdata->sem_perm.mode, semdata->sem_perm.mode & 0777);

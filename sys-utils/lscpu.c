@@ -52,6 +52,10 @@
 # endif
 #endif
 
+#if defined(HAVE_LIBRTAS)
+#include <librtas.h>
+#endif
+
 #include <libsmartcols.h>
 
 #include "cpuset.h"
@@ -69,6 +73,7 @@
 
 /* /sys paths */
 #define _PATH_SYS_SYSTEM	"/sys/devices/system"
+#define _PATH_SYS_HYP_FEATURES "/sys/hypervisor/properties/features"
 #define _PATH_SYS_CPU		_PATH_SYS_SYSTEM "/cpu"
 #define _PATH_SYS_NODE		_PATH_SYS_SYSTEM "/node"
 #define _PATH_PROC_XEN		"/proc/xen"
@@ -81,6 +86,15 @@
 #define _PATH_PROC_BC	"/proc/bc"
 #define _PATH_PROC_DEVICETREE	"/proc/device-tree"
 #define _PATH_DEV_MEM 		"/dev/mem"
+
+/* Xen Domain feature flag used for /sys/hypervisor/properties/features */
+#define XENFEAT_supervisor_mode_kernel		3
+#define XENFEAT_mmu_pt_update_preserve_ad	5
+#define XENFEAT_hvm_callback_vector			8
+
+#define XEN_FEATURES_PV_MASK	(1U << XENFEAT_mmu_pt_update_preserve_ad)
+#define XEN_FEATURES_PVH_MASK	( (1U << XENFEAT_supervisor_mode_kernel) \
+								| (1U << XENFEAT_hvm_callback_vector) )
 
 /* virtualization types */
 enum {
@@ -187,6 +201,8 @@ struct lscpu_desc {
 	char	*family;
 	char	*model;
 	char	*modelname;
+	char	*revision;  /* alternative for model (ppc) */
+	char	*cpu;       /* alternative for modelname (ppc, sparc) */
 	char	*virtflag;	/* virtualization flag (vmx, svm) */
 	char	*hypervisor;	/* hypervisor software */
 	int	hyper;		/* hypervisor vendor ID */
@@ -242,6 +258,9 @@ struct lscpu_desc {
 	int		*polarization;	/* cpu polarization */
 	int		*addresses;	/* physical cpu addresses */
 	int		*configured;	/* cpu configured */
+	int		physsockets;	/* Physical sockets (modules) */
+	int		physchips;	/* Physical chips */
+	int		physcoresperchip;	/* Physical cores per chip */
 };
 
 enum {
@@ -344,7 +363,8 @@ lookup(char *line, char *pattern, char **value)
 	char *p, *v;
 	int len = strlen(pattern);
 
-	if (!*line)
+	/* don't re-fill already found tags, first one wins */
+	if (!*line || *value)
 		return 0;
 
 	/* pattern */
@@ -400,6 +420,45 @@ init_mode(struct lscpu_modifier *mod)
 	return m;
 }
 
+#if defined(HAVE_LIBRTAS)
+#define PROCESSOR_MODULE_INFO	43
+static int strbe16toh(const char *buf, int offset)
+{
+	return (buf[offset] << 8) + buf[offset+1];
+}
+
+static void read_physical_info_powerpc(struct lscpu_desc *desc)
+{
+	char buf[BUFSIZ];
+	int rc, len, ntypes;
+
+	desc->physsockets = desc->physchips = desc->physcoresperchip = 0;
+
+	rc = rtas_get_sysparm(PROCESSOR_MODULE_INFO, sizeof(buf), buf);
+	if (rc < 0)
+		return;
+
+	len = strbe16toh(buf, 0);
+	if (len < 8)
+		return;
+
+	ntypes = strbe16toh(buf, 2);
+
+	assert(ntypes <= 1);
+	if (!ntypes)
+		return;
+
+	desc->physsockets = strbe16toh(buf, 4);
+	desc->physchips = strbe16toh(buf, 6);
+	desc->physcoresperchip = strbe16toh(buf, 8);
+}
+#else
+static void read_physical_info_powerpc(
+		struct lscpu_desc *desc __attribute__((__unused__)))
+{
+}
+#endif
+
 static void
 read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 {
@@ -428,6 +487,8 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		else if (lookup(buf, "type", &desc->flags)) ;		/* sparc64 */
 		else if (lookup(buf, "bogomips", &desc->bogomips)) ;
 		else if (lookup(buf, "bogomips per cpu", &desc->bogomips)) ; /* s390 */
+		else if (lookup(buf, "cpu", &desc->cpu)) ;
+		else if (lookup(buf, "revision", &desc->revision)) ;
 		else
 			continue;
 	}
@@ -506,6 +567,9 @@ read_basicinfo(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		desc->dispatching = path_read_s32(_PATH_SYS_CPU "/dispatching");
 	else
 		desc->dispatching = -1;
+
+	if (mod->system == SYSTEM_LIVE)
+		read_physical_info_powerpc(desc);
 }
 
 static int
@@ -757,10 +821,28 @@ read_hypervisor(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 			desc->hyper = HYPER_VMWARE;
 	}
 
-	if (desc->hyper)
+	if (desc->hyper) {
 		desc->virtype = VIRT_FULL;
 
-	else if (read_hypervisor_powerpc(desc) > 0) {}
+		if (desc->hyper == HYPER_XEN) {
+			uint32_t features;
+
+			fd = path_fopen("r", 0, _PATH_SYS_HYP_FEATURES);
+			if (fd && fscanf(fd, "%x", &features) == 1) {
+				/* Xen PV domain */
+				if (features & XEN_FEATURES_PV_MASK)
+					desc->virtype = VIRT_PARA;
+				/* Xen PVH domain */
+				else if ((features & XEN_FEATURES_PVH_MASK)
+								== XEN_FEATURES_PVH_MASK)
+					desc->virtype = VIRT_PARA;
+				fclose(fd);
+			} else {
+				err(EXIT_FAILURE, _("failed to read from: %s"),
+						_PATH_SYS_HYP_FEATURES);
+			}
+		}
+	} else if (read_hypervisor_powerpc(desc) > 0) {}
 
 	/* Xen para-virt or dom0 */
 	else if (path_exist(_PATH_PROC_XEN)) {
@@ -1224,15 +1306,17 @@ get_cell_data(struct lscpu_desc *desc, int idx, int col,
 			if (cpuset_ary_isset(cpu, ca->sharedmaps,
 					     ca->nsharedmaps, setsize, &i) == 0) {
 				int x = snprintf(p, sz, "%zu", i);
-				if (x <= 0 || (size_t) x + 2 >= sz)
+				if (x < 0 || (size_t) x >= sz)
 					return NULL;
 				p += x;
 				sz -= x;
 			}
 			if (j != 0) {
+				if (sz < 2)
+					return NULL;
 				*p++ = mod->compat ? ',' : ':';
 				*p = '\0';
-				sz++;
+				sz--;
 			}
 		}
 		break;
@@ -1297,14 +1381,16 @@ get_cell_header(struct lscpu_desc *desc, int col,
 
 		for (i = desc->ncaches - 1; i >= 0; i--) {
 			int x = snprintf(p, sz, "%s", desc->caches[i].name);
-			if (x <= 0 || (size_t) x + 2 > sz)
+			if (x < 0 || (size_t) x >= sz)
 				return NULL;
 			sz -= x;
 			p += x;
 			if (i > 0) {
+				if (sz < 2)
+					return NULL;
 				*p++ = mod->compat ? ',' : ':';
 				*p = '\0';
-				sz++;
+				sz--;
 			}
 		}
 		if (desc->ncaches)
@@ -1591,10 +1677,10 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		print_s(_("Vendor ID:"), desc->vendor);
 	if (desc->family)
 		print_s(_("CPU family:"), desc->family);
-	if (desc->model)
-		print_s(_("Model:"), desc->model);
-	if (desc->modelname)
-		print_s(_("Model name:"), desc->modelname);
+	if (desc->model || desc->revision)
+		print_s(_("Model:"), desc->revision ? desc->revision : desc->model);
+	if (desc->modelname || desc->cpu)
+		print_s(_("Model name:"), desc->cpu ? desc->cpu : desc->modelname);
 	if (desc->stepping)
 		print_s(_("Stepping:"), desc->stepping);
 	if (desc->mhz)
@@ -1636,6 +1722,12 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 
 	if (desc->flags)
 		print_s(_("Flags:"), desc->flags);
+
+	if (desc->physsockets) {
+		print_n(_("Physical sockets:"), desc->physsockets);
+		print_n(_("Physical chips:"), desc->physchips);
+		print_n(_("Physical cores/chip:"), desc->physcoresperchip);
+	}
 }
 
 static void __attribute__((__noreturn__)) usage(FILE *out)

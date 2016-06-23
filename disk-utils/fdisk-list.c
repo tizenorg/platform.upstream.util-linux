@@ -141,7 +141,7 @@ void list_disklabel(struct fdisk_context *cxt)
 		if (!co)
 			goto done;
 
-		/* set colum header color */
+		/* set column header color */
 		if (bold)
 			scols_cell_set_color(scols_column_get_header(co), bold);
 	}
@@ -405,9 +405,7 @@ void list_available_columns(FILE *out)
 	if (!cxt)
 		return;
 
-	termwidth = get_terminal_width();
-	if (termwidth <= 0)
-		termwidth = 80;
+	termwidth = get_terminal_width(80);
 
 	fprintf(out, _("\nAvailable columns (for -o):\n"));
 

@@ -1069,7 +1069,7 @@ int mnt_context_get_mtab_for_target(struct libmnt_context *cxt,
 	char *cn_tgt = NULL;
 	int rc;
 
-	if (stat(tgt, &st) == 0 && S_ISDIR(st.st_mode)) {
+	if (mnt_stat_mountpoint(tgt, &st) == 0 && S_ISDIR(st.st_mode)) {
 		cache = mnt_context_get_cache(cxt);
 		cn_tgt = mnt_resolve_path(tgt, cache);
 		if (cn_tgt)
@@ -1540,7 +1540,7 @@ static int mkdir_target(const char *tgt, struct libmnt_fs *fs)
 
 	if (mnt_optstr_get_option(fs->user_optstr, "x-mount.mkdir", &mstr, &mstr_sz) != 0)
 		return 0;
-	if (stat(tgt, &st) == 0)
+	if (mnt_stat_mountpoint(tgt, &st) == 0)
 		return 0;
 
 	if (mstr && mstr_sz) {
@@ -2412,7 +2412,7 @@ static void lock_fallback(void)
 		mnt_unlock_file(lock);
 }
 
-int test_mount(struct libmnt_test *ts, int argc, char *argv[])
+static int test_mount(struct libmnt_test *ts, int argc, char *argv[])
 {
 	int idx = 1, rc = 0;
 	struct libmnt_context *cxt;
@@ -2462,7 +2462,7 @@ int test_mount(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
-int test_umount(struct libmnt_test *ts, int argc, char *argv[])
+static int test_umount(struct libmnt_test *ts, int argc, char *argv[])
 {
 	int idx = 1, rc = 0;
 	struct libmnt_context *cxt;
@@ -2517,7 +2517,7 @@ err:
 	return rc;
 }
 
-int test_flags(struct libmnt_test *ts, int argc, char *argv[])
+static int test_flags(struct libmnt_test *ts, int argc, char *argv[])
 {
 	int idx = 1, rc = 0;
 	struct libmnt_context *cxt;
@@ -2555,7 +2555,7 @@ int test_flags(struct libmnt_test *ts, int argc, char *argv[])
 	return rc;
 }
 
-int test_mountall(struct libmnt_test *ts, int argc, char *argv[])
+static int test_mountall(struct libmnt_test *ts, int argc, char *argv[])
 {
 	struct libmnt_context *cxt;
 	struct libmnt_iter *itr;

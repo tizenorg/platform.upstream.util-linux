@@ -1,7 +1,7 @@
 /*
  * symbols since util-linux 2.25
  *
- * Copyright (C) 2014-2015 Karel Zak <kzak@redhat.com>
+ * Copyright (C) 2014-2016 Karel Zak <kzak@redhat.com>
  */
 SMARTCOLS_2.25 {
 global:
@@ -116,7 +116,23 @@ local:
 
 SMARTCOLS_2.27 {
 global:
+	scols_column_is_hidden;
 	scols_table_enable_json;
 	scols_table_is_json;
 	scols_table_set_name;
 } SMARTCOLS_2.25;
+
+SMARTCOLS_2.28 {
+global:
+	scols_column_is_wrap;
+	scols_line_refer_column_data;
+	scols_line_set_column_data;
+	scols_symbols_set_title_padding;
+	scols_table_enable_nowrap;
+	scols_table_get_title;
+	scols_cell_get_flags;
+	scols_cell_set_flags;
+	scols_table_print_range;
+	scols_table_print_range_to_string;
+	scols_table_enable_nolinesep;
+} SMARTCOLS_2.27;

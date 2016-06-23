@@ -85,77 +85,41 @@ static const char *Senter = "", *Sexit = "";	/* enter and exit standout mode */
 #  include <ncurses/ncurses.h>
 # endif
 # include <term.h>
+#endif
 
 static int setup_terminal(char *term)
 {
+#if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW)
 	int ret;
 
 	if (setupterm(term, STDOUT_FILENO, &ret) != OK || ret != 1)
 		return -1;
+#endif
 	return 0;
 }
 
 static void my_putstring(char *s)
 {
+#if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW)
 	if (has_term)
 		putp(s);
 	else
+#endif
 		fputs(s, stdout);
 }
 
-static const char *my_tgetstr(char *s __attribute__((__unused__)), char *ss)
+static const char *my_tgetstr(char *ss)
 {
 	const char *ret = NULL;
 
+#if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW)
 	if (has_term)
 		ret = tigetstr(ss);
+#endif
 	if (!ret || ret == (char *)-1)
 		return "";
 	return ret;
 }
-
-#elif defined(HAVE_LIBTERMCAP)
-# include <termcap.h>
-
-static char termbuffer[4096];
-static char tcbuffer[4096];
-static char *strbuf = termbuffer;
-
-static int setup_terminal(char *term)
-{
-	if (tgetent(tcbuffer, term) < 0)
-		return -1;
-	return 0;
-}
-
-static void my_putstring(char *s)
-{
-	if (has_term)
-		tputs(s, 1, putchar);
-	else
-		fputs(s, stdout);
-}
-
-static const char *my_tgetstr(char *s, char *ss __attribute__((__unused__)))
-{
-	const char *ret = NULL;
-
-	if (has_term)
-		ret = tgetstr(s, &strbuf);
-	if (!ret)
-		return "";
-	return ret;
-}
-
-#else	/* ! (HAVE_LIBTERMCAP || HAVE_LIBNCURSES || HAVE_LIBNCURSESW) */
-
-static void my_putstring(char *s)
-{
-	fputs(s, stdout);
-}
-
-#endif	/* end of LIBTERMCAP / NCURSES */
-
 
 #include "widechar.h"
 
@@ -232,6 +196,7 @@ struct cal_control {
 	const char *full_month[MONTHS_IN_YEAR];	/* month names */
 	int colormode;			/* day and week number highlight */
 	int num_months;			/* number of requested mounths */
+	int span_months;		/* span the date */
 	int months_in_row;		/* number of months horizontally in print out */
 	int weekstart;			/* day the week starts, often Sun or Mon */
 	int weektype;			/* WEEK_TYPE_{NONE,ISO,US} */
@@ -276,6 +241,7 @@ int main(int argc, char **argv)
 	static struct cal_control ctl = {
 		.weekstart = SUNDAY,
 		.num_months = 1,		/* default is "cal -1" */
+		.span_months = 0,
 		.colormode = UL_COLORMODE_UNDEF,
 		.weektype = WEEK_NUM_DISABLED,
 		.day_width = DAY_LEN,
@@ -295,6 +261,7 @@ int main(int argc, char **argv)
 		{"monday", no_argument, NULL, 'm'},
 		{"julian", no_argument, NULL, 'j'},
 		{"months", required_argument, NULL, 'n'},
+		{"span", no_argument, NULL, 'S'},
 		{"year", no_argument, NULL, 'y'},
 		{"week", optional_argument, NULL, 'w'},
 		{"color", optional_argument, NULL, OPT_COLOR},
@@ -315,15 +282,14 @@ int main(int argc, char **argv)
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-#if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW) || defined(HAVE_LIBTERMCAP)
+#if defined(HAVE_LIBNCURSES) || defined(HAVE_LIBNCURSESW)
 	{
 		char *term = getenv("TERM");
-
 		if (term) {
 			has_term = setup_terminal(term) == 0;
 			if (has_term) {
-				Senter = my_tgetstr("so","smso");
-				Sexit = my_tgetstr("se","rmso");
+				Senter = my_tgetstr("smso");
+				Sexit = my_tgetstr("rmso");
 			}
 		}
 	}
@@ -363,7 +329,7 @@ int main(int argc, char **argv)
 		ctl.weekstart = (wfd + *nl_langinfo(_NL_TIME_FIRST_WEEKDAY) - 1) % DAYS_IN_WEEK;
 	}
 #endif
-	while ((ch = getopt_long(argc, argv, "13mjn:sywYVh", longopts, NULL)) != -1) {
+	while ((ch = getopt_long(argc, argv, "13mjn:sSywYVh", longopts, NULL)) != -1) {
 
 		err_exclusive_options(ch, longopts, excl, excl_st);
 
@@ -373,6 +339,7 @@ int main(int argc, char **argv)
 			break;
 		case '3':
 			ctl.num_months = 3;
+			ctl.span_months = 1;
 			ctl.months_in_row = 3;
 			break;
 		case 's':
@@ -394,6 +361,9 @@ int main(int argc, char **argv)
 		case 'n':
 			ctl.num_months = strtou32_or_err(optarg,
 						_("invalid month argument"));
+			break;
+		case 'S':
+			ctl.span_months = 1;
 			break;
 		case 'w':
 			if (optarg) {
@@ -544,9 +514,14 @@ static void headers_init(struct cal_control *ctl)
 	size_t i, wd;
 	char *cur_dh = day_headings;
 	char tmp[FMT_ST_CHARS];
-	size_t year_len;
+	int year_len;
 
 	year_len = snprintf(tmp, sizeof(tmp), "%d", ctl->req.year);
+
+	if (year_len < 0 || (size_t)year_len >= sizeof(tmp)) {
+		/* XXX impossible error */
+		return;
+	}
 
 	for (i = 0; i < DAYS_IN_WEEK; i++) {
 		size_t space_left;
@@ -733,16 +708,18 @@ static void cal_output_months(struct cal_month *month, const struct cal_control 
 static void monthly(const struct cal_control *ctl)
 {
 	struct cal_month m1,m2,m3, *m;
-	int i, rows, month = ctl->req.start_month ? ctl->req.start_month : ctl->req.month;
+	int i, rows, new_month, month = ctl->req.start_month ? ctl->req.start_month : ctl->req.month;
 	int32_t year = ctl->req.year;
 
-	/* cal -3 */
-	if (ctl->num_months == 3 && ctl->months_in_row == 3) {
-		if (month == 1){
-			month = MONTHS_IN_YEAR;
+	/* cal -3, cal -Y --span, etc. */
+	if (ctl->span_months) {
+		new_month = month - ctl->num_months / 2;
+		if (new_month < 1) {
+			month = new_month + MONTHS_IN_YEAR;
 			year--;
-		} else
-			month--;
+		}
+		else
+			month = new_month;
 	}
 
 	m1.next = (ctl->months_in_row > 1) ? &m2 : NULL;
@@ -955,6 +932,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 	fputs(_(" -1, --one             show only a single month (default)\n"), out);
 	fputs(_(" -3, --three           show three months spanning the date\n"), out);
 	fputs(_(" -n, --months <num>    show num months starting with date's month\n"), out);
+	fputs(_(" -S, --span            span the date when displaying multiple months\n"), out);
 	fputs(_(" -s, --sunday          Sunday as first day of week\n"), out);
 	fputs(_(" -m, --monday          Monday as first day of week\n"), out);
 	fputs(_(" -j, --julian          output Julian dates\n"), out);

@@ -39,12 +39,12 @@
 #include "canonicalize.h"
 #include "nls.h"
 #include "xalloc.h"
-#include "at.h"
 #include "strutils.h"
 #include "c.h"
 #include "list.h"
 #include "closestream.h"
 #include "optutils.h"
+#include "procutils.h"
 
 /* column IDs */
 enum {
@@ -119,28 +119,6 @@ static void disable_columns_truncate(void)
 }
 
 /*
- * Return a PID's command name
- */
-static char *get_cmdname(pid_t id)
-{
-	FILE *fp;
-	char path[PATH_MAX], *ret = NULL;
-
-	sprintf(path, "/proc/%d/comm", id);
-	if (!(fp = fopen(path, "r")))
-		return NULL;
-
-	if (!fgets(path, sizeof(path), fp))
-		goto out;
-
-	path[strlen(path) - 1] = '\0';
-	ret = xstrdup(path);
-out:
-	fclose(fp);
-	return ret;
-}
-
-/*
  * Associate the device's mountpoint for a filename
  */
 static char *get_fallback_filename(dev_t dev)
@@ -201,12 +179,11 @@ static char *get_filename_sz(ino_t inode, pid_t lock_pid, size_t *size)
 		if (!strtol(dp->d_name, (char **) NULL, 10))
 			continue;
 
-		if (!fstat_at(fd, path, dp->d_name, &sb, 0)
+		if (!fstatat(fd, dp->d_name, &sb, 0)
 		    && inode != sb.st_ino)
 			continue;
 
-		if ((len = readlink_at(fd, path, dp->d_name,
-				       sym, sizeof(sym) - 1)) < 1)
+		if ((len = readlinkat(fd, dp->d_name, sym, sizeof(sym) - 1)) < 1)
 			goto out;
 
 		*size = sb.st_size;
@@ -285,7 +262,7 @@ static int get_local_locks(struct list_head *locks)
 				 * to the list, no need to worry now.
 				 */
 				l->pid = strtos32_or_err(tok, _("failed to parse pid"));
-				l->cmdname = get_cmdname(l->pid);
+				l->cmdname = proc_get_command_name(l->pid);
 				if (!l->cmdname)
 					l->cmdname = xstrdup(_("(unknown)"));
 				break;

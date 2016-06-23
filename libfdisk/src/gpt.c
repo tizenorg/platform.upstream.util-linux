@@ -196,6 +196,7 @@ static struct fdisk_parttype gpt_parttypes[] =
 	DEF_GUID("69DAD710-2CE4-4E3C-B16C-21A1D49ABED3", N_("Linux root (ARM)")),
 	DEF_GUID("4F68BCE3-E8CD-4DB1-96E7-FBCAF984B709", N_("Linux root (x86-64)")),
 	DEF_GUID("B921B045-1DF0-41C3-AF44-4C6F280D3FAE", N_("Linux root (ARM-64)")),
+	DEF_GUID("993D8D3D-F80E-4225-855A-9DAF8ED7EA97", N_("Linux root	(IA-64)")),
 	DEF_GUID("8DA63339-0007-60C0-C436-083AC8230908", N_("Linux reserved")),
 	DEF_GUID("933AC7E1-2EB4-4F13-B844-0E14E2AEF915", N_("Linux home")),
 	DEF_GUID("A19D880F-05FC-4D3B-A006-743F0F84911E", N_("Linux RAID")),
@@ -620,7 +621,8 @@ static int count_first_last_lba(struct fdisk_context *cxt,
 		if (rc < 0)
 			return rc;
 
-		DBG(LABEL, ul_debug("FirstLBA: script=%ju, uefi=%ju, topology=%ju.", *first, flba, cxt->first_lba));
+		DBG(LABEL, ul_debug("FirstLBA: script=%"PRIu64", uefi=%"PRIu64", topology=%ju.",
+		                    *first, flba,  (uintmax_t)cxt->first_lba));
 
 		if (rc == 0 && (*first < flba || *first > llba)) {
 			fdisk_warnx(cxt, _("First LBA specified by script is out of range."));
@@ -631,7 +633,8 @@ static int count_first_last_lba(struct fdisk_context *cxt,
 		if (rc < 0)
 			return rc;
 
-		DBG(LABEL, ul_debug("LastLBA: script=%ju, uefi=%ju, topology=%ju.", *last, llba, cxt->last_lba));
+		DBG(LABEL, ul_debug("LastLBA: script=%"PRIu64", uefi=%"PRIu64", topology=%ju.",
+		                    *last, llba,  (uintmax_t)cxt->last_lba));
 
 		if (rc == 0 && (*last > llba || *last < flba)) {
 			fdisk_warnx(cxt, _("Last LBA specified by script is out of range."));
@@ -798,7 +801,7 @@ static uint64_t last_lba(struct fdisk_context *cxt)
 	else
 		fdisk_warnx(cxt, _("gpt: cannot handle files with mode %o"), s.st_mode);
 
-	DBG(LABEL, ul_debug("GPT last LBA: %ju", sectors));
+	DBG(LABEL, ul_debug("GPT last LBA: %"PRIu64"", sectors));
 	return sectors;
 }
 
@@ -809,7 +812,7 @@ static ssize_t read_lba(struct fdisk_context *cxt, uint64_t lba,
 
 	if (lseek(cxt->dev_fd, offset, SEEK_SET) == (off_t) -1)
 		return -1;
-	return read(cxt->dev_fd, buffer, bytes) != bytes;
+	return (size_t)read(cxt->dev_fd, buffer, bytes) != bytes;
 }
 
 
@@ -845,10 +848,30 @@ fail:
 	return NULL;
 }
 
-static inline uint32_t count_crc32(const unsigned char *buf, size_t len)
+static inline uint32_t count_crc32(const unsigned char *buf, size_t len,
+				   size_t ex_off, size_t ex_len)
 {
-	return (crc32(~0L, buf, len) ^ ~0L);
+	return (crc32_exclude_offset(~0L, buf, len, ex_off, ex_len) ^ ~0L);
 }
+
+static inline uint32_t gpt_header_count_crc32(struct gpt_header *header)
+{
+        return count_crc32((unsigned char *) header,		/* buffer */
+			le32_to_cpu(header->size),		/* size of buffer */
+			offsetof(struct gpt_header, crc32),	/* exclude */
+			sizeof(header->crc32));			/* size of excluded area */
+}
+
+static inline uint32_t gpt_entryarr_count_crc32(struct gpt_header *header, struct gpt_entry *ents)
+{
+	size_t arysz = 0;
+
+	arysz = le32_to_cpu(header->npartition_entries) *
+		le32_to_cpu(header->sizeof_partition_entry);
+
+	return count_crc32((unsigned char *) ents, arysz, 0, 0);
+}
+
 
 /*
  * Recompute header and partition array 32bit CRC checksums.
@@ -857,24 +880,13 @@ static inline uint32_t count_crc32(const unsigned char *buf, size_t len)
  */
 static void gpt_recompute_crc(struct gpt_header *header, struct gpt_entry *ents)
 {
-	uint32_t crc = 0;
-	size_t entry_sz = 0;
-
 	if (!header)
 		return;
 
-	/* header CRC */
-	header->crc32 = 0;
-	crc = count_crc32((unsigned char *) header, le32_to_cpu(header->size));
-	header->crc32 = cpu_to_le32(crc);
+	header->partition_entry_array_crc32 =
+			cpu_to_le32( gpt_entryarr_count_crc32(header, ents) );
 
-	/* partition entry array CRC */
-	header->partition_entry_array_crc32 = 0;
-	entry_sz = le32_to_cpu(header->npartition_entries) *
-		le32_to_cpu(header->sizeof_partition_entry);
-
-	crc = count_crc32((unsigned char *) ents, entry_sz);
-	header->partition_entry_array_crc32 = cpu_to_le32(crc);
+	header->crc32 = cpu_to_le32( gpt_header_count_crc32(header) );
 }
 
 /*
@@ -883,28 +895,20 @@ static void gpt_recompute_crc(struct gpt_header *header, struct gpt_entry *ents)
  */
 static int gpt_check_header_crc(struct gpt_header *header, struct gpt_entry *ents)
 {
-	uint32_t crc, orgcrc = le32_to_cpu(header->crc32);
+	uint32_t orgcrc = le32_to_cpu(header->crc32),
+		 crc = gpt_header_count_crc32(header);
 
-	header->crc32 = 0;
-	crc = count_crc32((unsigned char *) header, le32_to_cpu(header->size));
-	header->crc32 = cpu_to_le32(orgcrc);
-
-	if (crc == le32_to_cpu(header->crc32))
+	if (crc == orgcrc)
 		return 1;
 
 	/*
-	 * If we have checksum mismatch it may be due to stale data,
-	 * like a partition being added or deleted. Recompute the CRC again
-	 * and make sure this is not the case.
+	 * If we have checksum mismatch it may be due to stale data, like a
+	 * partition being added or deleted. Recompute the CRC again and make
+	 * sure this is not the case.
 	 */
 	if (ents) {
 		gpt_recompute_crc(header, ents);
-		orgcrc = le32_to_cpu(header->crc32);
-		header->crc32 = 0;
-		crc = count_crc32((unsigned char *) header, le32_to_cpu(header->size));
-		header->crc32 = cpu_to_le32(orgcrc);
-
-		return crc == le32_to_cpu(header->crc32);
+		return gpt_header_count_crc32(header) == orgcrc;
 	}
 
 	return 0;
@@ -917,23 +921,11 @@ static int gpt_check_header_crc(struct gpt_header *header, struct gpt_entry *ent
 static int gpt_check_entryarr_crc(struct gpt_header *header,
 				  struct gpt_entry *ents)
 {
-	int ret = 0;
-	ssize_t entry_sz;
-	uint32_t crc;
-
 	if (!header || !ents)
-		goto done;
+		return 0;
 
-	entry_sz = le32_to_cpu(header->npartition_entries) *
-		   le32_to_cpu(header->sizeof_partition_entry);
-
-	if (!entry_sz)
-		goto done;
-
-	crc = count_crc32((unsigned char *) ents, entry_sz);
-	ret = (crc == le32_to_cpu(header->partition_entry_array_crc32));
-done:
-	return ret;
+	return gpt_entryarr_count_crc32(header, ents) ==
+			le32_to_cpu(header->partition_entry_array_crc32);
 }
 
 static int gpt_check_lba_sanity(struct fdisk_context *cxt, struct gpt_header *header)
@@ -1034,13 +1026,13 @@ static struct gpt_header *gpt_read_header(struct fdisk_context *cxt,
 	else
 		free(ents);
 
-	DBG(LABEL, ul_debug("found valid GPT Header on LBA %ju", lba));
+	DBG(LABEL, ul_debug("found valid GPT Header on LBA %"PRIu64"", lba));
 	return header;
 invalid:
 	free(header);
 	free(ents);
 
-	DBG(LABEL, ul_debug("read GPT Header on LBA %ju failed", lba));
+	DBG(LABEL, ul_debug("read GPT Header on LBA %"PRIu64" failed", lba));
 	return NULL;
 }
 
@@ -1753,14 +1745,14 @@ static int gpt_set_partition(struct fdisk_context *cxt, size_t n,
 
 	if (!FDISK_IS_UNDEF(start)) {
 		if (start < le64_to_cpu(gpt->pheader->first_usable_lba)) {
-			fdisk_warnx(cxt, _("The begin of the partition overflows FirstUsableLBA."));
+			fdisk_warnx(cxt, _("The start of the partition understeps FirstUsableLBA."));
 			return -EINVAL;
 		}
 		e->lba_start = cpu_to_le64(start);
 	}
 	if (!FDISK_IS_UNDEF(end)) {
 		if (end > le64_to_cpu(gpt->pheader->last_usable_lba)) {
-			fdisk_warnx(cxt, _("The end of the partition overflows LastUsableLBA."));
+			fdisk_warnx(cxt, _("The end of the partition oversteps LastUsableLBA."));
 			return -EINVAL;
 		}
 		e->lba_end = cpu_to_le64(end);
@@ -2151,14 +2143,14 @@ static int gpt_add_partition(
 
 		do {
 			uint64_t x;
-			DBG(LABEL, ul_debug("testing first sector %ju", disk_f));
+			DBG(LABEL, ul_debug("testing first sector %"PRIu64"", disk_f));
 			disk_f = find_first_available(pheader, ents, disk_f);
 			if (!disk_f)
 				break;
 			x = find_last_free(pheader, ents, disk_f);
 			if (x - disk_f >= cxt->grain / cxt->sector_size)
 				break;
-			DBG(LABEL, ul_debug("first sector %ju addresses to small space, continue...", disk_f));
+			DBG(LABEL, ul_debug("first sector %"PRIu64" addresses to small space, continue...", disk_f));
 			disk_f = x + 1;
 		} while(1);
 
@@ -2180,9 +2172,9 @@ static int gpt_add_partition(
 		user_f = dflt_f;
 
 	} else if (pa && fdisk_partition_has_start(pa)) {
-		DBG(LABEL, ul_debug("first sector defined: %ju", pa->start));
+		DBG(LABEL, ul_debug("first sector defined: %ju",  (uintmax_t)pa->start));
 		if (pa->start != find_first_available(pheader, ents, pa->start)) {
-			fdisk_warnx(cxt, _("Sector %ju already used."), pa->start);
+			fdisk_warnx(cxt, _("Sector %ju already used."),  (uintmax_t)pa->start);
 			return -ERANGE;
 		}
 		user_f = pa->start;
@@ -2223,8 +2215,8 @@ static int gpt_add_partition(
 
 	} else if (pa && fdisk_partition_has_size(pa)) {
 		user_l = user_f + pa->size - 1;
-		DBG(LABEL, ul_debug("size defined: %ju, end: %ju (last possible: %ju)",
-					pa->size, user_l, dflt_l));
+		DBG(LABEL, ul_debug("size defined: %ju, end: %"PRIu64" (last possible: %"PRIu64")",
+					 (uintmax_t)pa->size, user_l, dflt_l));
 		if (user_l != dflt_l && !pa->size_explicit
 		    && user_l - user_f > (cxt->grain / fdisk_get_sector_size(cxt))) {
 			user_l = fdisk_align_lba_in_range(cxt, user_l, user_f, dflt_l);
@@ -2273,7 +2265,7 @@ static int gpt_add_partition(
 		goto done;
 	}
 
-	/* Be paranoid and check agains on-disk setting rather than against libfdisk cxt */
+	/* Be paranoid and check against on-disk setting rather than against libfdisk cxt */
 	if (user_l > le64_to_cpu(pheader->last_usable_lba)) {
 		fdisk_warnx(cxt, _("The last usable GPT sector is %ju, but %ju is requested."),
 				le64_to_cpu(pheader->last_usable_lba), user_l);
@@ -2318,7 +2310,7 @@ static int gpt_add_partition(
 	if (pa && pa->attrs)
 		gpt_entry_attrs_from_string(cxt, e, pa->attrs);
 
-	DBG(LABEL, ul_debug("GPT new partition: partno=%zu, start=%ju, end=%ju, size=%ju",
+	DBG(LABEL, ul_debug("GPT new partition: partno=%zu, start=%"PRIu64", end=%"PRIu64", size=%"PRIu64"",
 				partnum,
 				gpt_partition_start(e),
 				gpt_partition_end(e),
@@ -2574,7 +2566,8 @@ static int gpt_toggle_partition_flag(
 		unsigned long flag)
 {
 	struct fdisk_gpt_label *gpt;
-	uint64_t attrs, tmp;
+	uint64_t attrs;
+	uintmax_t tmp;
 	char *bits;
 	const char *name = NULL;
 	int bit = -1, rc;
@@ -2817,7 +2810,7 @@ struct fdisk_label *fdisk_new_gpt_label(struct fdisk_context *cxt)
 }
 
 #ifdef TEST_PROGRAM
-int test_getattr(struct fdisk_test *ts, int argc, char *argv[])
+static int test_getattr(struct fdisk_test *ts, int argc, char *argv[])
 {
 	const char *disk = argv[1];
 	size_t part = strtoul(argv[2], NULL, 0) - 1;
@@ -2839,7 +2832,7 @@ int test_getattr(struct fdisk_test *ts, int argc, char *argv[])
 	return 0;
 }
 
-int test_setattr(struct fdisk_test *ts, int argc, char *argv[])
+static int test_setattr(struct fdisk_test *ts, int argc, char *argv[])
 {
 	const char *disk = argv[1];
 	size_t part = strtoul(argv[2], NULL, 0) - 1;

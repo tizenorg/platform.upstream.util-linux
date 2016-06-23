@@ -85,7 +85,7 @@ int program;
 char orig_file[FILENAMELEN];	/* original file /etc/passwd or /etc/group */
 char *tmp_file;			/* tmp file */
 
-void pw_error __P((char *, int, int));
+void pw_error (char *, int, int);
 
 static void copyfile(int from, int to)
 {
@@ -181,6 +181,7 @@ static void pw_write(void)
 	}
 	unlink(tmp_file);
 	free(tmp_file);
+	tmp_file = NULL;
 }
 
 static void pw_edit(void)
@@ -233,7 +234,9 @@ pw_error(char *name, int err, int eval)
 			warn(NULL);
 	}
 	warnx(_("%s unchanged"), orig_file);
-	unlink(tmp_file);
+
+	if (tmp_file)
+		unlink(tmp_file);
 	ulckpwdf();
 	exit(eval);
 }
@@ -269,7 +272,7 @@ static void edit_file(int is_shadow)
 		if (close_stream(tmp_fd) != 0)
 			err(EXIT_FAILURE, _("write error"));
 		tmp_fd = fopen(tmp_file, "r");
-		if (!tmp_file)
+		if (!tmp_fd)
 			err(EXIT_FAILURE, _("cannot open %s"), tmp_file);
 		if (fstat(fileno(tmp_fd), &end))
 			pw_error(tmp_file, 1, 1);
@@ -343,9 +346,10 @@ int main(int argc, char *argv[])
 	if (access(orig_file, F_OK) == 0) {
 		char response[80];
 
-		printf((program == VIGR)
+		fputs((program == VIGR)
 		       ? _("You are using shadow groups on this system.\n")
-		       : _("You are using shadow passwords on this system.\n"));
+		       : _("You are using shadow passwords on this system.\n"), stdout);
+
 		/* TRANSLATORS: this program uses for y and n rpmatch(3),
 		 * which means they can be translated. */
 		printf(_("Would you like to edit %s now [y/n]? "), orig_file);

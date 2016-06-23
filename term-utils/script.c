@@ -249,7 +249,8 @@ static void write_output(struct script_control *ctl, char *obuf,
 
 		gettime_monotonic(&now);
 		timersub(&now, &ctl->oldtime, &delta);
-		fprintf(ctl->timingfp, "%ld.%06ld %zd\n", delta.tv_sec, delta.tv_usec, bytes);
+		fprintf(ctl->timingfp, "%ld.%06ld %zd\n",
+		        (long)delta.tv_sec, (long)delta.tv_usec, bytes);
 		if (ctl->flush)
 			fflush(ctl->timingfp);
 		ctl->oldtime = now;
@@ -287,9 +288,9 @@ static void wait_for_empty_fd(int fd)
 }
 
 /*
- * The script(1) is usually faster than shell, so it's good idea to wait until
- * the previous message is has been already read by shell from slave before we
- * wrate to master. This is necessary expecially for EOF situation when we can
+ * The script(1) is usually faster than shell, so it's a good idea to wait until
+ * the previous message has been already read by shell from slave before we
+ * write to master. This is necessary especially for EOF situation when we can
  * send EOF to master before shell is fully initialized, to workaround this
  * problem we wait until slave is empty. For example:
  *
@@ -609,7 +610,6 @@ static void getmaster(struct script_control *ctl)
 	}
 #else
 	char *pty, *bank, *cp;
-	struct stat stb;
 
 	ctl->isterm = isatty(STDIN_FILENO);
 
@@ -617,7 +617,7 @@ static void getmaster(struct script_control *ctl)
 	for (bank = "pqrs"; *bank; bank++) {
 		ctl->line[strlen("/dev/pty")] = *bank;
 		*pty = '0';
-		if (stat(ctl->line, &stb) < 0)
+		if (access(ctl->line, F_OK) != 0)
 			break;
 		for (cp = "0123456789abcdef"; *cp; cp++) {
 			*pty = *cp;

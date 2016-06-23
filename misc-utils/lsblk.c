@@ -56,7 +56,6 @@
 #include "nls.h"
 #include "xalloc.h"
 #include "strutils.h"
-#include "at.h"
 #include "sysfs.h"
 #include "closestream.h"
 #include "mangle.h"
@@ -205,7 +204,7 @@ static struct colinfo infos[] = {
 
 struct lsblk {
 	struct libscols_table *table;	/* output table */
-	struct libscols_column *sort_col;/* sort output by this colum */
+	struct libscols_column *sort_col;/* sort output by this column */
 	int sort_id;
 
 	unsigned int all_devices:1;	/* print all devices, including empty */
@@ -214,6 +213,7 @@ struct lsblk {
 	unsigned int nodeps:1;		/* don't print slaves/holders */
 	unsigned int scsi:1;		/* print only device with HCTL (SCSI) */
 	unsigned int paths:1;		/* print devnames with "/dev" prefix */
+	unsigned int sort_hidden:1;	/* sort column not between output columns */
 };
 
 struct lsblk *lsblk;	/* global handler */
@@ -430,8 +430,7 @@ static int table_parser_errcb(struct libmnt_table *tb __attribute__((__unused__)
 			const char *filename, int line)
 {
 	if (filename)
-		warnx(_("%s: parse error: ignore entry at line %d."),
-							filename, line);
+		warnx(_("%s: parse error at line %d -- ignored"), filename, line);
 	return 1;
 }
 
@@ -910,7 +909,7 @@ static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libsc
 		char md[11];
 
 		if (!st_rc) {
-			strmode(cxt->st.st_mode, md);
+			xstrmode(cxt->st.st_mode, md);
 			str = xstrdup(md);
 		}
 		break;
@@ -1011,7 +1010,7 @@ static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libsc
 		if (!cxt->size)
 			break;
 		if (lsblk->bytes)
-			xasprintf(&str, "%jd", cxt->size);
+			xasprintf(&str, "%ju", cxt->size);
 		else
 			str = size_to_human_string(SIZE_SUFFIX_1LETTER, cxt->size);
 		if (sort)
@@ -1171,7 +1170,7 @@ static int set_cxt(struct blkdev_cxt *cxt,
 
 	cxt->filename = get_device_path(cxt);
 	if (!cxt->filename) {
-		warnx(_("%s: failed to get device path"), cxt->name);
+		DBG(CXT, ul_debugobj(cxt, "%s: failed to get device path", cxt->name));
 		return -1;
 	}
 	DBG(CXT, ul_debugobj(cxt, "%s: filename=%s", cxt->name, cxt->filename));
@@ -1179,20 +1178,20 @@ static int set_cxt(struct blkdev_cxt *cxt,
 	devno = sysfs_devname_to_devno(cxt->name, wholedisk ? wholedisk->name : NULL);
 
 	if (!devno) {
-		warnx(_("%s: unknown device name"), cxt->name);
+		DBG(CXT, ul_debugobj(cxt, "%s: unknown device name", cxt->name));
 		return -1;
 	}
 
 	if (lsblk->inverse) {
 		if (sysfs_init(&cxt->sysfs, devno, wholedisk ? &wholedisk->sysfs : NULL)) {
-			warnx(_("%s: failed to initialize sysfs handler"), cxt->name);
+			DBG(CXT, ul_debugobj(cxt, "%s: failed to initialize sysfs handler", cxt->name));
 			return -1;
 		}
 		if (parent)
 			parent->sysfs.parent = &cxt->sysfs;
 	} else {
 		if (sysfs_init(&cxt->sysfs, devno, parent ? &parent->sysfs : NULL)) {
-			warnx(_("%s: failed to initialize sysfs handler"), cxt->name);
+			DBG(CXT, ul_debugobj(cxt, "%s: failed to initialize sysfs handler", cxt->name));
 			return -1;
 		}
 	}
@@ -1216,7 +1215,7 @@ static int set_cxt(struct blkdev_cxt *cxt,
 	if (is_dm(cxt->name)) {
 		cxt->dm_name = sysfs_strdup(&cxt->sysfs, "dm/name");
 		if (!cxt->dm_name) {
-			warnx(_("%s: failed to get dm name"), cxt->name);
+			DBG(CXT, ul_debugobj(cxt, "%s: failed to get dm name", cxt->name));
 			return -1;
 		}
 	}
@@ -1319,15 +1318,14 @@ static int list_partitions(struct blkdev_cxt *wholedisk_cxt, struct blkdev_cxt *
 	return r;
 }
 
-static int get_wholedisk_from_partition_dirent(DIR *dir, const char *dirname,
+static int get_wholedisk_from_partition_dirent(DIR *dir,
 				struct dirent *d, struct blkdev_cxt *cxt)
 {
 	char path[PATH_MAX];
 	char *p;
 	int len;
 
-	if ((len = readlink_at(dirfd(dir), dirname,
-			       d->d_name, path, sizeof(path) - 1)) < 0)
+	if ((len = readlinkat(dirfd(dir), d->d_name, path, sizeof(path) - 1)) < 0)
 		return 0;
 
 	path[len] = '\0';
@@ -1354,7 +1352,6 @@ static int list_deps(struct blkdev_cxt *cxt)
 	DIR *dir;
 	struct dirent *d;
 	struct blkdev_cxt dep = { 0 };
-	char dirname[PATH_MAX];
 	const char *depname;
 
 	assert(cxt);
@@ -1374,12 +1371,10 @@ static int list_deps(struct blkdev_cxt *cxt)
 
 	DBG(CXT, ul_debugobj(cxt, "%s: checking for '%s' dependence", cxt->name, depname));
 
-	snprintf(dirname, sizeof(dirname), "%s/%s", cxt->sysfs.dir_path, depname);
-
 	while ((d = xreaddir(dir))) {
 		/* Is the dependency a partition? */
 		if (sysfs_is_partition_dirent(dir, d, NULL)) {
-			if (!get_wholedisk_from_partition_dirent(dir, dirname, d, &dep)) {
+			if (!get_wholedisk_from_partition_dirent(dir, d, &dep)) {
 				DBG(CXT, ul_debugobj(cxt, "%s: %s: dependence is partition",
 								cxt->name, d->d_name));
 				process_blkdev(&dep, cxt, 1, d->d_name);
@@ -1849,8 +1844,11 @@ int main(int argc, char *argv[])
 	if (nexcludes == 0 && nincludes == 0)
 		excludes[nexcludes++] = 1;	/* default: ignore RAM disks */
 
-	if (lsblk->sort_id >= 0 && column_id_to_number(lsblk->sort_id) < 0)
-		errx(EXIT_FAILURE, _("the sort column has to be among the output columns"));
+	if (lsblk->sort_id >= 0 && column_id_to_number(lsblk->sort_id) < 0) {
+		/* the sort column is not between output columns -- add as hidden */
+		add_column(columns, ncolumns++, lsblk->sort_id);
+		lsblk->sort_hidden = 1;
+	}
 
 	mnt_init_debug(0);
 	scols_init_debug(0);
@@ -1876,6 +1874,8 @@ int main(int argc, char *argv[])
 
 		if (!(scols_flags & LSBLK_TREE) && id == COL_NAME)
 			fl &= ~SCOLS_FL_TREE;
+		if (lsblk->sort_hidden && lsblk->sort_id == id)
+			fl |= SCOLS_FL_HIDDEN;
 
 		cl = scols_table_new_column(lsblk->table, ci->name, ci->whint, fl);
 		if (!cl) {

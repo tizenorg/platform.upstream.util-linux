@@ -9,7 +9,7 @@
     <title>libsmartcols Reference Manual</title>
     <releaseinfo>for libsmartcols version &version;</releaseinfo>
     <copyright>
-      <year>2014-2015</year>
+      <year>2014-2016</year>
       <holder>Karel Zak &lt;kzak@redhat.com&gt;</holder>
     </copyright>
   </bookinfo>
@@ -48,5 +48,13 @@ available from ftp://ftp.kernel.org/pub/linux/utils/util-linux/.
   <index id="api-index">
     <title>API Index</title>
     <xi:include href="xml/api-index-full.xml"><xi:fallback /></xi:include>
+  </index>
+  <index role="2.27">
+    <title>Index of new symbols in 2.27</title>
+    <xi:include href="xml/api-index-2.27.xml"><xi:fallback /></xi:include>
+  </index>
+  <index role="2.28">
+    <title>Index of new symbols in 2.28</title>
+    <xi:include href="xml/api-index-2.28.xml"><xi:fallback /></xi:include>
   </index>
 </book>

@@ -19,7 +19,7 @@ struct menu_entry {
 						   but don't print it in help */
 
 	enum fdisk_labeltype	label;		/* only for this label */
-	enum fdisk_labeltype	exclude;	/* all labels except this */
+	int                     exclude;    /* all labels except these */
 	enum fdisk_labeltype	parent;		/* for nested PT */
 };
 
@@ -28,7 +28,7 @@ struct menu_entry {
 
 struct menu {
 	enum fdisk_labeltype	label;		/* only for this label */
-	enum fdisk_labeltype	exclude;	/* all labels except this */
+	int                     exclude;    /* all labels except these */
 
 	unsigned int		nonested : 1;	/* don't make this menu active in nested PT */
 
@@ -577,6 +577,10 @@ static int generic_menu_cb(struct fdisk_context **cxt0,
 			break;
 		case 'f':
 			rc = fdisk_reorder_partitions(cxt);
+			if (rc)
+				fdisk_warnx(cxt, _("Failed to fix partitions order."));
+			else
+				fdisk_info(cxt, _("Partitions order fixed."));
 			break;
 		case 'r':
 			rc = fdisk_enable_details(cxt, 0);
@@ -793,7 +797,6 @@ static int dos_menu_cb(struct fdisk_context **cxt0,
 
 			fdisk_info(cxt, _("Leaving nested disklabel."));
 			fdisk_unref_context(cxt);
-			cxt = *cxt0;
 		}
 		break;
 	}

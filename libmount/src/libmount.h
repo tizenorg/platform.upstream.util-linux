@@ -29,10 +29,10 @@ extern "C" {
 #include <mntent.h>
 #include <sys/types.h>
 
-#define LIBMOUNT_VERSION   "2.27.0"
+#define LIBMOUNT_VERSION   "2.28."
 #define LIBMOUNT_MAJOR_VERSION   2
-#define LIBMOUNT_MINOR_VERSION   27
-#define LIBMOUNT_PATCH_VERSION   0
+#define LIBMOUNT_MINOR_VERSION   28
+#define LIBMOUNT_PATCH_VERSION   
 
 /**
  * libmnt_cache:
@@ -391,6 +391,7 @@ extern const char *mnt_fs_get_swaptype(struct libmnt_fs *fs);
 extern off_t mnt_fs_get_size(struct libmnt_fs *fs);
 extern off_t mnt_fs_get_usedsize(struct libmnt_fs *fs);
 extern int mnt_fs_get_priority(struct libmnt_fs *fs);
+extern int mnt_fs_set_priority(struct libmnt_fs *fs, int prio);
 
 extern const char *mnt_fs_get_comment(struct libmnt_fs *fs);
 extern int mnt_fs_set_comment(struct libmnt_fs *fs, const char *comm);
@@ -483,6 +484,8 @@ extern struct libmnt_fs *mnt_table_find_srcpath(struct libmnt_table *tb,
 				const char *path, int direction);
 extern struct libmnt_fs *mnt_table_find_tag(struct libmnt_table *tb, const char *tag,
 				const char *val, int direction);
+extern struct libmnt_fs *mnt_table_find_target_with_option(struct libmnt_table *tb, const char *path,
+			const char *option, const char *val, int direction);
 extern struct libmnt_fs *mnt_table_find_source(struct libmnt_table *tb,
 				const char *source, int direction);
 extern struct libmnt_fs *mnt_table_find_pair(struct libmnt_table *tb,

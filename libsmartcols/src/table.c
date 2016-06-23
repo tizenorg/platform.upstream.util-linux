@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2010-2014 Karel Zak <kzak@redhat.com>
  * Copyright (C) 2014 Ondrej Oprala <ooprala@redhat.com>
+ * Copytight (C) 2016 Igor Gnatenko <i.gnatenko.brain@gmail.com>
  *
  * This file may be redistributed under the terms of the
  * GNU Lesser General Public License.
@@ -87,6 +88,7 @@ void scols_unref_table(struct libscols_table *tb)
 		scols_table_remove_lines(tb);
 		scols_table_remove_columns(tb);
 		scols_unref_symbols(tb->symbols);
+		scols_reset_cell(&tb->title);
 		free(tb->linesep);
 		free(tb->colsep);
 		free(tb->name);
@@ -103,6 +105,8 @@ void scols_unref_table(struct libscols_table *tb)
  * The table name is used for example for JSON top level object name.
  *
  * Returns: 0, a negative number in case of an error.
+ *
+ * Since: 2.27
  */
 int scols_table_set_name(struct libscols_table *tb, const char *name)
 {
@@ -122,17 +126,31 @@ int scols_table_set_name(struct libscols_table *tb, const char *name)
 }
 
 /**
+ * scols_table_get_title:
+ * @tb: a pointer to a struct libscols_table instance
+ *
+ * Returns: Title of the table, or %NULL in case of blank title.
+ *
+ * Since: 2.28
+ */
+struct libscols_cell *scols_table_get_title(struct libscols_table *tb)
+{
+	return &tb->title;
+}
+
+/**
  * scols_table_add_column:
  * @tb: a pointer to a struct libscols_table instance
  * @cl: a pointer to a struct libscols_column instance
  *
- * Adds @cl to @tb's column list.
+ * Adds @cl to @tb's column list. The column cannot be shared between more
+ * tables.
  *
  * Returns: 0, a negative number in case of an error.
  */
 int scols_table_add_column(struct libscols_table *tb, struct libscols_column *cl)
 {
-	if (!tb || !cl || !list_empty(&tb->tb_lines))
+	if (!tb || !cl || !list_empty(&tb->tb_lines) || cl->table)
 		return -EINVAL;
 
 	if (cl->flags & SCOLS_FL_TREE)
@@ -141,6 +159,7 @@ int scols_table_add_column(struct libscols_table *tb, struct libscols_column *cl
 	DBG(TAB, ul_debugobj(tb, "add column %p", cl));
 	list_add_tail(&cl->cl_columns, &tb->tb_columns);
 	cl->seqnum = tb->ncols++;
+	cl->table = tb;
 	scols_ref_column(cl);
 
 	/* TODO:
@@ -173,6 +192,7 @@ int scols_table_remove_column(struct libscols_table *tb,
 	DBG(TAB, ul_debugobj(tb, "remove column %p", cl));
 	list_del_init(&cl->cl_columns);
 	tb->ncols--;
+	cl->table = NULL;
 	scols_unref_column(cl);
 	return 0;
 }
@@ -213,17 +233,19 @@ int scols_table_remove_columns(struct libscols_table *tb)
  *   scols_column_set_....(cl, ...);
  *   scols_table_add_column(tb, cl);
  *
- * The column width is possible to define by three ways:
+ * The column width is possible to define by:
  *
  *  @whint = 0..1    : relative width, percent of terminal width
  *
- *  @whint = 1..N    : absolute width, empty colum will be truncated to
- *                     the column header width
+ *  @whint = 1..N    : absolute width, empty column will be truncated to
+ *                     the column header width if no specified STRICTWIDTH flag
  *
- *  @whint = 1..N
+ * Note that if table has disabled "maxout" flag (disabled by default) than
+ * relative width is used as a hint only. It's possible that column will be
+ * narrow if the specified size is too large for column data.
  *
- * The column is necessary to address by
- * sequential number. The first defined column has the colnum = 0. For example:
+ * The column is necessary to address by sequential number. The first defined
+ * column has the colnum = 0. For example:
  *
  *	scols_table_new_column(tab, "FOO", 0.5, 0);		// colnum = 0
  *	scols_table_new_column(tab, "BAR", 0.5, 0);		// colnum = 1
@@ -310,7 +332,7 @@ int scols_table_next_column(struct libscols_table *tb,
  */
 int scols_table_get_ncols(struct libscols_table *tb)
 {
-	return tb ? tb->ncols : -EINVAL;
+	return tb ? (int)tb->ncols : -EINVAL;
 }
 
 /**
@@ -321,7 +343,7 @@ int scols_table_get_ncols(struct libscols_table *tb)
  */
 int scols_table_get_nlines(struct libscols_table *tb)
 {
-	return tb ? tb->nlines : -EINVAL;
+	return tb ? (int)tb->nlines : -EINVAL;
 }
 
 /**
@@ -362,7 +384,11 @@ FILE *scols_table_get_stream(struct libscols_table *tb)
  * @tb: table
  * @reduce: width
  *
- * Reduce the output width to @reduce.
+ * If necessary then libsmartcols use all terminal width, the @reduce setting
+ * provides extra space (for example for borders in ncurses applications).
+ *
+ * The @reduce must be smaller than terminal width, otherwise it's sillently
+ * ignored. The reduction is not applied when STDOUT_FILENO is not terminal.
  *
  * Returns: 0, a negative value in case of an error.
  */
@@ -548,13 +574,7 @@ err:
  * @tb: table
  * @n: column number (0..N)
  *
- * This is a shortcut for
- *
- *   ln = scols_new_line();
- *   scols_line_set_....(cl, ...);
- *   scols_table_add_line(tb, ln);
- *
- * Returns: a newly allocate line
+ * Returns: a line or NULL
  */
 struct libscols_line *scols_table_get_line(struct libscols_table *tb,
 					   size_t n)
@@ -683,8 +703,30 @@ int scols_table_set_symbols(struct libscols_table *tb,
 			scols_symbols_set_vertical(tb->symbols, "| ");
 			scols_symbols_set_right(tb->symbols, "`-");
 		}
+		scols_symbols_set_title_padding(tb->symbols, " ");
 	}
 
+	return 0;
+}
+
+/**
+ * scols_table_enable_nolinesep
+ * @tb: table
+ * @enable: 1 or 0
+ *
+ * Enable/disable line separator printing. This is usefull if you want to
+ * re-printing the same line more than once (e.g. progress bar). Don't use it
+ * if you're not sure.
+ *
+ * Returns: 0 on success, negative number in case of an error.
+ */
+int scols_table_enable_nolinesep(struct libscols_table *tb, int enable)
+{
+	if (!tb)
+		return -EINVAL;
+
+	DBG(TAB, ul_debugobj(tb, "nolinesep: %s", enable ? "ENABLE" : "DISABLE"));
+	tb->no_linesep = enable;
 	return 0;
 }
 
@@ -739,6 +781,8 @@ int scols_table_enable_raw(struct libscols_table *tb, int enable)
  * (export, raw, JSON, ...) are mutually exclusive.
  *
  * Returns: 0 on success, negative number in case of an error.
+ *
+ * Since: 2.27
  */
 int scols_table_enable_json(struct libscols_table *tb, int enable)
 {
@@ -839,6 +883,26 @@ int scols_table_enable_maxout(struct libscols_table *tb, int enable)
 }
 
 /**
+ * scols_table_enable_nowrap:
+ * @tb: table
+ * @enable: 1 or 0
+ *
+ * Never continue on next line, remove last column(s) when too large, truncate last column.
+ *
+ * Returns: 0 on success, negative number in case of an error.
+ *
+ * Since: 2.28
+ */
+int scols_table_enable_nowrap(struct libscols_table *tb, int enable)
+{
+	if (!tb)
+		return -EINVAL;
+	DBG(TAB, ul_debugobj(tb, "nowrap: %s", enable ? "ENABLE" : "DISABLE"));
+	tb->no_wrap = enable ? 1 : 0;
+	return 0;
+}
+
+/**
  * scols_table_colors_wanted:
  * @tb: table
  *
@@ -909,6 +973,8 @@ int scols_table_is_raw(struct libscols_table *tb)
  * @tb: table
  *
  * Returns: 1 if JSON output format is enabled.
+ *
+ * Since: 2.27
  */
 int scols_table_is_json(struct libscols_table *tb)
 {
@@ -1050,7 +1116,7 @@ static int cells_cmp_wrapper(struct list_head *a, struct list_head *b, void *dat
  */
 int scols_sort_table(struct libscols_table *tb, struct libscols_column *cl)
 {
-	if (!tb || !cl)
+	if (!tb || !cl || !cl->cmpfunc)
 		return -EINVAL;
 
 	DBG(TAB, ul_debugobj(tb, "sorting table"));

@@ -17,13 +17,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
-#ifdef HAVE_GETOPT_H
 #include <getopt.h>
-#else
-extern int getopt(int argc, char * const argv[], const char *optstring);
-extern char *optarg;
-extern int optind;
-#endif
 
 #define OUTPUT_VALUE_ONLY	(1 << 1)
 #define OUTPUT_DEVICE_ONLY	(1 << 2)
@@ -160,9 +154,7 @@ static void pretty_print_line(const char *device, const char *fs_type,
 	int len, w;
 
 	if (term_width < 0) {
-		term_width = get_terminal_width();
-		if (term_width <= 0)
-			term_width = 80;
+		term_width = get_terminal_width(80);
 	}
 	if (term_width > 80) {
 		term_width -= 80;
@@ -198,7 +190,7 @@ static void pretty_print_dev(blkid_dev dev)
 	if (dev == NULL) {
 		pretty_print_line("device", "fs_type", "label",
 				  "mount point", "UUID");
-		for (len=get_terminal_width()-1; len > 0; len--)
+		for (len=get_terminal_width(0)-1; len > 0; len--)
 			fputc('-', stdout);
 		fputc('\n', stdout);
 		return;
@@ -482,7 +474,7 @@ static int lowprobe_topology(blkid_probe pr)
 
 static int lowprobe_device(blkid_probe pr, const char *devname,
 			int chain, char *show[], int output,
-			blkid_loff_t offset, blkid_loff_t size)
+			uint64_t offset, uint64_t size)
 {
 	const char *data;
 	const char *name;
@@ -856,8 +848,8 @@ int main(int argc, char **argv)
 		for (i = 0; i < numdev; i++) {
 			err = lowprobe_device(pr, devices[i], lowprobe, show,
 					output_format,
-					(blkid_loff_t) offset,
-					(blkid_loff_t) size);
+					(uint64_t) offset,
+					(uint64_t) size);
 			if (err)
 				break;
 		}

@@ -14,7 +14,6 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <limits.h>
-#include <mntent.h>
 #include <sys/utsname.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -88,7 +87,7 @@ static void init_signature_page(struct mkswap_control *ctl)
 	} else
 		ctl->pagesize = kernel_pagesize;
 
-	ctl->signature_page = (unsigned long *) xcalloc(1, ctl->pagesize);
+	ctl->signature_page = xcalloc(1, ctl->pagesize);
 	ctl->hdr = (struct swap_header_v1_2 *) ctl->signature_page;
 }
 
@@ -240,23 +239,14 @@ static void open_device(struct mkswap_control *ctl)
 
 	if (stat(ctl->devname, &ctl->devstat) < 0)
 		err(EXIT_FAILURE, _("stat of %s failed"), ctl->devname);
-
-	if (S_ISBLK(ctl->devstat.st_mode))
-		ctl->fd = open(ctl->devname, O_RDWR | O_EXCL);
-	else {
-		if (ctl->check) {
-			ctl->check = 0;
-			warnx(_("warning: checking bad blocks from swap file is not supported: %s"),
-				ctl->devname);
-		}
-		ctl->fd = open(ctl->devname, O_RDWR);
-	}
+	ctl->fd = open_blkdev_or_file(&ctl->devstat, ctl->devname, O_RDWR);
 	if (ctl->fd < 0)
 		err(EXIT_FAILURE, _("cannot open %s"), ctl->devname);
-
-	if (S_ISBLK(ctl->devstat.st_mode))
-		if (blkdev_is_misaligned(ctl->fd))
-			warnx(_("warning: %s is misaligned"), ctl->devname);
+	if (ctl->check && S_ISREG(ctl->devstat.st_mode)) {
+		ctl->check = 0;
+		warnx(_("warning: checking bad blocks from swap file is not supported: %s"),
+		       ctl->devname);
+	}
 }
 
 static void wipe_device(struct mkswap_control *ctl)
@@ -353,7 +343,7 @@ static void write_header_to_device(struct mkswap_control *ctl)
 int main(int argc, char **argv)
 {
 	struct mkswap_control ctl = { .fd = -1 };
-	int c;
+	int c, permMask;
 	uint64_t sz;
 	int version = SWAP_VERSION;
 	char *block_count = NULL, *strsz = NULL;
@@ -453,7 +443,7 @@ int main(int argc, char **argv)
 	else if (ctl.npages > sz && !ctl.force)
 		errx(EXIT_FAILURE,
 			_("error: "
-			  "size %llu KiB is larger than device size %ju KiB"),
+			  "size %llu KiB is larger than device size %"PRIu64" KiB"),
 			ctl.npages * (ctl.pagesize / 1024), sz * (ctl.pagesize / 1024));
 
 	if (ctl.npages < MIN_GOODPAGES)
@@ -473,6 +463,15 @@ int main(int argc, char **argv)
 			ctl.devname);
 
 	open_device(&ctl);
+	permMask = S_ISBLK(ctl.devstat.st_mode) ? 07007 : 07077;
+	if ((ctl.devstat.st_mode & permMask) != 0)
+		warnx(_("%s: insecure permissions %04o, %04o suggested."),
+			ctl.devname, ctl.devstat.st_mode & 07777,
+			~permMask & 0666);
+	if (getuid() == 0 && S_ISREG(ctl.devstat.st_mode) && ctl.devstat.st_uid != 0)
+		warnx(_("%s: insecure file owner %d, 0 (root) suggested."),
+			ctl.devname, ctl.devstat.st_uid);
+
 
 	if (ctl.check)
 		check_blocks(&ctl);
@@ -490,7 +489,7 @@ int main(int argc, char **argv)
 	sz = (ctl.npages - ctl.nbadpages - 1) * ctl.pagesize;
 	strsz = size_to_human_string(SIZE_SUFFIX_SPACE | SIZE_SUFFIX_3LETTER, sz);
 
-	printf(_("Setting up swapspace version %d, size = %s (%ju bytes)\n"),
+	printf(_("Setting up swapspace version %d, size = %s (%"PRIu64" bytes)\n"),
 		version, strsz, sz);
 	free(strsz);
 

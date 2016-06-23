@@ -985,7 +985,7 @@ static fdisk_sector_t get_possible_last(struct fdisk_context *cxt, size_t n)
  * last[] are fill_bounds() results */
 static fdisk_sector_t get_unused_last(struct fdisk_context *cxt, size_t n,
 				fdisk_sector_t start,
-				fdisk_sector_t first[], fdisk_sector_t last[])
+				fdisk_sector_t first[])
 {
 	size_t i;
 	fdisk_sector_t limit = get_possible_last(cxt, n);
@@ -1127,7 +1127,7 @@ static int add_partition(struct fdisk_context *cxt, size_t n,
 		}
 	}
 
-	limit = get_unused_last(cxt, n, start, first, last);
+	limit = get_unused_last(cxt, n, start, first);
 
 	if (start > limit) {
 		fdisk_warnx(cxt, _("No free sectors available."));
@@ -1201,7 +1201,7 @@ static int add_partition(struct fdisk_context *cxt, size_t n,
 		if (stop > start)
 			stop -= 1;
 		DBG(LABEL, ul_debug("DOS: don't align end os tiny partition [start=%ju, stop=%ju, grain=%lu]",
-			   start, stop, cxt->grain));
+			    (uintmax_t)start,  (uintmax_t)stop, cxt->grain));
 	}
 
 	if (stop < limit) {
@@ -1598,8 +1598,11 @@ static int dos_add_partition(struct fdisk_context *cxt,
 			}
 			rc = add_logical(cxt, pa, &res);
 		} else {
+			if (free_primary)
+				fdisk_info(cxt, _("All space for primary partitions is in use."));
+			else
 			/* TRANSLATORS: Try to keep this within 80 characters. */
-			fdisk_info(cxt, _("To create more partitions, first replace "
+				fdisk_info(cxt, _("To create more partitions, first replace "
 					  "a primary with an extended partition."));
 			return -EINVAL;
 		}
@@ -1785,7 +1788,7 @@ static int dos_locate_disklabel(struct fdisk_context *cxt, int n,
 		break;
 	default:
 		/* extended partitions */
-		if (n - 1 + 4 < cxt->label->nparts_max) {
+		if ((size_t)n - 1 + 4 < cxt->label->nparts_max) {
 			struct pte *pe = self_pte(cxt, n - 1 + 4);
 
 			assert(pe->private_sectorbuffer);
@@ -1900,15 +1903,15 @@ static int dos_get_partition(struct fdisk_context *cxt, size_t n,
 	/* start C/H/S */
 	if (asprintf(&pa->start_chs, "%d/%d/%d",
 				cylinder(p->bs, p->bc),
-				sector(p->bs),
-				p->bh) < 0)
+				p->bh,
+				sector(p->bs)) < 0)
 		return -ENOMEM;
 
 	/* end C/H/S */
 	if (asprintf(&pa->end_chs, "%d/%d/%d",
 				cylinder(p->es, p->ec),
-				sector(p->es),
-				p->eh) < 0)
+				p->eh,
+				sector(p->es)) < 0)
 		return -ENOMEM;
 
 	return 0;

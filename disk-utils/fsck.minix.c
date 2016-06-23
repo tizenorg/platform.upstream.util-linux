@@ -87,7 +87,6 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <termios.h>
-#include <mntent.h>
 #include <sys/stat.h>
 #include <signal.h>
 #include <getopt.h>
@@ -627,7 +626,8 @@ read_tables(void) {
 	if (show) {
 		printf(_("%ld inodes\n"), inodes);
 		printf(_("%ld blocks\n"), zones);
-		printf(_("Firstdatazone=%jd (%jd)\n"), first_zone, norm_first_zone);
+		printf(_("Firstdatazone=%jd (%jd)\n"),
+			(intmax_t)first_zone, (intmax_t)norm_first_zone);
 		printf(_("Zonesize=%d\n"), MINIX_BLOCK_SIZE << get_zone_size());
 		printf(_("Maxsize=%zu\n"), get_max_size());
 		if (fs_version < 3)
@@ -1012,13 +1012,14 @@ check_file2(struct minix2_inode *dir, unsigned int offset) {
 	block = map_block2(dir, offset / MINIX_BLOCK_SIZE);
 	read_block(block, blk);
 	name = blk + (offset % MINIX_BLOCK_SIZE) + version_offset;
-	ino = *(unsigned short *)(name - version_offset);
+	ino = version_offset == 4 ? *(uint32_t *)(name - version_offset)
+	                          : *(uint16_t *)(name - version_offset);
 	if (ino > get_ninodes()) {
 		get_current_name();
 		printf(_("The directory '%s' contains a bad inode number "
 			 "for file '%.*s'."), current_name, (int)namelen, name);
 		if (ask(_(" Remove"), 1)) {
-			*(unsigned short *)(name - version_offset) = 0;
+			memset(name - version_offset, 0, version_offset);
 			write_block(block, blk);
 		}
 		ino = 0;
@@ -1053,7 +1054,7 @@ check_file2(struct minix2_inode *dir, unsigned int offset) {
 	name_depth++;
 	if (list) {
 		if (verbose)
-			printf("%6ju %07o %3d ", ino, inode->i_mode,
+			printf("%6ju %07o %3d ", (uintmax_t)ino, inode->i_mode,
 			       inode->i_nlinks);
 		get_current_name();
 		printf("%s", current_name);

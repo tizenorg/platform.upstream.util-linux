@@ -54,7 +54,7 @@ int ipc_sem_get_limits(struct ipc_limits *lim)
 	}
 
 	if (rc != 4) {
-		struct seminfo seminfo;
+		struct seminfo seminfo = { .semmni = 0 };
 		union semun arg = { .array = (ushort *) &seminfo };
 
 		if (semctl(0, 0, IPC_INFO, arg) < 0)
@@ -99,6 +99,7 @@ int ipc_shm_get_info(int id, struct shm_data **shmds)
 {
 	FILE *f;
 	int i = 0, maxid;
+	char buf[BUFSIZ];
 	struct shm_data *p;
 	struct shmid_ds dummy;
 
@@ -111,8 +112,11 @@ int ipc_shm_get_info(int id, struct shm_data **shmds)
 
 	while (fgetc(f) != '\n');		/* skip header */
 
-	while (feof(f) == 0) {
-		if (fscanf(f,
+	while (fgets(buf, sizeof(buf), f) != NULL) {
+		/* scan for the first 14-16 columns (e.g. Linux 2.6.32 has 14) */
+		p->shm_rss = 0xdead;
+		p->shm_swp = 0xdead;
+		if (sscanf(buf,
 			  "%d %d  %o %"SCNu64 " %u %u  "
 			  "%"SCNu64 " %u %u %u %u %"SCNi64 " %"SCNi64 " %"SCNi64
 			  " %"SCNu64 " %"SCNu64 "\n",
@@ -131,8 +135,8 @@ int ipc_shm_get_info(int id, struct shm_data **shmds)
 			   &p->shm_dtim,
 			   &p->shm_ctim,
 			   &p->shm_rss,
-			   &p->shm_swp) != 16)
-			continue;
+			   &p->shm_swp) < 14)
+			continue; /* ivalid line, skipped */
 
 		if (id > -1) {
 			/* ID specified */

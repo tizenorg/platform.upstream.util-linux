@@ -195,123 +195,34 @@ extern char PC;			/* pad character */
 #elif defined(HAVE_NCURSES_NCURSES_H)
 # include <ncurses/ncurses.h>
 #endif
+#include <term.h>		/* include after <curses.h> */
 
-#if defined(HAVE_NCURSES_H) || defined(HAVE_NCURSES_NCURSES_H)
-# include <term.h>		/* include after <curses.h> */
+#define TERM_AUTO_RIGHT_MARGIN    "am"
+#define TERM_CEOL                 "xhp"
+#define TERM_CLEAR                "clear"
+#define TERM_CLEAR_TO_LINE_END    "el"
+#define TERM_CLEAR_TO_SCREEN_END  "ed"
+#define TERM_COLS                 "cols"
+#define TERM_CURSOR_ADDRESS       "cup"
+#define TERM_EAT_NEW_LINE         "xenl"
+#define TERM_ENTER_UNDERLINE      "smul"
+#define TERM_EXIT_STANDARD_MODE   "rmso"
+#define TERM_EXIT_UNDERLINE       "rmul"
+#define TERM_HARD_COPY            "hc"
+#define TERM_HOME                 "home"
+#define TERM_LINE_DOWN            "cud1"
+#define TERM_LINES                "lines"
+#define TERM_OVER_STRIKE          "os"
+#define TERM_PAD_CHAR             "pad"
+#define TERM_STANDARD_MODE        "smso"
+#define TERM_STD_MODE_GLITCH      "xmc"
+#define TERM_UNDERLINE_CHAR       "uc"
+#define TERM_UNDERLINE            "ul"
 
-# define TERM_AUTO_RIGHT_MARGIN    "am"
-# define TERM_CEOL                 "xhp"
-# define TERM_CLEAR                "clear"
-# define TERM_CLEAR_TO_LINE_END    "el"
-# define TERM_CLEAR_TO_SCREEN_END  "ed"
-# define TERM_COLS                 "cols"
-# define TERM_CURSOR_ADDRESS       "cup"
-# define TERM_EAT_NEW_LINE         "xenl"
-# define TERM_ENTER_UNDERLINE      "smul"
-# define TERM_EXIT_STANDARD_MODE   "rmso"
-# define TERM_EXIT_UNDERLINE       "rmul"
-# define TERM_HARD_COPY            "hc"
-# define TERM_HOME                 "home"
-# define TERM_LINE_DOWN            "cud1"
-# define TERM_LINES                "lines"
-# define TERM_OVER_STRIKE          "os"
-# define TERM_PAD_CHAR             "pad"
-# define TERM_STANDARD_MODE        "smso"
-# define TERM_STD_MODE_GLITCH      "xmc"
-# define TERM_UNDERLINE_CHAR       "uc"
-# define TERM_UNDERLINE            "ul"
-
-static void my_putstring(char *s)
+static void putstring(char *s)
 {
 	tputs(s, fileno(stdout), putchar);	/* putp(s); */
 }
-
-static void my_setupterm(char *term, int fildes, int *errret)
-{
-	setupterm(term, fildes, errret);
-}
-
-static int my_tgetnum(char *s)
-{
-	return tigetnum(s);
-}
-
-static int my_tgetflag(char *s)
-{
-	return tigetflag(s);
-}
-
-static char *my_tgetstr(char *s)
-{
-	return tigetstr(s);
-}
-
-static char *my_tgoto(char *cap, int col, int row)
-{
-	return tparm(cap, col, row);
-}
-
-#elif defined(HAVE_LIBTERMCAP)	/* ncurses not found */
-
-# include <termcap.h>
-
-# define TERM_AUTO_RIGHT_MARGIN    "am"
-# define TERM_CEOL                 "xs"
-# define TERM_CLEAR                "cl"
-# define TERM_CLEAR_TO_LINE_END    "ce"
-# define TERM_CLEAR_TO_SCREEN_END  "cd"
-# define TERM_COLS                 "co"
-# define TERM_CURSOR_ADDRESS       "cm"
-# define TERM_EAT_NEW_LINE         "xn"
-# define TERM_ENTER_UNDERLINE      "us"
-# define TERM_EXIT_STANDARD_MODE   "se"
-# define TERM_EXIT_UNDERLINE       "ue"
-# define TERM_HARD_COPY            "hc"
-# define TERM_HOME                 "ho"
-# define TERM_LINE_DOWN            "le"
-# define TERM_LINES                "li"
-# define TERM_OVER_STRIKE          "os"
-# define TERM_PAD_CHAR             "pc"
-# define TERM_STANDARD_MODE        "so"
-# define TERM_STD_MODE_GLITCH      "sg"
-# define TERM_UNDERLINE_CHAR       "uc"
-# define TERM_UNDERLINE            "ul"
-
-char termbuffer[TERMINAL_BUF];
-char tcbuffer[TERMINAL_BUF];
-char *strbuf = termbuffer;
-
-static void my_putstring(char *s)
-{
-	tputs(s, fileno(stdout), putchar);
-}
-
-static void my_setupterm(char *term, int fildes __attribute__((__unused__)), int *errret)
-{
-	*errret = tgetent(tcbuffer, term);
-}
-
-static int my_tgetnum(char *s)
-{
-	return tgetnum(s);
-}
-
-static int my_tgetflag(char *s)
-{
-	return tgetflag(s);
-}
-
-static char *my_tgetstr(char *s)
-{
-	return tgetstr(s, &strbuf);
-}
-
-static char *my_tgoto(char *cap, int col, int row)
-{
-	return tgoto(cap, col, row);
-}
-
-#endif	/* HAVE_LIBTERMCAP */
 
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
@@ -693,7 +604,7 @@ void screen(register FILE *f, register int num_lines)
 			num_lines--;
 		}
 		if (pstate) {
-			my_putstring(ULexit);
+			putstring(ULexit);
 			pstate = 0;
 		}
 		fflush(stdout);
@@ -802,7 +713,7 @@ static void prompt(char *filename)
 	if (!hard) {
 		promptlen = 0;
 		if (Senter && Sexit) {
-			my_putstring(Senter);
+			putstring(Senter);
 			promptlen += (2 * soglitch);
 		}
 		if (clreol)
@@ -820,7 +731,7 @@ static void prompt(char *filename)
 			    printf(_("[Press space to continue, 'q' to quit.]"));
 		}
 		if (Senter && Sexit)
-			my_putstring(Sexit);
+			putstring(Sexit);
 		if (clreol)
 			clreos();
 		fflush(stdout);
@@ -965,7 +876,7 @@ int get_line(register FILE *f, int *length)
 			if (!hardtabs || (column < promptlen && !hard)) {
 				if (hardtabs && eraseln && !dumb) {
 					column = 1 + (column | 7);
-					my_putstring(eraseln);
+					putstring(eraseln);
 					promptlen = 0;
 				} else {
 					for (--p; p < &Line[LineLen - 1];) {
@@ -1069,7 +980,7 @@ void erasep(register int col)
 		if (col == 0)
 			putchar('\r');
 		if (!dumb && eraseln)
-			my_putstring(eraseln);
+			putstring(eraseln);
 		else
 			printf("%*s", promptlen - col, "");
 	}
@@ -1087,12 +998,12 @@ void kill_line(void)
 /* force clear to end of line */
 void cleareol(void)
 {
-	my_putstring(eraseln);
+	putstring(eraseln);
 }
 
 void clreos(void)
 {
-	my_putstring(EodClr);
+	putstring(EodClr);
 }
 
 
@@ -1132,7 +1043,7 @@ void prbuf(register char *s, register int n)
 				    && wouldul(s, n - 1))
 					state = 1;
 				else
-					my_putstring(state ? ULenter : ULexit);
+					putstring(state ? ULenter : ULexit);
 			}
 			if (c != ' ' || pstate == 0 || state != 0
 			    || ulglitch == 0)
@@ -1154,7 +1065,7 @@ void prbuf(register char *s, register int n)
 #endif				/* HAVE_WIDECHAR */
 			if (state && *chUL) {
 				putsout(chBS);
-				my_putstring(chUL);
+				putstring(chUL);
 			}
 			pstate = state;
 		}
@@ -1164,7 +1075,7 @@ void prbuf(register char *s, register int n)
 void doclear(void)
 {
 	if (Clear && !hard) {
-		my_putstring(Clear);
+		putstring(Clear);
 		/* Put out carriage return so that system doesn't get
 		 * confused by escape sequences when expanding tabs */
 		putchar('\r');
@@ -1175,7 +1086,7 @@ void doclear(void)
 /* Go to home position */
 void home(void)
 {
-	my_putstring(Home);
+	putstring(Home);
 }
 
 static int lastcmd, lastarg, lastp;
@@ -1451,12 +1362,12 @@ int command(char *filename, register FILE *f)
 			if (dum_opt) {
 				kill_line();
 				if (Senter && Sexit) {
-					my_putstring(Senter);
+					putstring(Senter);
 					promptlen =
 					    printf(_
 						   ("[Press 'h' for instructions.]"))
 					    + 2 * soglitch;
-					my_putstring(Sexit);
+					putstring(Sexit);
 				} else
 					promptlen =
 					    printf(_
@@ -1807,7 +1718,7 @@ void initterm(void)
 			dumb++;
 			ul_opt = 0;
 		}
-		my_setupterm(term, 1, &ret);
+		setupterm(term, 1, &ret);
 		if (ret <= 0) {
 			dumb++;
 			ul_opt = 0;
@@ -1815,34 +1726,34 @@ void initterm(void)
 #ifdef TIOCGWINSZ
 			if (ioctl(fileno(stdout), TIOCGWINSZ, &win) < 0) {
 #endif
-				Lpp = my_tgetnum(TERM_LINES);
-				Mcol = my_tgetnum(TERM_COLS);
+				Lpp = tigetnum(TERM_LINES);
+				Mcol = tigetnum(TERM_COLS);
 #ifdef TIOCGWINSZ
 			} else {
 				if ((Lpp = win.ws_row) == 0)
-					Lpp = my_tgetnum(TERM_LINES);
+					Lpp = tigetnum(TERM_LINES);
 				if ((Mcol = win.ws_col) == 0)
-					Mcol = my_tgetnum(TERM_COLS);
+					Mcol = tigetnum(TERM_COLS);
 			}
 #endif
-			if ((Lpp <= 0) || my_tgetflag(TERM_HARD_COPY)) {
+			if ((Lpp <= 0) || tigetflag(TERM_HARD_COPY)) {
 				hard++;	/* Hard copy terminal */
 				Lpp = LINES_PER_PAGE;
 			}
 
-			if (my_tgetflag(TERM_EAT_NEW_LINE))
+			if (tigetflag(TERM_EAT_NEW_LINE))
 				/* Eat newline at last column + 1; dec, concept */
 				eatnl++;
 			if (Mcol <= 0)
 				Mcol = NUM_COLUMNS;
 
-			Wrap = my_tgetflag(TERM_AUTO_RIGHT_MARGIN);
-			bad_so = my_tgetflag(TERM_CEOL);
-			eraseln = my_tgetstr(TERM_CLEAR_TO_LINE_END);
-			Clear = my_tgetstr(TERM_CLEAR);
-			Senter = my_tgetstr(TERM_STANDARD_MODE);
-			Sexit = my_tgetstr(TERM_EXIT_STANDARD_MODE);
-			if ((soglitch = my_tgetnum(TERM_STD_MODE_GLITCH)) < 0)
+			Wrap = tigetflag(TERM_AUTO_RIGHT_MARGIN);
+			bad_so = tigetflag(TERM_CEOL);
+			eraseln = tigetstr(TERM_CLEAR_TO_LINE_END);
+			Clear = tigetstr(TERM_CLEAR);
+			Senter = tigetstr(TERM_STANDARD_MODE);
+			Sexit = tigetstr(TERM_EXIT_STANDARD_MODE);
+			if ((soglitch = tigetnum(TERM_STD_MODE_GLITCH)) < 0)
 				soglitch = 0;
 
 			/* Set up for underlining:  some terminals don't
@@ -1851,15 +1762,15 @@ void initterm(void)
 			 * which is assumed to move the cursor forward
 			 * one character.  If underline sequence isn't
 			 * available, settle for standout sequence. */
-			if (my_tgetflag(TERM_UNDERLINE)
-			    || my_tgetflag(TERM_OVER_STRIKE))
+			if (tigetflag(TERM_UNDERLINE)
+			    || tigetflag(TERM_OVER_STRIKE))
 				ul_opt = 0;
-			if ((chUL = my_tgetstr(TERM_UNDERLINE_CHAR)) == NULL)
+			if ((chUL = tigetstr(TERM_UNDERLINE_CHAR)) == NULL)
 				chUL = "";
 			if (((ULenter =
-			      my_tgetstr(TERM_ENTER_UNDERLINE)) == NULL
+			      tigetstr(TERM_ENTER_UNDERLINE)) == NULL
 			     || (ULexit =
-				 my_tgetstr(TERM_EXIT_UNDERLINE)) == NULL)
+				 tigetstr(TERM_EXIT_UNDERLINE)) == NULL)
 			    && !*chUL) {
 				if ((ULenter = Senter) == NULL
 				    || (ULexit = Sexit) == NULL) {
@@ -1871,22 +1782,22 @@ void initterm(void)
 				ulglitch = 0;
 			}
 
-			if ((padstr = my_tgetstr(TERM_PAD_CHAR)) != NULL)
+			if ((padstr = tigetstr(TERM_PAD_CHAR)) != NULL)
 				PC = *padstr;
-			Home = my_tgetstr(TERM_HOME);
+			Home = tigetstr(TERM_HOME);
 			if (Home == NULL || *Home == '\0') {
 				if ((cursorm =
-				     my_tgetstr(TERM_CURSOR_ADDRESS)) != NULL) {
+				     tigetstr(TERM_CURSOR_ADDRESS)) != NULL) {
 					const char *t =
-					    (const char *)my_tgoto(cursorm, 0,
+					    (const char *)tparm(cursorm, 0,
 								   0);
 					xstrncpy(cursorhome, t,
 						 sizeof(cursorhome));
 					Home = cursorhome;
 				}
 			}
-			EodClr = my_tgetstr(TERM_CLEAR_TO_SCREEN_END);
-			if ((chBS = my_tgetstr(TERM_LINE_DOWN)) == NULL)
+			EodClr = tigetstr(TERM_CLEAR_TO_SCREEN_END);
+			if ((chBS = tigetstr(TERM_LINE_DOWN)) == NULL)
 				chBS = "\b";
 
 		}
@@ -2129,9 +2040,9 @@ void more_error(char *mess)
 		kill_line();
 	promptlen += strlen(mess);
 	if (Senter && Sexit) {
-		my_putstring(Senter);
+		putstring(Senter);
 		putsout(mess);
-		my_putstring(Sexit);
+		putstring(Sexit);
 	} else
 		putsout(mess);
 	fflush(stdout);

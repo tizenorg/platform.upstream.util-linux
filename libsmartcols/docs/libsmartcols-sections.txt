@@ -4,10 +4,12 @@ libscols_cell
 scols_cell_copy_content
 scols_cell_get_color
 scols_cell_get_data
+scols_cell_get_flags
 scols_cell_get_userdata
 scols_cell_refer_data
 scols_cell_set_color
 scols_cell_set_data
+scols_cell_set_flags
 scols_cell_set_userdata
 scols_cmpstr_cells
 scols_reset_cell
@@ -20,11 +22,13 @@ scols_column_get_color
 scols_column_get_flags
 scols_column_get_header
 scols_column_get_whint
+scols_column_is_hidden
 scols_column_is_noextremes
 scols_column_is_right
 scols_column_is_strict_width
 scols_column_is_tree
 scols_column_is_trunc
+scols_column_is_wrap
 scols_column_set_cmpfunc
 scols_column_set_color
 scols_column_set_flags
@@ -59,9 +63,11 @@ scols_line_get_parent
 scols_line_get_userdata
 scols_line_has_children
 scols_line_next_child
+scols_line_refer_column_data
 scols_line_refer_data
 scols_line_remove_child
 scols_line_set_color
+scols_line_set_column_data
 scols_line_set_data
 scols_line_set_userdata
 scols_new_line
@@ -78,6 +84,7 @@ scols_ref_symbols
 scols_symbols_set_branch
 scols_symbols_set_right
 scols_symbols_set_vertical
+scols_symbols_set_title_padding
 scols_unref_symbols
 </SECTION>
 
@@ -96,6 +103,8 @@ scols_table_enable_export
 scols_table_enable_json
 scols_table_enable_maxout
 scols_table_enable_noheadings
+scols_table_enable_nolinesep
+scols_table_enable_nowrap
 scols_table_enable_raw
 scols_table_get_column
 scols_table_get_column_separator
@@ -126,6 +135,7 @@ scols_table_set_line_separator
 scols_table_set_name
 scols_table_set_stream
 scols_table_set_symbols
+scols_table_get_title
 scols_sort_table
 scols_unref_table
 </SECTION>
@@ -134,6 +144,8 @@ scols_unref_table
 <FILE>table_print</FILE>
 scols_print_table
 scols_print_table_to_string
+scols_table_print_range
+scols_table_print_range_to_string
 </SECTION>
 
 <SECTION>

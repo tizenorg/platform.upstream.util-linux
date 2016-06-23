@@ -258,15 +258,12 @@ hw_clock_is_utc(const bool utc, const bool local_opt,
 static int read_adjtime(struct adjtime *adjtime_p)
 {
 	FILE *adjfile;
-	int rc;			/* local return code */
-	struct stat statbuf;	/* We don't even use the contents of this. */
 	char line1[81];		/* String: first line of adjtime file */
 	char line2[81];		/* String: second line of adjtime file */
 	char line3[81];		/* String: third line of adjtime file */
 	long timeval;
 
-	rc = stat(adj_file_name, &statbuf);
-	if (rc < 0 && errno == ENOENT) {
+	if (access(adj_file_name, R_OK) != 0) {
 		/* He doesn't have a adjtime file, so we'll use defaults. */
 		adjtime_p->drift_factor = 0;
 		adjtime_p->last_adj_time = 0;
@@ -613,18 +610,18 @@ set_hardware_clock_exact(const time_t sethwtime,
 		if (ticksize < 0) {
 			if (debug)
 				printf(_("time jumped backward %.6f seconds "
-					 "to %ld.%06d - retargeting\n"),
+					 "to %ld.%06ld - retargeting\n"),
 				       ticksize, (long)nowsystime.tv_sec,
-				       (int)nowsystime.tv_usec);
+				       (long)nowsystime.tv_usec);
 			/* The retarget is handled at the end of the loop. */
 		} else if (deltavstarget < 0) {
 			/* deltavstarget < 0 if current time < target time */
 			if (debug >= 2)
-				printf(_("%ld.%06d < %ld.%06d (%.6f)\n"),
+				printf(_("%ld.%06ld < %ld.%06ld (%.6f)\n"),
 				       (long)nowsystime.tv_sec,
-				       (int)nowsystime.tv_usec,
+				       (long)nowsystime.tv_usec,
 				       (long)targetsystime.tv_sec,
-				       (int)targetsystime.tv_usec,
+				       (long)targetsystime.tv_usec,
 				       deltavstarget);
 			continue;  /* not there yet - keep spinning */
 		} else if (deltavstarget <= target_time_tolerance_secs) {
@@ -636,12 +633,12 @@ set_hardware_clock_exact(const time_t sethwtime,
 			 * aim for the next opportunity.
 			 */
 			if (debug)
-				printf(_("missed it - %ld.%06d is too far "
-					 "past %ld.%06d (%.6f > %.6f)\n"),
+				printf(_("missed it - %ld.%06ld is too far "
+					 "past %ld.%06ld (%.6f > %.6f)\n"),
 				       (long)nowsystime.tv_sec,
-				       (int)nowsystime.tv_usec,
+				       (long)nowsystime.tv_usec,
 				       (long)targetsystime.tv_sec,
-				       (int)targetsystime.tv_usec,
+				       (long)targetsystime.tv_usec,
 				       deltavstarget,
 				       target_time_tolerance_secs);
 			target_time_tolerance_secs += tolerance_incr_secs;
@@ -664,14 +661,14 @@ set_hardware_clock_exact(const time_t sethwtime,
 			    - RTC_SET_DELAY_SECS /* don't count this */
 			    + 0.5 /* for rounding */);
 	if (debug)
-		printf(_("%ld.%06d is close enough to %ld.%06d (%.6f < %.6f)\n"
-			 "Set RTC to %ld (%ld + %d; refsystime = %ld.%06d)\n"),
-		       (long)nowsystime.tv_sec, (int)nowsystime.tv_usec,
-		       (long)targetsystime.tv_sec, (int)targetsystime.tv_usec,
+		printf(_("%ld.%06ld is close enough to %ld.%06ld (%.6f < %.6f)\n"
+			 "Set RTC to %ld (%ld + %d; refsystime = %ld.%06ld)\n"),
+		       (long)nowsystime.tv_sec, (long)nowsystime.tv_usec,
+		       (long)targetsystime.tv_sec, (long)targetsystime.tv_usec,
 		       deltavstarget, target_time_tolerance_secs,
 		       (long)newhwtime, (long)sethwtime,
 		       (int)(newhwtime - sethwtime),
-		       (long)refsystime.tv_sec, (int)refsystime.tv_usec);
+		       (long)refsystime.tv_sec, (long)refsystime.tv_usec);
 
 	set_hardware_clock(newhwtime, universal, testing);
 }
@@ -690,13 +687,15 @@ display_time(const bool hclock_valid, struct timeval hwctime)
 		       "either invalid (e.g. 50th day of month) or beyond the range "
 		       "we can handle (e.g. Year 2095)."));
 	else {
-		struct tm *lt;
-		char *format = "%c";
-		char ctime_now[200];
+		struct tm lt;
+		int zhour, zmin;
 
-		lt = localtime(&hwctime.tv_sec);
-		strftime(ctime_now, sizeof(ctime_now), format, lt);
-		printf(_("%s  .%06d seconds\n"), ctime_now, (int)hwctime.tv_usec);
+		lt = *localtime(&hwctime.tv_sec);
+		zhour = - timezone / 60 / 60;
+		zmin = labs(timezone / 60 % 60);
+		printf(_("%4d-%.2d-%.2d %02d:%02d:%02d.%06ld%+02d:%02d\n"),
+		       lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday, lt.tm_hour,
+		       lt.tm_min, lt.tm_sec, (long)hwctime.tv_usec, zhour, zmin);
 	}
 }
 
@@ -1102,8 +1101,8 @@ calculate_adjustment(const double factor,
 			"Time since last adjustment is %d seconds\n",
 		       (int)(systime - last_time)),
 		       (int)(systime - last_time));
-		printf(_("Calculated Hardware Clock drift is %ld.%06d seconds\n"),
-		       (long)tdrift_p->tv_sec, (int)tdrift_p->tv_usec);
+		printf(_("Calculated Hardware Clock drift is %ld.%06ld seconds\n"),
+		       (long)tdrift_p->tv_sec, (long)tdrift_p->tv_usec);
 	}
 }
 
@@ -1954,7 +1953,7 @@ void __attribute__((__noreturn__)) hwaudit_exit(int status)
 {
 	if (hwaudit_on) {
 		audit_log_user_message(hwaudit_fd, AUDIT_USYS_CONFIG,
-				       "changing system time", NULL, NULL, NULL,
+				       "op=change-system-time", NULL, NULL, NULL,
 				       status ? 0 : 1);
 		close(hwaudit_fd);
 	}

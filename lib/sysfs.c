@@ -5,9 +5,12 @@
  * Written by Karel Zak <kzak@redhat.com>
  */
 #include <ctype.h>
+#include <libgen.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 #include "c.h"
-#include "at.h"
 #include "pathnames.h"
 #include "sysfs.h"
 #include "fileutils.h"
@@ -25,7 +28,7 @@ char *sysfs_devno_attribute_path(dev_t devno, char *buf,
 		len = snprintf(buf, bufsiz, _PATH_SYS_DEVBLOCK "/%d:%d",
 			major(devno), minor(devno));
 
-	return (len < 0 || (size_t) len + 1 > bufsiz) ? NULL : buf;
+	return (len < 0 || (size_t) len >= bufsiz) ? NULL : buf;
 }
 
 int sysfs_devno_has_attribute(dev_t devno, const char *attr)
@@ -81,7 +84,7 @@ dev_t sysfs_devname_to_devno(const char *name, const char *parent)
 				_PATH_SYS_BLOCK "/%s/%s/dev", _parent, _name);
 		free(_name);
 		free(_parent);
-		if (len < 0 || (size_t) len + 1 > sizeof(buf))
+		if (len < 0 || (size_t) len >= sizeof(buf))
 			return 0;
 		path = buf;
 
@@ -99,7 +102,7 @@ dev_t sysfs_devname_to_devno(const char *name, const char *parent)
 		len = snprintf(buf, sizeof(buf),
 				_PATH_SYS_BLOCK "/%s/dev", _name);
 		free(_name);
-		if (len < 0 || (size_t) len + 1 > sizeof(buf))
+		if (len < 0 || (size_t) len >= sizeof(buf))
 			return 0;
 		path = buf;
 	}
@@ -202,7 +205,7 @@ void sysfs_deinit(struct sysfs_cxt *cxt)
 
 int sysfs_stat(struct sysfs_cxt *cxt, const char *attr, struct stat *st)
 {
-	int rc = fstat_at(cxt->dir_fd, cxt->dir_path, attr, st, 0);
+	int rc = fstatat(cxt->dir_fd, attr, st, 0);
 
 	if (rc != 0 && errno == ENOENT &&
 	    strncmp(attr, "queue/", 6) == 0 && cxt->parent) {
@@ -210,8 +213,7 @@ int sysfs_stat(struct sysfs_cxt *cxt, const char *attr, struct stat *st)
 		/* Exception for "queue/<attr>". These attributes are available
 		 * for parental devices only
 		 */
-		return fstat_at(cxt->parent->dir_fd,
-				cxt->parent->dir_path, attr, st, 0);
+		return fstatat(cxt->parent->dir_fd, attr, st, 0);
 	}
 	return rc;
 }
@@ -225,7 +227,7 @@ int sysfs_has_attribute(struct sysfs_cxt *cxt, const char *attr)
 
 static int sysfs_open(struct sysfs_cxt *cxt, const char *attr, int flags)
 {
-	int fd = open_at(cxt->dir_fd, cxt->dir_path, attr, flags);
+	int fd = openat(cxt->dir_fd, attr, flags);
 
 	if (fd == -1 && errno == ENOENT &&
 	    strncmp(attr, "queue/", 6) == 0 && cxt->parent) {
@@ -233,7 +235,7 @@ static int sysfs_open(struct sysfs_cxt *cxt, const char *attr, int flags)
 		/* Exception for "queue/<attr>". These attributes are available
 		 * for parental devices only
 		 */
-		fd = open_at(cxt->parent->dir_fd, cxt->dir_path, attr, flags);
+		fd = openat(cxt->parent->dir_fd, attr, flags);
 	}
 	return fd;
 }
@@ -245,7 +247,7 @@ ssize_t sysfs_readlink(struct sysfs_cxt *cxt, const char *attr,
 		return -1;
 
 	if (attr)
-		return readlink_at(cxt->dir_fd, cxt->dir_path, attr, buf, bufsiz);
+		return readlinkat(cxt->dir_fd, attr, buf, bufsiz);
 
 	/* read /sys/dev/block/<maj:min> link */
 	return readlink(cxt->dir_path, buf, bufsiz);
@@ -461,9 +463,9 @@ int sysfs_write_u64(struct sysfs_cxt *cxt, const char *attr, uint64_t num)
 	if (fd < 0)
 		return -errno;
 
-	len = snprintf(buf, sizeof(buf), "%ju", num);
-	if (len < 0 || (size_t) len + 1 > sizeof(buf))
-		rc = -errno;
+	len = snprintf(buf, sizeof(buf), "%" PRIu64, num);
+	if (len < 0 || (size_t) len >= sizeof(buf))
+		rc = len < 0 ? -errno : -E2BIG;
 	else
 		rc = write_all(fd, buf, len);
 
@@ -929,7 +931,7 @@ static char *sysfs_scsi_host_attribute_path(struct sysfs_cxt *cxt,
 		len = snprintf(buf, bufsz, _PATH_SYS_CLASS "/%s_host/host%d",
 				type, host);
 
-	return (len < 0 || (size_t) len + 1 > bufsz) ? NULL : buf;
+	return (len < 0 || (size_t) len >= bufsz) ? NULL : buf;
 }
 
 char *sysfs_scsi_host_strdup_attribute(struct sysfs_cxt *cxt,
@@ -978,7 +980,7 @@ static char *sysfs_scsi_attribute_path(struct sysfs_cxt *cxt,
 	else
 		len = snprintf(buf, bufsz, _PATH_SYS_SCSI "/devices/%d:%d:%d:%d",
 				h,c,t,l);
-	return (len < 0 || (size_t) len + 1 > bufsz) ? NULL : buf;
+	return (len < 0 || (size_t) len >= bufsz) ? NULL : buf;
 }
 
 int sysfs_scsi_has_attribute(struct sysfs_cxt *cxt, const char *attr)

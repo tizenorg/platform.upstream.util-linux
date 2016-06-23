@@ -361,7 +361,7 @@ static char *mk_string_list(char *ptr, size_t *len, size_t *begin,
 			return ptr;
 		}
 
-		if (*begin + *run == cur) {	/* no gap, continue */
+		if (*begin + *run == (size_t)cur) {	/* no gap, continue */
 			(*run)++;
 			return ptr;
 		}
@@ -383,15 +383,11 @@ static char *mk_string_list(char *ptr, size_t *len, size_t *begin,
 			snprintf(ptr, *len, "%c-%c,", tochar(*begin), tochar(*begin + *run)) :
 			snprintf(ptr, *len, "%zu-%zu,", *begin, *begin + *run);
 
-	if (rlen < 0 || (size_t) rlen + 1 > *len)
+	if (rlen < 0 || (size_t) rlen >= *len)
 		return NULL;
 
 	ptr += rlen;
-
-	if (rlen > 0 && *len > (size_t) rlen)
-		*len -= rlen;
-	else
-		*len = 0;
+	*len -= rlen;
 
 	if (cur == -1 && *begin) {
 		/* end of the list */
@@ -466,7 +462,7 @@ int fdisk_ask_partnum(struct fdisk_context *cxt, size_t *partnum, int wantnew)
 		}
 	}
 
-	DBG(ASK, ul_debugobj(ask, "ask limits: low: %ju, high: %ju, default: %ju",
+	DBG(ASK, ul_debugobj(ask, "ask limits: low: %"PRIu64", high: %"PRIu64", default: %"PRIu64"",
 				num->low, num->hig, num->dfl));
 
 	if (!rc && !wantnew && num->low == num->hig) {
@@ -508,7 +504,7 @@ dont_ask:
 		if (*partnum)
 			*partnum -= 1;
 	}
-	DBG(ASK, ul_debugobj(ask, "result: %ju [rc=%d]\n", fdisk_ask_number_get_result(ask), rc));
+	DBG(ASK, ul_debugobj(ask, "result: %"PRIu64" [rc=%d]\n", fdisk_ask_number_get_result(ask), rc));
 	fdisk_unref_ask(ask);
 	return rc;
 }
@@ -1002,7 +998,7 @@ int fdisk_info_new_partition(
 }
 
 #ifdef TEST_PROGRAM
-int test_ranges(struct fdisk_test *ts, int argc, char *argv[])
+static int test_ranges(struct fdisk_test *ts, int argc, char *argv[])
 {
 	/*                1  -  3,       6,    8, 9,   11    13 */
 	size_t nums[] = { 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1 };

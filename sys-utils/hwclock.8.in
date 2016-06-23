@@ -88,7 +88,9 @@ command, such as \%'11\ minute\ mode' or from dual-booting another OS.
 .TQ
 .B \-\-get
 .br
-Read the Hardware Clock and print the time on standard output.
+Read the Hardware Clock and print its time to standard output in the
+.B ISO 8601
+format.
 The time shown is always in local time, even if you keep your Hardware Clock
 in UTC.  See the
 .B \%\-\-localtime
@@ -298,7 +300,7 @@ The value of this option is used as an argument to the
 option.  For example:
 .RS
 .IP "" 4
-.B "hwclock\ \-\-set\ \-\-date='2011-08-14\ 16:45:05'
+.B "hwclock\ \-\-set\ \-\-date='2011-08-14\ 16:45:05'"
 .PP
 The argument must be in local time, even if you keep your Hardware Clock in
 UTC.  See the

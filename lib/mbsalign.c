@@ -27,6 +27,7 @@
 
 #include "c.h"
 #include "mbsalign.h"
+#include "strutils.h"
 #include "widechar.h"
 
 #ifdef HAVE_WIDECHAR
@@ -246,6 +247,7 @@ wc_truncate (wchar_t *wc, size_t width)
         }
       if (cells + next_cells > width)
         break;
+
       cells += next_cells;
       wc++;
     }
@@ -290,7 +292,7 @@ mbs_truncate(char *str, size_t *width)
 	if (sz == (ssize_t) -1)
 		goto done;
 
-	wcs = malloc((sz + 1) * sizeof(wchar_t));
+	wcs = calloc(1, (sz + 1) * sizeof(wchar_t));
 	if (!wcs)
 		goto done;
 
@@ -301,7 +303,7 @@ mbs_truncate(char *str, size_t *width)
 done:
 	free(wcs);
 #else
-	if (*width < bytes)
+	if (bytes >= 0 && *width < (size_t) bytes)
 		bytes = *width;
 #endif
 	if (bytes >= 0)
@@ -315,14 +317,21 @@ done:
    A pointer to the terminating NUL is returned.  */
 
 static char*
-mbs_align_pad (char *dest, const char* dest_end, size_t n_spaces)
+mbs_align_pad (char *dest, const char* dest_end, size_t n_spaces, int padchar)
 {
   /* FIXME: Should we pad with "figure space" (\u2007)
      if non ascii data present?  */
   for (/* nothing */; n_spaces && (dest < dest_end); n_spaces--)
-    *dest++ = ' ';
+    *dest++ = padchar;
   *dest = '\0';
   return dest;
+}
+
+size_t
+mbsalign (const char *src, char *dest, size_t dest_size,
+          size_t *width, mbs_align_t align, int flags)
+{
+	return mbsalign_with_padding(src, dest, dest_size, width, align, flags, ' ');
 }
 
 /* Align a string, SRC, in a field of *WIDTH columns, handling multi-byte
@@ -339,8 +348,9 @@ mbs_align_pad (char *dest, const char* dest_end, size_t n_spaces)
    Update *WIDTH to indicate how many columns were used before padding.  */
 
 size_t
-mbsalign (const char *src, char *dest, size_t dest_size,
-          size_t *width, mbs_align_t align, int flags)
+mbsalign_with_padding (const char *src, char *dest, size_t dest_size,
+	               size_t *width, mbs_align_t align, int flags,
+		       int padchar)
 {
   size_t ret = -1;
   size_t src_size = strlen (src) + 1;
@@ -350,10 +360,11 @@ mbsalign (const char *src, char *dest, size_t dest_size,
   size_t n_cols = src_size - 1;
   size_t n_used_bytes = n_cols; /* Not including NUL */
   size_t n_spaces = 0, space_left;
+
+#ifdef HAVE_WIDECHAR
   bool conversion = false;
   bool wc_enabled = false;
 
-#ifdef HAVE_WIDECHAR
   /* In multi-byte locales convert to wide characters
      to allow easy truncation. Also determine number
      of screen columns used.  */
@@ -407,9 +418,9 @@ mbsalign (const char *src, char *dest, size_t dest_size,
         n_cols = wc_truncate (str_wc, *width);
         n_used_bytes = wcstombs (newstr, str_wc, src_size);
     }
-#endif
 
 mbsalign_unibyte:
+#endif
 
   if (n_cols > *width) /* Unibyte truncation required.  */
     {
@@ -451,14 +462,14 @@ mbsalign_unibyte:
 	  abort();
         }
 
-      dest = mbs_align_pad (dest, dest_end, start_spaces);
+      dest = mbs_align_pad (dest, dest_end, start_spaces, padchar);
       space_left = dest_end - dest;
       dest = mempcpy (dest, str_to_print, min (n_used_bytes, space_left));
-      mbs_align_pad (dest, dest_end, end_spaces);
+      mbs_align_pad (dest, dest_end, end_spaces, padchar);
     }
-
+#ifdef HAVE_WIDECHAR
 mbsalign_cleanup:
-
+#endif
   free (str_wc);
   free (newstr);
 

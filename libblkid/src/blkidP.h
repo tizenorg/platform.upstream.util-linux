@@ -167,8 +167,8 @@ struct blkid_idinfo
 
 struct blkid_bufinfo {
 	unsigned char		*data;
-	blkid_loff_t		off;
-	blkid_loff_t		len;
+	uint64_t		off;
+	uint64_t		len;
 	struct list_head	bufs;	/* list of buffers */
 };
 
@@ -178,8 +178,8 @@ struct blkid_bufinfo {
 struct blkid_struct_probe
 {
 	int			fd;		/* device file descriptor */
-	blkid_loff_t		off;		/* begin of data on the device */
-	blkid_loff_t		size;		/* end of data on the device */
+	uint64_t		off;		/* begin of data on the device */
+	uint64_t		size;		/* end of data on the device */
 
 	dev_t			devno;		/* device number (st.st_rdev) */
 	dev_t			disk_devno;	/* devno of the whole-disk or 0 */
@@ -189,8 +189,8 @@ struct blkid_struct_probe
 	int			flags;		/* private libray flags */
 	int			prob_flags;	/* always zeroized by blkid_do_*() */
 
-	blkid_loff_t		wipe_off;	/* begin of the wiped area */
-	blkid_loff_t		wipe_size;	/* size of the wiped area */
+	uint64_t		wipe_off;	/* begin of the wiped area */
+	uint64_t		wipe_size;	/* size of the wiped area */
 	struct blkid_chain	*wipe_chain;	/* superblock, partition, ... */
 
 	struct list_head	buffers;	/* list of buffers */
@@ -318,6 +318,7 @@ struct blkid_struct_cache
 #define BLKID_DEBUG_READ	(1 << 10)
 #define BLKID_DEBUG_SAVE	(1 << 11)
 #define BLKID_DEBUG_TAG		(1 << 12)
+#define BLKID_DEBUG_BUFFER	(1 << 13)
 #define BLKID_DEBUG_ALL		0xFFFF		/* (1 << 16) aka FFFF is expected by API */
 
 UL_DEBUG_DECLARE_MASK(libblkid);
@@ -384,7 +385,7 @@ extern int blkid_probe_is_cdrom(blkid_probe pr)
 			__attribute__((warn_unused_result));
 
 extern unsigned char *blkid_probe_get_buffer(blkid_probe pr,
-                                blkid_loff_t off, blkid_loff_t len)
+                                uint64_t off, uint64_t len)
 			__attribute__((nonnull))
 			__attribute__((warn_unused_result));
 
@@ -393,15 +394,15 @@ extern unsigned char *blkid_probe_get_sector(blkid_probe pr, unsigned int sector
 			__attribute__((warn_unused_result));
 
 extern int blkid_probe_get_dimension(blkid_probe pr,
-	                blkid_loff_t *off, blkid_loff_t *size)
+	                uint64_t *off, uint64_t *size)
 			__attribute__((nonnull));
 
 extern int blkid_probe_set_dimension(blkid_probe pr,
-	                blkid_loff_t off, blkid_loff_t size)
+	                uint64_t off, uint64_t size)
 			__attribute__((nonnull));
 
 extern int blkid_probe_get_idmag(blkid_probe pr, const struct blkid_idinfo *id,
-			blkid_loff_t *offset, const struct blkid_idmag **res)
+			uint64_t *offset, const struct blkid_idmag **res)
 			__attribute__((nonnull(1)));
 
 /* returns superblok according to 'struct blkid_idmag' */
@@ -414,7 +415,7 @@ extern blkid_partlist blkid_probe_get_partlist(blkid_probe pr)
 			__attribute__((warn_unused_result));
 
 extern int blkid_probe_is_covered_by_pt(blkid_probe pr,
-					blkid_loff_t offset, blkid_loff_t size)
+					uint64_t offset, uint64_t size)
 			__attribute__((warn_unused_result));
 
 extern void blkid_probe_chain_reset_values(blkid_probe pr, struct blkid_chain *chn)
@@ -485,7 +486,7 @@ extern int blkid_probe_sprintf_value(blkid_probe pr, const char *name,
 			__attribute__((nonnull))
 			__attribute__ ((__format__ (__printf__, 3, 4)));
 
-extern int blkid_probe_set_magic(blkid_probe pr, blkid_loff_t offset,
+extern int blkid_probe_set_magic(blkid_probe pr, uint64_t offset,
 				size_t len, unsigned char *magic)
 			__attribute__((nonnull));
 
@@ -501,14 +502,14 @@ extern size_t blkid_rtrim_whitespace(unsigned char *str)
 extern size_t blkid_ltrim_whitespace(unsigned char *str)
 			__attribute__((nonnull));
 
-extern void blkid_probe_set_wiper(blkid_probe pr, blkid_loff_t off,
-				  blkid_loff_t size)
+extern void blkid_probe_set_wiper(blkid_probe pr, uint64_t off,
+				  uint64_t size)
 			__attribute__((nonnull));
 extern int blkid_probe_is_wiped(blkid_probe pr, struct blkid_chain **chn,
-		                blkid_loff_t off, blkid_loff_t size)
+		                uint64_t off, uint64_t size)
 			__attribute__((nonnull))
 			__attribute__((warn_unused_result));
-extern void blkid_probe_use_wiper(blkid_probe pr, blkid_loff_t off, blkid_loff_t size)
+extern void blkid_probe_use_wiper(blkid_probe pr, uint64_t off, uint64_t size)
 			__attribute__((nonnull));
 
 /* filter bitmap macros */

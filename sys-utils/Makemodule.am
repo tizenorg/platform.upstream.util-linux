@@ -2,7 +2,7 @@ if BUILD_FLOCK
 usrbin_exec_PROGRAMS += flock
 dist_man_MANS += sys-utils/flock.1
 flock_SOURCES = sys-utils/flock.c lib/monotonic.c lib/timer.c
-flock_LDADD = $(LDADD) libcommon.la -lrt
+flock_LDADD = $(LDADD) libcommon.la $(REALTIME_LIBS)
 endif
 
 if BUILD_IPCMK
@@ -95,6 +95,7 @@ if BUILD_CTRLALTDEL
 sbin_PROGRAMS += ctrlaltdel
 dist_man_MANS += sys-utils/ctrlaltdel.8
 ctrlaltdel_SOURCES = sys-utils/ctrlaltdel.c
+ctrlaltdel_LDADD = $(LDADD) libcommon.la
 endif
 
 if BUILD_FSFREEZE
@@ -162,7 +163,7 @@ man_MANS += $(SETARCH_MAN_LINKS)
 CLEANFILES += $(SETARCH_MAN_LINKS)
 
 $(SETARCH_MAN_LINKS):
-	$(AM_V_at) test -d $(dir $@) || mkdir -p $(dir $@)
+	$(AM_V_at) $(MKDIR_P) sys-utils
 	$(AM_V_GEN)echo ".so man8/setarch.8" > $@
 
 install-exec-hook-setarch:
@@ -222,6 +223,15 @@ dist_man_MANS += sys-utils/prlimit.1
 prlimit_SOURCES = sys-utils/prlimit.c
 prlimit_LDADD = $(LDADD) libcommon.la libsmartcols.la
 prlimit_CFLAGS = $(AM_CFLAGS) -I$(ul_libsmartcols_incdir)
+endif
+
+
+if BUILD_LSNS
+usrbin_exec_PROGRAMS += lsns
+dist_man_MANS += sys-utils/lsns.8
+lsns_SOURCES =	sys-utils/lsns.c
+lsns_LDADD = $(LDADD) libcommon.la libsmartcols.la
+lsns_CFLAGS = $(AM_CFLAGS) -I$(ul_libsmartcols_incdir)
 endif
 
 
@@ -314,7 +324,7 @@ lscpu_SOURCES = \
 	sys-utils/lscpu.c \
 	sys-utils/lscpu.h \
 	sys-utils/lscpu-dmi.c
-lscpu_LDADD = $(LDADD) libcommon.la libsmartcols.la
+lscpu_LDADD = $(LDADD) libcommon.la libsmartcols.la $(RTAS_LIBS)
 lscpu_CFLAGS = $(AM_CFLAGS) -I$(ul_libsmartcols_incdir)
 dist_man_MANS += sys-utils/lscpu.1
 endif

@@ -30,8 +30,8 @@ dnl
 dnl Calls pkg-config --static
 dnl
 AC_DEFUN([UL_PKG_STATIC], [
-  if AC_RUN_LOG([pkg-config --exists --print-errors "$2"]); then
-    $1=`pkg-config --libs --static "$2"`
+  if AC_RUN_LOG([$PKG_CONFIG --exists --print-errors "$2"]); then
+    $1=`$PKG_CONFIG --libs --static "$2"`
   else
     AC_MSG_ERROR([pkg-config description of $2, needed for static build, is not available])
   fi
@@ -118,7 +118,6 @@ AC_DEFUN([UL_CHECK_SYSCALL], [
       ])
     ul_cv_syscall_$1=$syscall
     ])
-  AM_CONDITIONAL([HAVE_]m4_toupper($1), [test "x$ul_cv_syscall_$1" != xno])
   case $ul_cv_syscall_$1 in #(
   no) AC_MSG_WARN([Unable to detect syscall $1.]) ;;
   SYS_*) ;;
@@ -322,13 +321,6 @@ dnl
 AC_DEFUN([UL_REQUIRES_SYSCALL_CHECK], [
   m4_define([suffix], m4_default([$4],$1))
   m4_define([callname], m4_default([$3],$1))
-
-  dnl This is default, $3 will redefine the condition
-  dnl
-  dnl TODO: remove this junk, AM_CONDITIONAL should not be used for any HAVE_*
-  dnl       variables, all we need is BUILD_* only.
-  dnl
-  AM_CONDITIONAL([HAVE_]m4_toupper(callname), [false])
 
   if test "x$[build_]suffix" != xno; then
     if test "x$[enable_]suffix" = xno; then

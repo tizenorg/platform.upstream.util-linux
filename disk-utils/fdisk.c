@@ -37,7 +37,6 @@
 #include "canonicalize.h"
 #include "strutils.h"
 #include "closestream.h"
-#include "sysfs.h"
 
 #include "fdisk.h"
 
@@ -195,7 +194,7 @@ static int ask_number(struct fdisk_context *cxt,
 	assert(q);
 
 	DBG(ASK, ul_debug("asking for number "
-			"['%s', <%ju,%ju>, default=%ju, range: %s]",
+			"['%s', <%"PRIu64",%"PRIu64">, default=%"PRIu64", range: %s]",
 			q, low, high, dflt, range));
 
 	if (range && dflt >= low && dflt <= high) {
@@ -203,7 +202,7 @@ static int ask_number(struct fdisk_context *cxt,
 			snprintf(prompt, sizeof(prompt), _("%s (%s, default %c): "),
 					q, range, tochar(dflt));
 		else
-			snprintf(prompt, sizeof(prompt), _("%s (%s, default %ju): "),
+			snprintf(prompt, sizeof(prompt), _("%s (%s, default %"PRIu64"): "),
 					q, range, dflt);
 
 	} else if (dflt >= low && dflt <= high) {
@@ -211,13 +210,14 @@ static int ask_number(struct fdisk_context *cxt,
 			snprintf(prompt, sizeof(prompt), _("%s (%c-%c, default %c): "),
 					q, tochar(low), tochar(high), tochar(dflt));
 		else
-			snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju, default %ju): "),
+			snprintf(prompt, sizeof(prompt),
+					_("%s (%"PRIu64"-%"PRIu64", default %"PRIu64"): "),
 					q, low, high, dflt);
 	} else if (inchar)
 		snprintf(prompt, sizeof(prompt), _("%s (%c-%c): "),
 				q, tochar(low), tochar(high));
 	else
-		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju): "),
+		snprintf(prompt, sizeof(prompt), _("%s (%"PRIu64"-%"PRIu64"): "),
 				q, low, high);
 
 	do {
@@ -265,18 +265,22 @@ static int ask_offset(struct fdisk_context *cxt,
 
 	assert(q);
 
-	DBG(ASK, ul_debug("asking for offset ['%s', <%ju,%ju>, base=%ju, default=%ju, range: %s]",
+	DBG(ASK, ul_debug("asking for offset ['%s', <%"PRIu64",%"PRIu64">, base=%"PRIu64", default=%"PRIu64", range: %s]",
 				q, low, high, base, dflt, range));
 
 	if (range && dflt >= low && dflt <= high)
-		snprintf(prompt, sizeof(prompt), _("%s (%s, default %ju): "), q, range, dflt);
+		snprintf(prompt, sizeof(prompt), _("%s (%s, default %"PRIu64"): "),
+		         q, range, dflt);
 	else if (dflt >= low && dflt <= high)
-		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju, default %ju): "), q, low, high, dflt);
+		snprintf(prompt, sizeof(prompt),
+		         _("%s (%"PRIu64"-%"PRIu64", default %"PRIu64"): "),
+		         q, low, high, dflt);
 	else
-		snprintf(prompt, sizeof(prompt), _("%s (%ju-%ju): "), q, low, high);
+		snprintf(prompt, sizeof(prompt), _("%s (%"PRIu64"-%"PRIu64"): "),
+		         q, low, high);
 
 	do {
-		uint64_t num = 0;
+		uintmax_t num = 0;
 		char sig = 0, *p;
 		int pwr = 0;
 
@@ -313,7 +317,7 @@ static int ask_offset(struct fdisk_context *cxt,
 		if (num >= low && num <= high) {
 			if (sig && pwr)
 				fdisk_ask_number_set_relative(ask, 1);
-			return fdisk_ask_number_set_result(ask, num);
+			return fdisk_ask_number_set_result(ask, (uint64_t)num);
 		}
 		fdisk_warnx(cxt, _("Value out of range."));
 	} while (1);
@@ -363,12 +367,14 @@ int ask_callback(struct fdisk_context *cxt, struct fdisk_ask *ask,
 		fputs_info(ask, stdout);
 		break;
 	case FDISK_ASKTYPE_WARNX:
+		fflush(stdout);
 		color_scheme_fenable("warn", UL_COLOR_RED, stderr);
 		fputs(fdisk_ask_print_get_mesg(ask), stderr);
 		color_fdisable(stderr);
 		fputc('\n', stderr);
 		break;
 	case FDISK_ASKTYPE_WARN:
+		fflush(stdout);
 		color_scheme_fenable("warn", UL_COLOR_RED, stderr);
 		fputs(fdisk_ask_print_get_mesg(ask), stderr);
 		errno = fdisk_ask_print_get_errno(ask);
@@ -630,7 +636,7 @@ static void dump_buffer(off_t base, unsigned char *buf, size_t sz, int all)
 		if (l == 0) {
 			if (all == 0 && !next)
 				next = skip_empty(buf, i, sz);
-			printf("%08jx ", base + i);
+			printf("%08jx ", (intmax_t)base + i);
 		}
 		printf(" %02x", buf[i]);
 		if (l == 7)				/* words separator */
@@ -654,7 +660,7 @@ static void dump_blkdev(struct fdisk_context *cxt, const char *name,
 {
 	int fd = fdisk_get_devfd(cxt);
 
-	fdisk_info(cxt, _("\n%s: offset = %ju, size = %zu bytes."),
+	fdisk_info(cxt, _("\n%s: offset = %"PRIu64", size = %zu bytes."),
 			name, offset, size);
 
 	assert(fd >= 0);
@@ -723,7 +729,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -b, --sector-size <size>      physical and logical sector size\n"), out);
-	fputs(_(" -B, --protect-boot            don't erase bootbits when create a new label\n"), out);
+	fputs(_(" -B, --protect-boot            don't erase bootbits when creating a new label\n"), out);
 	fputs(_(" -c, --compatibility[=<mode>]  mode is 'dos' or 'nondos' (default)\n"), out);
 	fputs(_(" -L, --color[=<when>]          colorize output (auto, always or never)\n"), out);
 	fprintf(out,
@@ -734,6 +740,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_(" -u, --units[=<unit>]          display units: 'cylinders' or 'sectors' (default)\n"), out);
 	fputs(_(" -s, --getsz                   display device size in 512-byte sectors [DEPRECATED]\n"), out);
 	fputs(_("     --bytes                   print SIZE in bytes rather than in human readable format\n"), out);
+	fputs(_(" -w, --wipe <mode>             wipe signatures (auto, always or never)\n"), out);
 
 	fputs(USAGE_SEPARATOR, out);
 	fputs(_(" -C, --cylinders <number>      specify the number of cylinders\n"), out);
@@ -761,6 +768,7 @@ int main(int argc, char **argv)
 {
 	int rc, i, c, act = ACT_FDISK;
 	int colormode = UL_COLORMODE_UNDEF;
+	int wipemode = WIPEMODE_AUTO;
 	struct fdisk_context *cxt;
 	char *outarg = NULL;
 	enum {
@@ -782,6 +790,7 @@ int main(int argc, char **argv)
 		{ "version",        no_argument,       NULL, 'V' },
 		{ "output",         no_argument,       NULL, 'o' },
 		{ "protect-boot",   no_argument,       NULL, 'B' },
+		{ "wipe",           required_argument, NULL, 'w' },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -800,7 +809,7 @@ int main(int argc, char **argv)
 
 	fdisk_set_ask(cxt, ask_callback, NULL);
 
-	while ((c = getopt_long(argc, argv, "b:Bc::C:hH:lL::o:sS:t:u::vV",
+	while ((c = getopt_long(argc, argv, "b:Bc::C:hH:lL::o:sS:t:u::vVw:",
 				longopts, NULL)) != -1) {
 		switch (c) {
 		case 'b':
@@ -891,6 +900,11 @@ int main(int argc, char **argv)
 		case 'v': /* for backward compatibility only */
 			printf(UTIL_LINUX_VERSION);
 			return EXIT_SUCCESS;
+		case 'w':
+			wipemode = wipemode_from_string(optarg);
+			if (wipemode < 0)
+				errx(EXIT_FAILURE, _("unsupported wipe mode"));
+			break;
 		case 'h':
 			usage(stdout);
 		case OPT_BYTES:
@@ -957,6 +971,24 @@ int main(int argc, char **argv)
 
 		fflush(stdout);
 
+		if (fdisk_get_collision(cxt)) {
+			int dowipe = wipemode == WIPEMODE_ALWAYS ? 1 : 0;
+
+			fdisk_warnx(cxt, _("Device %s already contains a %s signature."),
+				argv[optind], fdisk_get_collision(cxt));
+
+			if (isatty(STDIN_FILENO) && wipemode == WIPEMODE_AUTO)
+				dowipe = 1;	/* do it in interactive mode */
+
+			fdisk_enable_wipe(cxt, dowipe);
+			if (dowipe)
+				fdisk_warnx(cxt, _(
+					"The signature will be removed by a write command."));
+			else
+				fdisk_warnx(cxt, _(
+					"It is strongly recommended to wipe the device with "
+					"wipefs(8), in order to avoid possible collisions."));
+		}
 		if (!fdisk_has_label(cxt)) {
 			fdisk_info(cxt, _("Device does not contain a recognized partition table."));
 			fdisk_create_disklabel(cxt, NULL);

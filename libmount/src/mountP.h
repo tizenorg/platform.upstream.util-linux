@@ -40,6 +40,8 @@
 #define MNT_DEBUG_CXT		(1 << 9)
 #define MNT_DEBUG_DIFF		(1 << 10)
 #define MNT_DEBUG_MONITOR	(1 << 11)
+#define MNT_DEBUG_BTRFS		(1 << 12)
+#define MNT_DEBUG_LOOP		(1 << 13)
 
 #define MNT_DEBUG_ALL		0xFFFF
 
@@ -99,6 +101,8 @@ extern int mnt_get_filesystems(char ***filesystems, const char *pattern);
 extern void mnt_free_filesystems(char **filesystems);
 
 extern char *mnt_get_kernel_cmdline_option(const char *name);
+extern int mnt_guess_system_root(dev_t devno, struct libmnt_cache *cache, char **path);
+extern int mnt_stat_mountpoint(const char *target, struct stat *st);
 
 /* tab.c */
 extern int is_mountinfo(struct libmnt_table *tb);
@@ -409,5 +413,10 @@ extern int mnt_update_set_filename(struct libmnt_update *upd,
 				   const char *filename, int userspace_only);
 extern int mnt_update_already_done(struct libmnt_update *upd,
 				   struct libmnt_lock *lc);
+
+#if __linux__
+/* btrfs.c */
+extern uint64_t btrfs_get_default_subvol_id(const char *path);
+#endif
 
 #endif /* _LIBMOUNT_PRIVATE_H */

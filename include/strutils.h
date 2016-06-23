@@ -36,6 +36,7 @@ extern void strtotimeval_or_err(const char *str, struct timeval *tv,
 		const char *errmesg);
 
 extern int isdigit_string(const char *str);
+extern int isxdigit_string(const char *str);
 
 extern int parse_switch(const char *arg, const char *errmesg, ...);
 
@@ -78,7 +79,7 @@ static inline char *strdup_to_offset(void *stru, size_t offset, const char *str)
 #define strdup_to_struct_member(_s, _m, _str) \
 		strdup_to_offset((void *) _s, offsetof(__typeof__(*(_s)), _m), _str)
 
-extern void strmode(mode_t mode, char *str);
+extern void xstrmode(mode_t mode, char *str);
 
 /* Options for size_to_human_string() */
 enum

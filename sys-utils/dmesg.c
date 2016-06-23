@@ -289,9 +289,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(_(" -x, --decode                decode facility and level to readable string\n"), out);
 	fputs(_(" -d, --show-delta            show time delta between printed messages\n"), out);
 	fputs(_(" -e, --reltime               show local time and time delta in readable format\n"), out);
-	fputs(_(" -T, --ctime                 show human readable timestamp (may be inaccurate!)\n"), out);
-	fputs(_(" -t, --notime                don't print messages timestamp\n"), out);
-	fputs(_("     --time-format <format>  show time stamp using format:\n"
+	fputs(_(" -T, --ctime                 show human-readable timestamp (may be inaccurate!)\n"), out);
+	fputs(_(" -t, --notime                don't show any timestamp with messages\n"), out);
+	fputs(_("     --time-format <format>  show timestamp using the given format:\n"
 		"                               [delta|reltime|ctime|notime|iso]\n"
 		"Suspending/resume will make ctime and iso timestamps inaccurate.\n"), out);
 	fputs(USAGE_SEPARATOR, out);
@@ -835,7 +835,7 @@ static char *iso_8601_time(struct dmesg_control *ctl, struct dmesg_record *rec,
 		return buf;
 	}
 	len = strlen(buf);
-	snprintf(buf + len, bufsiz - len, ",%06d", (int)rec->tv.tv_usec);
+	snprintf(buf + len, bufsiz - len, ",%06ld", (long)rec->tv.tv_usec);
 	len = strlen(buf);
 	strftime(buf + len, bufsiz - len, "%z", &tm);
 	return buf;
@@ -894,10 +894,10 @@ static void print_record(struct dmesg_control *ctl,
 	 * backward compatibility with syslog(2) buffers only
 	 */
 	if (ctl->raw) {
-		ctl->indent = printf("<%d>[%5d.%06d] ",
+		ctl->indent = printf("<%d>[%5ld.%06ld] ",
 				     LOG_MAKEPRI(rec->facility, rec->level),
-				     (int) rec->tv.tv_sec,
-				     (int) rec->tv.tv_usec);
+				     (long) rec->tv.tv_sec,
+				     (long) rec->tv.tv_usec);
 
 		goto mesg;
 	}
@@ -948,11 +948,12 @@ static void print_record(struct dmesg_control *ctl,
 		ctl->lasttm = cur;
 		break;
 	case DMESG_TIMEFTM_TIME:
-		ctl->indent = printf("[%5d.%06d] ", (int)rec->tv.tv_sec, (int)rec->tv.tv_usec);
+		ctl->indent = printf("[%5ld.%06ld] ",
+		               (long)rec->tv.tv_sec, (long)rec->tv.tv_usec);
 		break;
 	case DMESG_TIMEFTM_TIME_DELTA:
-		ctl->indent = printf("[%5d.%06d <%12.06f>] ", (int)rec->tv.tv_sec,
-			       (int)rec->tv.tv_usec, record_count_delta(ctl, rec));
+		ctl->indent = printf("[%5ld.%06ld <%12.06f>] ", (long)rec->tv.tv_sec,
+		               (long)rec->tv.tv_usec, record_count_delta(ctl, rec));
 		break;
 	case DMESG_TIMEFTM_ISO8601:
 		ctl->indent = printf("%s ", iso_8601_time(ctl, rec, buf, sizeof(buf)));

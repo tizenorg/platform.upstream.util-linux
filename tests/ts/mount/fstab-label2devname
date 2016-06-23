@@ -24,10 +24,10 @@ ts_init "$*"
 
 ts_check_test_command "$TS_CMD_MOUNT"
 ts_check_test_command "$TS_CMD_UMOUNT"
-ts_check_prog "mkfs.ext3"
 
 ts_skip_nonroot
 ts_check_losetup
+ts_check_prog "mkfs.ext3"
 
 ts_device_init
 DEVICE=$TS_LODEV
@@ -42,12 +42,12 @@ ts_device_has "LABEL" $LABEL $DEVICE \
 ts_fstab_add "$DEVICE"
 
 # variant A)
-$TS_CMD_MOUNT -L $LABEL 2>&1 >> $TS_OUTPUT
+$TS_CMD_MOUNT -L $LABEL >> $TS_OUTPUT 2>&1
 ts_is_mounted $DEVICE || ts_die "A) Cannot find $DEVICE in /proc/mounts"
 $TS_CMD_UMOUNT $DEVICE || ts_die "A) Cannot umount $DEVICE"
 
 # variant B)
-$TS_CMD_MOUNT "LABEL=$LABEL" 2>&1 >> $TS_OUTPUT
+$TS_CMD_MOUNT "LABEL=$LABEL" >> $TS_OUTPUT 2>&1
 ts_is_mounted $DEVICE || ts_die "B) Cannot find $DEVICE in /proc/mounts"
 $TS_CMD_UMOUNT $DEVICE || ts_die "B) Cannot umount $DEVICE"
 

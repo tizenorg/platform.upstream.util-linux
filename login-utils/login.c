@@ -48,12 +48,10 @@
 #include <utmp.h>
 #include <stdlib.h>
 #include <sys/syslog.h>
-#include <sys/sysmacros.h>
 #ifdef HAVE_LINUX_MAJOR_H
 # include <linux/major.h>
 #endif
 #include <netdb.h>
-#include <lastlog.h>
 #include <security/pam_appl.h>
 #ifdef HAVE_SECURITY_PAM_MISC_H
 # include <security/pam_misc.h>
@@ -256,13 +254,11 @@ static void motd(void)
 		struct stat st;
 		int fd;
 
-		if (stat(motdfile, &st) || !st.st_size)
-			continue;
 		fd = open(motdfile, O_RDONLY, 0);
 		if (fd < 0)
 			continue;
-
-		sendfile(fileno(stdout), fd, NULL, st.st_size);
+		if (!fstat(fd, &st) && st.st_size)
+			sendfile(fileno(stdout), fd, NULL, st.st_size);
 		close(fd);
 	}
 
@@ -409,7 +405,7 @@ static void init_tty(struct login_context *cxt)
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 
-	signal(SIGHUP, SIG_IGN);	/* so vhangup() wont kill us */
+	signal(SIGHUP, SIG_IGN);	/* so vhangup() won't kill us */
 	vhangup();
 	signal(SIGHUP, SIG_DFL);
 
@@ -676,22 +672,14 @@ static struct passwd *get_passwd_entry(const char *username,
 					 struct passwd *pwd)
 {
 	struct passwd *res = NULL;
-	size_t sz = 16384;
 	int x;
 
 	if (!pwdbuf || !username)
 		return NULL;
 
-#ifdef _SC_GETPW_R_SIZE_MAX
-	{
-		long xsz = sysconf(_SC_GETPW_R_SIZE_MAX);
-		if (xsz > 0)
-			sz = (size_t) xsz;
-	}
-#endif
-	*pwdbuf = xrealloc(*pwdbuf, sz);
+	*pwdbuf = xrealloc(*pwdbuf, UL_GETPW_BUFSIZ);
 
-	x = getpwnam_r(username, pwd, *pwdbuf, sz, &res);
+	x = getpwnam_r(username, pwd, *pwdbuf, UL_GETPW_BUFSIZ, &res);
 	if (!res) {
 		errno = x;
 		return NULL;
@@ -1048,7 +1036,7 @@ static void init_environ(struct login_context *cxt)
 
 	/* destroy environment unless user has requested preservation (-p) */
 	if (!cxt->keep_env) {
-		environ = (char **) xmalloc(sizeof(char *));
+		environ = xmalloc(sizeof(char *));
 		memset(environ, 0, sizeof(char *));
 	}
 
@@ -1066,7 +1054,7 @@ static void init_environ(struct login_context *cxt)
 
 	/* mailx will give a funny error msg if you forget this one */
 	len = snprintf(tmp, sizeof(tmp), "%s/%s", _PATH_MAILDIR, pwd->pw_name);
-	if (len > 0 && (size_t) len + 1 <= sizeof(tmp))
+	if (len > 0 && (size_t) len < sizeof(tmp))
 		setenv("MAIL", tmp, 0);
 
 	/* LOGNAME is not documented in login(1) but HP-UX 6.5 does it. We'll

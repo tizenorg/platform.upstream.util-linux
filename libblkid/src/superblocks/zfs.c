@@ -70,9 +70,10 @@ struct nvlist {
 
 static void zfs_extract_guid_name(blkid_probe pr, loff_t offset)
 {
+	unsigned char *p, buff[4096];
 	struct nvlist *nvl;
 	struct nvpair *nvp;
-	size_t left = 4096;
+	size_t left = sizeof(buff);
 	int found = 0;
 
 	offset = (offset & ~(VDEV_LABEL_SIZE - 1)) + VDEV_LABEL_NVPAIR;
@@ -81,9 +82,13 @@ static void zfs_extract_guid_name(blkid_probe pr, loff_t offset)
 	 * the first 4k (left) of the nvlist.  This is true for all pools
 	 * I've seen, and simplifies this code somewhat, because we don't
 	 * have to handle an nvpair crossing a buffer boundary. */
-	nvl = (struct nvlist *)blkid_probe_get_buffer(pr, offset, left);
-	if (nvl == NULL)
+	p = blkid_probe_get_buffer(pr, offset, left);
+	if (!p)
 		return;
+
+	/* libblkid buffers are strictly readonly, but the code below modifies nvpair etc. */
+	memcpy(buff, p, sizeof(buff));
+	nvl = (struct nvlist *) buff;
 
 	nvdebug("zfs_extract: nvlist offset %llu\n", offset);
 
@@ -165,13 +170,13 @@ static void zfs_extract_guid_name(blkid_probe pr, loff_t offset)
 
 static int find_uberblocks(const void *label, loff_t *ub_offset, int *swap_endian)
 {
-	uint64_t swab_magic = swab64(UBERBLOCK_MAGIC);
+	uint64_t swab_magic = swab64((uint64_t)UBERBLOCK_MAGIC);
 	struct zfs_uberblock *ub;
 	int i, found = 0;
 	loff_t offset = VDEV_LABEL_UBERBLOCK;
 
 	for (i = 0; i < UBERBLOCKS_COUNT; i++, offset += UBERBLOCK_SIZE) {
-		ub = (struct zfs_uberblock *)(label + offset);
+		ub = (struct zfs_uberblock *)((char *) label + offset);
 
 		if (ub->ub_magic == UBERBLOCK_MAGIC) {
 			*ub_offset = offset;
@@ -194,7 +199,8 @@ static int find_uberblocks(const void *label, loff_t *ub_offset, int *swap_endia
 /* ZFS has 128x1kB host-endian root blocks, stored in 2 areas at the start
  * of the disk, and 2 areas at the end of the disk.  Check only some of them...
  * #4 (@ 132kB) is the first one written on a new filesystem. */
-static int probe_zfs(blkid_probe pr, const struct blkid_idmag *mag)
+static int probe_zfs(blkid_probe pr,
+	const struct blkid_idmag *mag  __attribute__((__unused__)))
 {
 	int swab_endian = 0;
 	struct zfs_uberblock *ub;
@@ -229,7 +235,7 @@ static int probe_zfs(blkid_probe pr, const struct blkid_idmag *mag)
 
 		if (found_in_label > 0) {
 			found+= found_in_label;
-			ub = (struct zfs_uberblock *)(label + ub_offset);
+			ub = (struct zfs_uberblock *)((char *) label + ub_offset);
 			ub_offset += offset;
 
 			if (found >= ZFS_WANT)
@@ -258,7 +264,7 @@ static int probe_zfs(blkid_probe pr, const struct blkid_idmag *mag)
 const struct blkid_idinfo zfs_idinfo =
 {
 	.name		= "zfs_member",
-	.usage		= BLKID_USAGE_RAID,
+	.usage		= BLKID_USAGE_FILESYSTEM,
 	.probefunc	= probe_zfs,
 	.minsz		= 64 * 1024 * 1024,
 	.magics		= BLKID_NONE_MAGIC

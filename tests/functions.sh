@@ -46,11 +46,22 @@ function ts_cd {
 }
 
 function ts_report {
-	if [ "$TS_PARALLEL" == "yes" ]; then
-		echo "$TS_TITLE $1"
-	else
-		echo "$1"
+	local desc=
+
+	if [ "$TS_PARSABLE" != "yes" ]; then
+		if [ $TS_NSUBTESTS -ne 0 ] && [ -z "$TS_SUBNAME" ]; then
+			desc=$(printf "%11s...")
+		fi
+		echo "$desc$1"
+		return
 	fi
+
+	if [ -n "$TS_SUBNAME" ]; then
+		desc=$(printf "%s: [%02d] %s" "$TS_DESC" "$TS_NSUBTESTS" "$TS_SUBNAME")
+	else
+		desc=$TS_DESC
+	fi
+	printf "%13s: %-45s ...%s\n" "$TS_COMPONENT" "$desc" "$1"
 }
 
 function ts_check_test_command {
@@ -158,16 +169,26 @@ function ts_has_option {
 	fi
 
 	# or just check the global command line options
-	echo -n $ALL | sed 's/ //g' | awk 'BEGIN { FS="="; RS="--" } /('$NAME'$|'$NAME'=)/ { print "yes" }'
+	if [[ $ALL =~ ([$' \t\n']|^)--$NAME([$'= \t\n']|$) ]]; then
+		echo yes
+		return
+	fi
+
+	# or the _global_ env, e.g TS_OPT_parsable="yes"
+	eval local env_opt=\$TS_OPT_${v_name}
+	if [ "$env_opt" = "yes" ]; then echo "yes"; fi
 }
 
 function ts_option_argument {
 	NAME="$1"
 	ALL="$2"
-	echo -n $ALL | sed 's/ //g' | awk 'BEGIN { FS="="; RS="--" } /'$NAME'=/ { print $2 }'
+
+	# last option wins!
+	echo "$ALL" | sed -n "s/.*[ \t\n]--$NAME=\([^ \t\n]*\).*/\1/p" | tail -n 1
 }
 
 function ts_init_core_env {
+	TS_SUBNAME=""
 	TS_NS="$TS_COMPONENT/$TS_TESTNAME"
 	TS_OUTPUT="$TS_OUTDIR/$TS_TESTNAME"
 	TS_VGDUMP="$TS_OUTDIR/$TS_TESTNAME.vgdump"
@@ -229,6 +250,7 @@ function ts_init_env {
 	TS_SUBDIR=$(dirname $TS_SCRIPT)
 	TS_TESTNAME=$(basename $TS_SCRIPT)
 	TS_COMPONENT=$(basename $TS_SUBDIR)
+	TS_DESC=${TS_DESC:-$TS_TESTNAME}
 
 	TS_NSUBTESTS=0
 	TS_NSUBFAILED=0
@@ -244,6 +266,8 @@ function ts_init_env {
 	TS_PARALLEL=$(ts_has_option "parallel" "$*")
 	TS_KNOWN_FAIL=$(ts_has_option "known-fail" "$*")
 	TS_SKIP_LOOPDEVS=$(ts_has_option "skip-loopdevs" "$*")
+	TS_PARSABLE=$(ts_has_option "parsable" "$*")
+	[ "$TS_PARSABLE" = "yes" ] || TS_PARSABLE="$TS_PARALLEL"
 
 	tmp=$( ts_has_option "memcheck" "$*")
 	if [ "$tmp" == "yes" -a -f /usr/bin/valgrind ]; then
@@ -291,17 +315,12 @@ function ts_init_env {
 function ts_init_subtest {
 
 	TS_SUBNAME="$1"
-
 	ts_init_core_subtest_env
-
-	[ $TS_NSUBTESTS -eq 0 ] && echo
 	TS_NSUBTESTS=$(( $TS_NSUBTESTS + 1 ))
 
-	if [ "$TS_PARALLEL" == "yes" ]; then
-		TS_TITLE=$(printf "%13s: %-30s ...\n%16s: %-27s ..." "$TS_COMPONENT" "$TS_DESC" "" "$TS_SUBNAME")
-	else
-		TS_TITLE=$(printf "%16s: %-27s ..." "" "$TS_SUBNAME")
-		echo -n "$TS_TITLE"
+	if [ "$TS_PARSABLE" != "yes" ]; then
+		[ $TS_NSUBTESTS -eq 1 ] && echo
+		printf "%16s: %-27s ..." "" "$TS_SUBNAME"
 	fi
 }
 
@@ -311,11 +330,8 @@ function ts_init {
 	local is_fake=$( ts_has_option "fake" "$*")
 	local is_force=$( ts_has_option "force" "$*")
 
-	if [ "$TS_PARALLEL" == "yes" ]; then
-		TS_TITLE=$(printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC")
-	else
-		TS_TITLE=$(printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC")
-		echo -n "$TS_TITLE"
+	if [ "$TS_PARSABLE" != "yes" ]; then
+		printf "%13s: %-30s ..." "$TS_COMPONENT" "$TS_DESC"
 	fi
 
 	[ "$is_fake" == "yes" ] && ts_skip "fake mode"
@@ -362,22 +378,21 @@ function ts_valgrind {
 function ts_gen_diff {
 	local res=0
 
-	if [ -s "$TS_OUTPUT" ]; then
+	[ -f "$TS_OUTPUT" ] || return 1
+	[ -f "$TS_EXPECTED" ] || TS_EXPECTED=/dev/null
 
-		# remove libtool lt- prefixes
-		sed --in-place 's/^lt\-\(.*\: \)/\1/g' $TS_OUTPUT
+	# remove libtool lt- prefixes
+	sed --in-place 's/^lt\-\(.*\: \)/\1/g' $TS_OUTPUT
 
-		[ -d "$TS_DIFFDIR" ] || mkdir -p "$TS_DIFFDIR"
-		diff -u $TS_EXPECTED $TS_OUTPUT > $TS_DIFF
+	[ -d "$TS_DIFFDIR" ] || mkdir -p "$TS_DIFFDIR"
+	diff -u $TS_EXPECTED $TS_OUTPUT > $TS_DIFF
 
-		if [ -s $TS_DIFF ]; then
-			res=1
-		else
-			rm -f $TS_DIFF;
-		fi
-	else
+	if [ $? -ne 0 ] || [ -s $TS_DIFF ]; then
 		res=1
+	else
+		rm -f $TS_DIFF;
 	fi
+
 	return $res
 }
 
@@ -393,16 +408,12 @@ function tt_gen_mem_report {
 function ts_finalize_subtest {
 	local res=0
 
-	if [ -s "$TS_EXPECTED" ]; then
-		ts_gen_diff
-		if [ $? -eq 1 ]; then
-			ts_failed_subtest "$1"
-			res=1
-		else
-			ts_ok_subtest "$(tt_gen_mem_report "$1")"
-		fi
+	ts_gen_diff
+	if [ $? -eq 1 ]; then
+		ts_failed_subtest "$1"
+		res=1
 	else
-		ts_skip_subtest "output undefined"
+		ts_ok_subtest "$(tt_gen_mem_report "$1")"
 	fi
 
 	[ $res -ne 0 ] && TS_NSUBFAILED=$(( $TS_NSUBFAILED + 1 ))
@@ -417,23 +428,15 @@ function ts_finalize {
 	ts_cleanup_on_exit
 
 	if [ $TS_NSUBTESTS -ne 0 ]; then
-		printf "%11s..."
-		if [ $TS_NSUBFAILED -ne 0 ]; then
+		if ! ts_gen_diff || [ $TS_NSUBFAILED -ne 0 ]; then
 			ts_failed "$TS_NSUBFAILED from $TS_NSUBTESTS sub-tests"
 		else
 			ts_ok "all $TS_NSUBTESTS sub-tests PASSED"
 		fi
 	fi
 
-	if [ -s $TS_EXPECTED ]; then
-		ts_gen_diff
-		if [ $? -eq 1 ]; then
-			ts_failed "$1"
-		fi
-		ts_ok "$1"
-	fi
-
-	ts_skip "output undefined"
+	ts_gen_diff || ts_failed "$1"
+	ts_ok "$1"
 }
 
 function ts_die {
@@ -464,7 +467,8 @@ function ts_image_init {
 	local mib=${1:-"5"}	# size in MiBs
 	local img=${2:-"$TS_OUTDIR/${TS_TESTNAME}.img"}
 
-	dd if=/dev/zero of="$img" bs=1M count=$mib &> /dev/null
+	rm -f $img
+	truncate -s "${mib}M" "$img"
 	echo "$img"
 	return 0
 }
@@ -608,21 +612,24 @@ function ts_fdisk_clean {
 	local DEVNAME=$1
 
 	# remove non comparable parts of fdisk output
-	if [ x"${DEVNAME}" != x"" ]; then
-	       sed -i -e "s:${DEVNAME}:<removed>:g" $TS_OUTPUT
+	if [ -n "${DEVNAME}" ]; then
+		sed -i -e "s@${DEVNAME}@<removed>@;" $TS_OUTPUT
 	fi
 
-	sed -i -e 's/Disk identifier:.*/Disk identifier: <removed>/g' \
-	       -e 's/Created a new.*/Created a new <removed>./g' \
-	       -e 's/^Device[[:blank:]]*Start/Device             Start/g' \
-	       -e 's/^Device[[:blank:]]*Boot/Device     Boot/g' \
-	       -e 's/^Device[[:blank:]]*Flag/Device     Flag/g' \
-	       -e 's/Welcome to fdisk.*/Welcome to fdisk <removed>./g' \
-	       $TS_OUTPUT
+	sed -i \
+		-e 's/Disk identifier:.*/Disk identifier: <removed>/' \
+		-e 's/Created a new.*/Created a new <removed>./' \
+		-e 's/^Device[[:blank:]]*Start/Device             Start/' \
+		-e 's/^Device[[:blank:]]*Boot/Device     Boot/' \
+		-e 's/Welcome to fdisk.*/Welcome to fdisk <removed>./' \
+		-e 's/typescript file.*/typescript file <removed>./' \
+		-e 's@^\(I/O size (minimum/op.* bytes /\) [1-9][0-9]* @\1 <removed> @' \
+		$TS_OUTPUT
 }
 
 function ts_scsi_debug_init {
 	local devname
+	local t
 	TS_DEVICE="none"
 
 	# dry run is not really reliable, real modprobe may still fail
@@ -633,6 +640,10 @@ function ts_scsi_debug_init {
 	modprobe -r scsi_debug &>/dev/null \
 		|| ts_skip "cannot remove scsi_debug module (rmmod)"
 
+	# TODO validate that all devices are gone, add function ts_scsi_debug_rmmod
+	# to be used by the tests too. Tests which produce non-removable scsi
+	# devices should fail!
+
 	modprobe -b scsi_debug "$@" &>/dev/null \
 		|| ts_skip "cannot load scsi_debug module (modprobe)"
 
@@ -640,13 +651,20 @@ function ts_scsi_debug_init {
 	lsmod | grep -q "^scsi_debug " \
 		|| ts_skip "scsi_debug module not loaded (lsmod)"
 
-	sleep 1
 	udevadm settle
 
-	devname=$(grep --with-filename scsi_debug /sys/block/*/device/model | awk -F '/' '{print $4}')
-	[ "x${devname}" == "x" ] && ts_die "cannot find scsi_debug device"
+	# wait for device if udevadm settle does not work
+	for t in 0 0.02 0.05 0.1 1; do
+		sleep $t
+		devname=$(grep --with-filename scsi_debug /sys/block/*/device/model) && break
+	done
+	[ -n "${devname}" ] || ts_die "timeout waiting for scsi_debug device"
 
+	devname=$(echo $devname | awk -F '/' '{print $4}')
 	TS_DEVICE="/dev/${devname}"
+
+	# TODO validate that device is really up, for now just a warning on stderr
+	test -b $TS_DEVICE || echo "warning: scsi_debug device is still down"
 }
 
 function ts_resolve_host {
@@ -681,22 +699,23 @@ function ts_init_socket_to_file {
 	ts_check_prog "socat"
 	rm -f "$socket" "$outfile"
 
+	# if socat is too old for these options we'll skip it below
 	socat -u UNIX-LISTEN:$socket,fork,max-children=1,backlog=128 \
-		STDOUT > "$outfile" &
+		STDOUT > "$outfile" 2>/dev/null &
 	pid=$!
 
 	# check for running background process
-	if [ "$pid" -le "0" ] || ! kill -s 0 "$pid"; then
+	if [ "$pid" -le "0" ] || ! kill -s 0 "$pid" &>/dev/null; then
 		ts_skip "unable to run socat"
 	fi
 	# wait for the socket listener
-	if ! socat -u /dev/null UNIX-CONNECT:$socket,retry=30,interval=0.1; then
-		kill -9 "$pid"
-		ts_skip "timeout waiting for socket"
+	if ! socat -u /dev/null UNIX-CONNECT:$socket,retry=30,interval=0.1 &>/dev/null; then
+		kill -9 "$pid" &>/dev/null
+		ts_skip "timeout waiting for socat socket"
 	fi
 	# check socket again
-	if ! socat -u /dev/null UNIX-CONNECT:$socket; then
-		kill -9 "$pid"
-		ts_skip "socket stopped listening"
+	if ! socat -u /dev/null UNIX-CONNECT:$socket &>/dev/null; then
+		kill -9 "$pid" &>/dev/null
+		ts_skip "socat socket stopped listening"
 	fi
 }

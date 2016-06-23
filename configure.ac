@@ -3,6 +3,7 @@ AC_INIT([util-linux],
 	[kzak@redhat.com],,
 	[http://www.kernel.org/pub/linux/utils/util-linux/])
 
+
 AC_PREREQ([2.60])
 
 AC_CONFIG_AUX_DIR([config])
@@ -22,11 +23,14 @@ dnl version details from <major>.<minor>[-<suffix>]
 PACKAGE_VERSION_MAJOR=$(echo $PACKAGE_VERSION | awk -F. '{print $1}')
 PACKAGE_VERSION_MINOR=$(echo $PACKAGE_VERSION | awk -F. '{print $2}' \
 					      | awk -F- '{print $1}')
-PACKAGE_VERSION_RELEASE=0
+
+PACKAGE_VERSION_RELEASE=$(echo $PACKAGE_VERSION | awk -F. '{print $3}' \
+						| sed 's/.*@<:@^@<:@:digit:@:>@@:>@.*/0/')
+
 
 dnl libblkid version
 LIBBLKID_VERSION="$PACKAGE_VERSION_MAJOR.$PACKAGE_VERSION_MINOR.$PACKAGE_VERSION_RELEASE"
-LIBBLKID_DATE="02-Nov-2015"
+LIBBLKID_DATE="12-Apr-2016"
 LIBBLKID_LT_MAJOR=1
 LIBBLKID_LT_MINOR=1
 LIBBLKID_LT_MICRO=0
@@ -95,6 +99,7 @@ AC_SUBST([usrlib_execdir])
 
 
 AM_PROG_CC_C_O
+AC_PROG_MKDIR_P
 AC_PROG_CC_STDC
 AC_CANONICAL_HOST
 AC_C_CONST
@@ -130,9 +135,14 @@ AC_SUBST([WARN_CFLAGS])
 
 UL_WARN_ADD([-Wno-clobbered], [BSD_WARN_CFLAGS])
 AC_SUBST([BSD_WARN_CFLAGS])
+UL_WARN_ADD([-Wno-unused-parameter], [NO_UNUSED_WARN_CFLAGS])
+AC_SUBST([NO_UNUSED_WARN_CFLAGS])
 
 dnl libtool-2
 LT_INIT
+
+dnl check supported linker flags
+AX_CHECK_VSCRIPT
 
 m4_ifndef([PKG_PROG_PKG_CONFIG],
   [m4_fatal([Could not locate the pkg-config autoconf
@@ -151,11 +161,17 @@ bsd_os=no
 AS_CASE([${host_os}],
   [*linux*],
      [linux_os=yes],
+  [*darwin*],
+     [darwin_os=yes],
   [*bsd*],
      [bsd_os=yes])
 AM_CONDITIONAL([LINUX], [test "x$linux_os" = xyes])
+AM_CONDITIONAL([DARWIN], [test "x$darwin_os" = xyes])
 AM_CONDITIONAL([BSD], [test "x$bsd_os" = xyes])
 
+AS_IF([test  "x$darwin_os" = xyes], [
+  AC_DEFINE([_DARWIN_C_SOURCE], [1], [Enable MAP_ANON in sys/mman.h on Mac OS X])
+])
 
 dnl define ARCH_<NAME> conditionals
 UL_SET_ARCH([I86], [i?86-*])
@@ -193,6 +209,7 @@ AC_CHECK_HEADERS([ \
 	fcntl.h \
 	getopt.h \
 	inttypes.h \
+	linux/btrfs.h \
 	linux/cdrom.h \
 	linux/falloc.h \
 	linux/watchdog.h \
@@ -223,21 +240,26 @@ AC_CHECK_HEADERS([ \
 	sys/ioccom.h \
 	sys/ioctl.h \
 	sys/mkdev.h \
+	sys/mount.h \
 	sys/param.h \
 	sys/prctl.h \
-	sys/queue.h \
 	sys/resource.h \
+	sys/signalfd.h \
 	sys/socket.h \
 	sys/sockio.h \
 	sys/stat.h \
+	sys/sysmacros.h \
 	sys/swap.h \
 	sys/syscall.h \
 	sys/time.h \
 	sys/timex.h \
 	sys/ttydefaults.h \
 	sys/types.h \
+	sys/ucred.h \
 	sys/un.h \
 	unistd.h \
+	shadow.h \
+	utmp.h \
 ])
 
 AC_CHECK_HEADERS([security/pam_misc.h],
@@ -260,12 +282,16 @@ AC_CHECK_HEADERS([langinfo.h],
 
 dnl Convert some ac_cv_header_* variables to have_*
 dnl
+have_linux_btrfs_h=$ac_cv_header_linux_btrfs_h
 have_linux_raw_h=$ac_cv_header_linux_raw_h
 have_linux_securebits_h=$ac_cv_header_linux_securebits_h
 have_linux_watchdog_h=$ac_cv_header_linux_watchdog_h
 have_security_pam_appl_h=$ac_cv_header_security_pam_appl_h
 have_security_pam_misc_h=$ac_cv_header_security_pam_misc_h
 have_security_openpam_h=$ac_cv_header_security_openpam_h
+have_shadow_h=$ac_cv_header_shadow_h
+have_sys_signalfd_h=$ac_cv_header_sys_signalfd_h
+have_utmp_h=$ac_cv_header_utmp_h
 
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 #include <time.h>
@@ -345,6 +371,7 @@ AC_CHECK_FUNCS([ \
 	llseek \
 	lseek64 \
 	mempcpy \
+	mkostemp \
 	nanosleep \
 	ntp_gettime \
 	personality \
@@ -353,8 +380,11 @@ AC_CHECK_FUNCS([ \
 	qsort_r \
 	rpmatch \
 	scandirat \
+	setprogname \
 	setresgid \
 	setresuid \
+	sched_setattr \
+	sched_setscheduler \
 	sigqueue \
 	srandom \
 	strnchr \
@@ -374,21 +404,39 @@ AC_CHECK_FUNCS([ioperm iopl], [have_io=yes])
 AC_CHECK_FUNCS([futimens], [have_futimens=yes])
 AC_CHECK_FUNCS([inotify_init1], [have_inotify_init1=yes])
 AC_CHECK_FUNCS([open_memstream], [have_open_memstream=yes],[have_open_memstream=no])
+AC_CHECK_FUNCS([reboot], [have_reboot=yes],[have_reboot=no])
+
+AM_CONDITIONAL([HAVE_OPENAT], [test "x$have_openat" = xyes])
 
 dnl lib/mononotic.c may require -lrt
 AC_CHECK_FUNCS([clock_gettime], [],
 	[AC_CHECK_LIB([rt], [clock_gettime], [REALTIME_LIBS="-lrt"])]
 )
-AC_SUBST([REALTIME_LIBS])
 
 have_timer="no"
-AC_CHECK_FUNCS([timer_createx],
-	[have_time="yes"],
+AC_CHECK_FUNCS([timer_create],
+	[have_timer="yes"],
 	[AC_CHECK_LIB([rt], [timer_create], [
 		have_timer="yes"
 		REALTIME_LIBS="-lrt"
-	])]
+	],[
+		AC_SEARCH_LIBS([timer_create], [rt], [
+			AC_MSG_RESULT(yes)
+			have_timer="yes"
+			REALTIME_LIBS="-lrt -lpthread"
+		],[], [-lpthread]
+		)
+		])]
 )
+
+AC_SUBST([REALTIME_LIBS])
+
+
+AC_CHECK_LIB([rtas], [rtas_get_sysparm], [
+	RTAS_LIBS="-lrtas"
+	AC_DEFINE_UNQUOTED([HAVE_LIBRTAS], [1], [Define if librtas exists]), [],
+])
+AC_SUBST([RTAS_LIBS])
 
 
 AC_CHECK_MEMBER([struct sockaddr.sa_len],
@@ -495,16 +543,15 @@ AC_DEFUN([UL_SCANF_TYPE_MODIFIER], [dnl
 int main()
 {
 	int i;
+	int rc = 1;
 	char *s;
 	i = sscanf("x", $1, &s);
+	if (i == 1  && *s == 'x')
+		rc = 0;
 	free(s);
-	if (i == 1)
-		return 0;
-	return 1;
+	return rc;
 }])
 
-ul_save_CPPFLAGS="$CPPFLAGS"
-CPPFLAGS="-Werror ${CPPFLAGS}"
 AC_CACHE_VAL([scanf_cv_alloc_modifier],
   AC_RUN_IFELSE([AC_LANG_SOURCE([UL_SCANF_TYPE_MODIFIER(["%ms"])])],
     [scanf_cv_alloc_modifier=ms],
@@ -538,7 +585,6 @@ AC_CACHE_VAL([scanf_cv_alloc_modifier],
     [scanf_cv_alloc_modifier=no])]
   )
 )
-CPPFLAGS="$ul_save_CPPFLAGS"
 
 AC_MSG_CHECKING([scanf string alloc modifiers])
 AS_CASE([$scanf_cv_alloc_modifier],
@@ -563,17 +609,6 @@ AS_IF([test "x$with_util" = xno], [
   have_util=no
 ], [
   UL_CHECK_LIB([util], [openpty])
-])
-
-
-AC_ARG_WITH([termcap], AS_HELP_STRING([--without-termcap], [compile without libtermcap]),
-  [], [with_termcap=auto]
-)
-AS_IF([test "x$with_termcap" = xno], [
-  AM_CONDITIONAL([HAVE_TERMCAP], [false])
-  have_termcap=no
-], [
-  UL_CHECK_LIB([termcap], [tgetnum])
 ])
 
 
@@ -884,9 +919,10 @@ dnl libblkid
 dnl
 AC_ARG_ENABLE([libblkid],
   AS_HELP_STRING([--disable-libblkid], [do not build libblkid and many related utilities]),
-  [], [UL_DEFAULT_ENABLE([libblkid], [yes])]
+  [], [UL_DEFAULT_ENABLE([libblkid], [check])]
 )
 UL_BUILD_INIT([libblkid])
+UL_REQUIRES_HAVE([libblkid], [openat], [openat functions])
 AC_SUBST([LIBBLKID_DATE])
 AC_SUBST([LIBBLKID_VERSION])
 AC_SUBST([LIBBLKID_VERSION_INFO])
@@ -940,7 +976,6 @@ AC_ARG_ENABLE([libsmartcols],
 )
 UL_BUILD_INIT([libsmartcols])
 AM_CONDITIONAL([BUILD_LIBSMARTCOLS], [test "x$build_libsmartcols" = xyes])
-AM_CONDITIONAL([BUILD_LIBSMARTCOLS_TESTS], [test "x$build_libsmartcols" = xyes -a "x$enable_static" = xyes])
 
 AC_SUBST([LIBSMARTCOLS_VERSION])
 AC_SUBST([LIBSMARTCOLS_VERSION_INFO])
@@ -972,12 +1007,14 @@ AC_DEFINE_UNQUOTED([LIBFDISK_VERSION], ["$LIBFDISK_VERSION"], [libfdisk version 
 
 
 UL_BUILD_INIT([fdisk], [check])
+UL_REQUIRES_HAVE([fdisk], [openat], [openat functions])
 UL_REQUIRES_BUILD([fdisk], [libfdisk])
 UL_REQUIRES_BUILD([fdisk], [libsmartcols])
 AM_CONDITIONAL([BUILD_FDISK], [test "x$build_fdisk" = xyes])
 
 
 UL_BUILD_INIT([sfdisk], [check])
+UL_REQUIRES_HAVE([sfdisk], [openat], [openat functions])
 UL_REQUIRES_BUILD([sfdisk], [libfdisk])
 UL_REQUIRES_BUILD([sfdisk], [libsmartcols])
 AM_CONDITIONAL([BUILD_SFDISK], [test "x$build_sfdisk" = xyes])
@@ -986,7 +1023,7 @@ AM_CONDITIONAL([BUILD_SFDISK], [test "x$build_sfdisk" = xyes])
 UL_BUILD_INIT([cfdisk], [check])
 UL_REQUIRES_BUILD([cfdisk], [libfdisk])
 UL_REQUIRES_BUILD([cfdisk], [libsmartcols])
-UL_REQUIRES_HAVE([cfdisk], [open_memstream])
+UL_REQUIRES_HAVE([cfdisk], [open_memstream], [open_memstream function])
 UL_REQUIRES_HAVE([cfdisk], [ncurses,slang], [ncurses or slang library])
 AM_CONDITIONAL([BUILD_CFDISK], [test "x$build_cfdisk" = xyes])
 
@@ -1045,6 +1082,8 @@ AC_ARG_ENABLE([uuidd],
 )
 UL_BUILD_INIT([uuidd])
 UL_REQUIRES_BUILD([uuidd], [libuuid])
+UL_REQUIRES_HAVE([uuidd], [timer], [timer_create function])
+UL_REQUIRES_HAVE([uuidd], [sys_signalfd_h], [sys/signalfd.h header])
 AS_IF([test "x$build_uuidd" = xyes], [
   AC_DEFINE([HAVE_UUIDD], [1], [Define to 1 if you want to use uuid daemon.])
 ])
@@ -1147,10 +1186,13 @@ AC_CHECK_FUNCS([setns])
 
 
 AC_ARG_WITH([cap_ng],
-  AS_HELP_STRING([--without-capng], [compile without libcap-ng]),
+  AS_HELP_STRING([--without-cap-ng], [compile without libcap-ng]),
   [], [with_cap_ng=auto]
 )
-AS_IF([test "x$with_cap_ng" = xno], [have_cap_ng=no],[
+AS_IF([test "x$with_cap_ng" = xno], [
+  AM_CONDITIONAL([HAVE_CAP_NG], [false])
+  have_cap_ng=no
+],[
   UL_CHECK_LIB([cap-ng], [capng_apply], [cap_ng])
 ])
 
@@ -1178,9 +1220,10 @@ AM_CONDITIONAL([BUILD_EJECT], [test "x$build_eject" = xyes])
 
 AC_ARG_ENABLE([agetty],
   AS_HELP_STRING([--disable-agetty], [do not build agetty]),
-  [], [UL_DEFAULT_ENABLE([agetty], [yes])]
+  [], [UL_DEFAULT_ENABLE([agetty], [check])]
 )
 UL_BUILD_INIT([agetty])
+UL_REQUIRES_HAVE([agetty], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_AGETTY], [test "x$build_agetty" = xyes])
 AS_IF([test "x$have_futimens" = xyes -a "x$have_inotify_init1" = xyes ], [
   AC_DEFINE([AGETTY_RELOAD], [1], [Enable agetty --reload feature])
@@ -1279,8 +1322,14 @@ UL_REQUIRES_HAVE([lscpu], [cpu_set_t], [cpu_set_t type])
 AM_CONDITIONAL([BUILD_LSCPU], [test "x$build_lscpu" = xyes])
 
 
-UL_BUILD_INIT([lslogins], [check])
+AC_ARG_ENABLE([lslogins],
+  AS_HELP_STRING([--disable-lslogins], [do not build lslogins]),
+  [], [UL_DEFAULT_ENABLE([lslogins], [check])]
+)
+UL_BUILD_INIT([lslogins])
 UL_REQUIRES_BUILD([lslogins], [libsmartcols])
+UL_REQUIRES_HAVE([lslogins], [shadow_h], [shadow.h header])
+UL_REQUIRES_HAVE([lslogins], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_LSLOGINS], [test "x$build_lslogins" = xyes])
 
 
@@ -1320,8 +1369,11 @@ AC_ARG_ENABLE([cal],
 UL_BUILD_INIT([cal])
 AM_CONDITIONAL([BUILD_CAL], [test "x$build_cal" = xyes])
 
-
-UL_BUILD_INIT([logger], [yes])
+AC_ARG_ENABLE([logger],
+  AS_HELP_STRING([--disable-logger], [do not build logger]),
+  [], [UL_DEFAULT_ENABLE([logger], [check])]
+)
+UL_BUILD_INIT([logger])
 AM_CONDITIONAL([BUILD_LOGGER], [test "x$build_logger" = xyes])
 
 UL_BUILD_INIT([look], [yes])
@@ -1382,23 +1434,36 @@ UL_REQUIRES_SYSCALL_CHECK([pivot_root], [UL_CHECK_SYSCALL([pivot_root])])
 AM_CONDITIONAL([BUILD_PIVOT_ROOT], [test "x$build_pivot_root" = xyes])
 
 
-UL_BUILD_INIT([flock], [yes])
+UL_BUILD_INIT([flock], [check])
 UL_REQUIRES_HAVE([flock], [timer], [timer_create function])
 AM_CONDITIONAL([BUILD_FLOCK], [test "x$build_flock" = xyes])
 
 UL_BUILD_INIT([ipcmk], [yes])
 AM_CONDITIONAL([BUILD_IPCMK], [test "x$build_ipcmk" = xyes])
 
-UL_BUILD_INIT([ipcrm], [yes])
+AC_ARG_ENABLE([ipcrm],
+  AS_HELP_STRING([--disable-ipcrm], [do not build ipcrm]),
+  [], [UL_DEFAULT_ENABLE([ipcrm], [yes])]
+)
+UL_BUILD_INIT([ipcrm])
 AM_CONDITIONAL([BUILD_IPCRM], [test "x$build_ipcrm" = xyes])
 
-UL_BUILD_INIT([ipcs], [yes])
+AC_ARG_ENABLE([ipcs],
+  AS_HELP_STRING([--disable-ipcs], [do not build ipcs]),
+  [], [UL_DEFAULT_ENABLE([ipcs], [yes])]
+)
+UL_BUILD_INIT([ipcs])
 AM_CONDITIONAL([BUILD_IPCS], [test "x$build_ipcs" = xyes])
 
 UL_BUILD_INIT([lsipc], [check])
 UL_REQUIRES_LINUX([lsipc])
 UL_REQUIRES_BUILD([lsipc], [libsmartcols])
 AM_CONDITIONAL([BUILD_LSIPC], [test "x$build_lsipc" = xyes])
+
+UL_BUILD_INIT([lsns], [check])
+UL_REQUIRES_LINUX([lsns])
+UL_REQUIRES_BUILD([lsns], [libsmartcols])
+AM_CONDITIONAL([BUILD_LSNS], [test "x$build_lsns" = xyes])
 
 UL_BUILD_INIT([renice], [yes])
 AM_CONDITIONAL([BUILD_RENICE], [test "x$build_renice" = xyes])
@@ -1416,6 +1481,11 @@ AM_CONDITIONAL([BUILD_DMESG], [test "x$build_dmesg" = xyes])
 
 UL_BUILD_INIT([ctrlaltdel], [check])
 UL_REQUIRES_LINUX([ctrlaltdel])
+dnl we assume reboot() to be the 1-argument variant, because even considering
+dnl widely used alternative C libraries like uclibc, dietlibc and musl,
+dnl reboot() with multiple arguments is yet only found in glibc versions
+dnl earlier than 2.x.
+UL_REQUIRES_HAVE([ctrlaltdel], [reboot], [reboot function])
 AM_CONDITIONAL([BUILD_CTRLALTDEL], [test "x$build_ctrlaltdel" = xyes])
 
 UL_BUILD_INIT([fsfreeze], [check])
@@ -1439,7 +1509,7 @@ UL_REQUIRES_LINUX([setarch])
 AM_CONDITIONAL([BUILD_SETARCH], [test "x$build_setarch" = xyes])
 
 UL_BUILD_INIT([script], [check])
-UL_REQUIRES_LINUX([script])
+UL_REQUIRES_HAVE([script], [sys_signalfd_h], [sys/signalfd.h header])
 AM_CONDITIONAL([BUILD_SCRIPT], [test "x$build_script" = xyes])
 
 UL_BUILD_INIT([scriptreplay], [yes])
@@ -1490,14 +1560,16 @@ AC_ARG_ENABLE([last],
   [], [UL_DEFAULT_ENABLE([last], [check])]
 )
 UL_BUILD_INIT([last])
+UL_REQUIRES_HAVE([last], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_LAST], [test "x$build_last" = xyes])
 
 
 AC_ARG_ENABLE([utmpdump],
   AS_HELP_STRING([--disable-utmpdump], [do not build utmpdump]),
-  [], [UL_DEFAULT_ENABLE([utmpdump], [yes])]
+  [], [UL_DEFAULT_ENABLE([utmpdump], [check])]
 )
 UL_BUILD_INIT([utmpdump])
+UL_REQUIRES_HAVE([utmpdump], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_UTMPDUMP], [test "x$build_utmpdump" = xyes])
 
 
@@ -1548,6 +1620,7 @@ AC_ARG_ENABLE([vipw],
   [], [UL_DEFAULT_ENABLE([vipw], [no])]
 )
 UL_BUILD_INIT([vipw])
+UL_REQUIRES_HAVE([vipw], [shadow_h], [shadow.h header])
 AM_CONDITIONAL([BUILD_VIPW], [test "x$build_vipw" = xyes])
 
 
@@ -1589,6 +1662,7 @@ AC_ARG_ENABLE([chfn-chsh],
   [], [UL_DEFAULT_ENABLE([chfn_chsh], [check])]
 )
 UL_BUILD_INIT([chfn_chsh])
+UL_REQUIRES_HAVE([chfn_chsh], [shadow_h], [shadow.h header])
 
 AS_IF([test "x$enable_chfn_chsh_password" = xyes -o "x$have_user" = xyes], [
   UL_REQUIRES_HAVE([chfn_chsh], [security_pam_appl_h], [PAM header file])
@@ -1614,6 +1688,7 @@ AC_ARG_ENABLE([login],
 UL_BUILD_INIT([login])
 UL_REQUIRES_HAVE([login], [security_pam_appl_h], [PAM header file])
 UL_REQUIRES_HAVE([login], [security_pam_misc_h, security_openpam_h], [PAM conversation functions])
+UL_REQUIRES_HAVE([login], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_LOGIN], [test "x$build_login" = xyes])
 
 AC_ARG_ENABLE([login-chown-vcs],
@@ -1645,9 +1720,10 @@ AM_CONDITIONAL([BUILD_NOLOGIN], [test "x$build_nologin" = xyes])
 
 AC_ARG_ENABLE([sulogin],
   AS_HELP_STRING([--disable-sulogin], [do not build sulogin]),
-  [], [UL_DEFAULT_ENABLE([sulogin], [yes])]
+  [], [UL_DEFAULT_ENABLE([sulogin], [check])]
 )
 UL_BUILD_INIT([sulogin])
+UL_REQUIRES_HAVE([sulogin], [shadow_h], [shadow.h header])
 AM_CONDITIONAL([BUILD_SULOGIN], [test "x$build_sulogin" = xyes])
 
 
@@ -1657,6 +1733,7 @@ AC_ARG_ENABLE([su],
 )
 UL_BUILD_INIT([su])
 UL_REQUIRES_HAVE([su], [security_pam_appl_h], [PAM header file])
+UL_REQUIRES_HAVE([su], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_SU], [test "x$build_su" = xyes])
 
 
@@ -1666,6 +1743,7 @@ AC_ARG_ENABLE([runuser],
 )
 UL_BUILD_INIT([runuser])
 UL_REQUIRES_HAVE([runuser], [security_pam_appl_h], [PAM header file])
+UL_REQUIRES_HAVE([runuser], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_RUNUSER], [test "x$build_runuser" = xyes])
 
 
@@ -1749,16 +1827,27 @@ UL_REQUIRES_SYSCALL_CHECK([taskset],
 	[sched_getaffinity])
 AM_CONDITIONAL([BUILD_TASKSET], [test "x$build_taskset" = xyes])
 
+
+have_schedsetter=no
+AS_IF([test "x$ac_cv_func_sched_setscheduler" = xyes], [have_schedsetter=yes],
+      [test "x$ac_cv_func_sched_setattr" = xyes], [have_schedsetter=yes])
+
 UL_BUILD_INIT([chrt], [check])
 UL_REQUIRES_BUILD([chrt], [schedutils])
+UL_REQUIRES_HAVE([chrt], [schedsetter], [sched_set functions])
 AM_CONDITIONAL([BUILD_CHRT], [test "x$build_chrt" = xyes])
+
+AS_IF([test "x$build_chrt" = xyes], [
+	UL_CHECK_SYSCALL([sched_setattr])
+])
 
 
 AC_ARG_ENABLE([wall],
   AS_HELP_STRING([--disable-wall], [do not build wall]),
-  [], [UL_DEFAULT_ENABLE([wall], [yes])]
+  [], [UL_DEFAULT_ENABLE([wall], [check])]
 )
 UL_BUILD_INIT([wall])
+UL_REQUIRES_HAVE([wall], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_WALL], [test "x$build_wall" = xyes])
 
 
@@ -1767,7 +1856,27 @@ AC_ARG_ENABLE([write],
   [], [UL_DEFAULT_ENABLE([write], [no])]
 )
 UL_BUILD_INIT([write])
+UL_REQUIRES_HAVE([write], [utmp_h], [utmp.h header])
 AM_CONDITIONAL([BUILD_WRITE], [test "x$build_write" = xyes])
+
+
+AC_ARG_WITH([btrfs],
+  AS_HELP_STRING([--with-btrfs], [build with support for btrfs]),
+  [], [with_btrfs=check]
+)
+have_btrfs=no
+AS_IF([test "x$with_btrfs" != xno], [
+  AS_CASE([$with_btrfs:$have_linux_btrfs_h],
+    [yes:no],
+    [AC_MSG_ERROR([btrfs selected but linux/btrfs.h not found])],
+    [check:no],
+       [AC_MSG_WARN([linux/btrfs.h not found, do not build with btrfs support])],
+    [*:yes],
+       [have_btrfs=yes
+	AC_DEFINE([HAVE_BTRFS_SUPPORT], [1], [Define if btrfs stuff is available])]
+  )
+])
+AM_CONDITIONAL([HAVE_BTRFS], [test "x$have_btrfs" = xyes])
 
 
 AC_ARG_WITH([systemd],
@@ -1874,6 +1983,18 @@ UL_REQUIRES_HAVE([pylibmount], [libpython], [libpython])
 UL_REQUIRES_BUILD([pylibmount], [libmount])
 AM_CONDITIONAL([BUILD_PYLIBMOUNT], [test "x$build_pylibmount" = "xyes"])
 
+# We need to introduce a verbatim dependency into the Makefile, without automake
+# trying to interpret it, so push it as a AM_SUBST_NOTMAKE variable.
+verbatim_pylibmount_dependency='
+
+# pylibmountexec module must be installed after usrlib_exec libraries,
+# otherwise the libtool relink step will fail to find libmount.la and
+# will try -lmount which is possibly not available.
+install-pylibmountexecLTLIBRARIES: install-usrlib_execLTLIBRARIES
+
+'
+AC_SUBST([verbatim_pylibmount_dependency])
+AM_SUBST_NOTMAKE([verbatim_pylibmount_dependency])
 
 AC_ARG_ENABLE([pg-bell],
   AS_HELP_STRING([--disable-pg-bell], [let pg not ring the bell on invalid keys]),
@@ -2045,6 +2166,7 @@ AC_MSG_RESULT([
 
 	Bash completions:  ${with_bashcompletiondir}
 	Systemd support:   ${have_systemd}
+	Btrfs support:     ${have_btrfs}
 
 	warnings:
 

@@ -34,11 +34,11 @@ extern "C" {
  *
  * Library version string
  */
-#define LIBFDISK_VERSION   "2.27.0"
+#define LIBFDISK_VERSION   "2.28."
 
 #define LIBFDISK_MAJOR_VERSION   2
-#define LIBFDISK_MINOR_VERSION   27
-#define LIBFDISK_PATCH_VERSION   0
+#define LIBFDISK_MINOR_VERSION   28
+#define LIBFDISK_PATCH_VERSION   
 
 /**
  * fdisk_context:
@@ -189,6 +189,10 @@ int fdisk_is_details(struct fdisk_context *cxt);
 
 int fdisk_enable_listonly(struct fdisk_context *cxt, int enable);
 int fdisk_is_listonly(struct fdisk_context *cxt);
+
+int fdisk_enable_wipe(struct fdisk_context *cxt, int enable);
+int fdisk_has_wipe(struct fdisk_context *cxt);
+const char *fdisk_get_collision(struct fdisk_context *cxt);
 
 int fdisk_set_unit(struct fdisk_context *cxt, const char *str);
 const char *fdisk_get_unit(struct fdisk_context *cxt, int n);
