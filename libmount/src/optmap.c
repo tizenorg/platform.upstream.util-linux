@@ -161,19 +161,10 @@ static const struct libmnt_optmap userspace_opts_map[] =
    { "comment=", MNT_MS_COMMENT, MNT_NOHLPS | MNT_NOMTAB },/* fstab comment only */
    { "x-",      MNT_MS_XCOMMENT, MNT_NOHLPS | MNT_NOMTAB | MNT_PREFIX }, /* x- options */
 
-   { "loop[=]", MNT_MS_LOOP, MNT_NOHLPS },                             /* use the loop device (no MNT_NOMTAB flag) */
+   { "loop[=]", MNT_MS_LOOP, MNT_NOHLPS },                             /* use the loop device */
    { "offset=", MNT_MS_OFFSET, MNT_NOHLPS | MNT_NOMTAB },		   /* loop device offset */
    { "sizelimit=", MNT_MS_SIZELIMIT, MNT_NOHLPS | MNT_NOMTAB },	   /* loop device size limit */
-/* IMPORTANT - make sure that bit numbers below do not conflict with other MNT_MS_* bit numbers in libmount.h.in */
-   { "encryption=",     (1 << 23), MNT_NOHLPS | MNT_NOMTAB },   /* loop device encryption */
-   { "pseed=",		(1 << 24), MNT_NOHLPS | MNT_NOMTAB },	/* loop device passphrase seed */
-   { "phash=",		(1 << 25), MNT_NOHLPS | MNT_NOMTAB },	/* loop device passphrase hash function */
-   { "itercountk=",	(1 << 26), MNT_NOHLPS | MNT_NOMTAB },	/* loop device passphrase iteration count */
-   { "loinit=",		(1 << 27), MNT_NOHLPS | MNT_NOMTAB },	/* loop device initialization code */
-   { "gpgkey=",		(1 << 28), MNT_NOHLPS | MNT_NOMTAB },	/* loop device GnuPG key file */
-   { "gpghome=",	(1 << 29), MNT_NOHLPS | MNT_NOMTAB },	/* loop device GnuPG home directory */
-   { "cleartextkey=",	(1 << 30), MNT_NOHLPS | MNT_NOMTAB },	/* loop device clear text key file */
-/* end IMPORTANT */
+   { "encryption=", MNT_MS_ENCRYPTION, MNT_NOHLPS | MNT_NOMTAB },	   /* loop device encryption */
 
    { "nofail",  MNT_MS_NOFAIL, MNT_NOMTAB },               /* Do not fail if ENOENT on dev */
 
