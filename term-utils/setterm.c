@@ -178,20 +178,6 @@ struct setterm_control {
 	    opt_powerdown:1, opt_blength:1, opt_bfreq:1;
 };
 
-/* Command line parsing routines.
- *
- * Note that it is an error for a given option to be invoked more than once.
- */
-
-static int parse_switch(const char *arg, const char *t, const char *f)
-{
-	if (strcmp(arg, t) == 0)
-		return 1;
-	else if (strcmp(arg, f) == 0)
-		return 0;
-	errx(EXIT_FAILURE, _("argument error: %s"), arg);
-}
-
 static int parse_febg_color(const char *arg)
 {
 	int color;
@@ -296,8 +282,6 @@ static int parse_blank(char **argv, char *optarg, int *optind)
 			errx(EXIT_FAILURE, _("argument error: %s"), arg);
 		return ret;
 	}
-	/* should be impossible to reach */
-	abort();
 }
 
 static int parse_powersave(const char *arg)
@@ -402,6 +386,10 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(USAGE_HEADER, out);
 	fprintf(out,
 	      _(" %s [options]\n"), program_invocation_short_name);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("Set the attributes of a terminal.\n"), out);
+
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" --term          <terminal_name>   override TERM environment variable\n"), out);
 	fputs(_(" --reset                           reset terminal to power-on state\n"), out);
@@ -552,19 +540,23 @@ static void parse_option(struct setterm_control *ctl, int argc, char **argv)
 			break;
 		case OPT_CURSOR:
 			ctl->opt_cursor = set_opt_flag(ctl->opt_cursor);
-			ctl->opt_cu_on = parse_switch(optarg, "on", "off");
+			ctl->opt_cu_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_REPEAT:
 			ctl->opt_repeat = set_opt_flag(ctl->opt_repeat);
-			ctl->opt_rep_on = parse_switch(optarg, "on", "off");
+			ctl->opt_rep_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_APPCURSORKEYS:
 			ctl->opt_appcursorkeys = set_opt_flag(ctl->opt_appcursorkeys);
-			ctl->opt_appck_on = parse_switch(optarg, "on", "off");
+			ctl->opt_appck_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_LINEWRAP:
 			ctl->opt_linewrap = set_opt_flag(ctl->opt_linewrap);
-			ctl->opt_li_on = parse_switch(optarg, "on", "off");
+			ctl->opt_li_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_DEFAULT:
 			ctl->opt_default = set_opt_flag(ctl->opt_default);
@@ -587,34 +579,41 @@ static void parse_option(struct setterm_control *ctl, int argc, char **argv)
 			break;
 		case OPT_INVERSESCREEN:
 			ctl->opt_inversescreen = set_opt_flag(ctl->opt_inversescreen);
-			ctl->opt_invsc_on = parse_switch(optarg, "on", "off");
+			ctl->opt_invsc_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_BOLD:
 			ctl->opt_bold = set_opt_flag(ctl->opt_bold);
-			ctl->opt_bo_on = parse_switch(optarg, "on", "off");
+			ctl->opt_bo_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_HALF_BRIGHT:
 			ctl->opt_halfbright = set_opt_flag(ctl->opt_halfbright);
-			ctl->opt_hb_on = parse_switch(optarg, "on", "off");
+			ctl->opt_hb_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_BLINK:
 			ctl->opt_blink = set_opt_flag(ctl->opt_blink);
-			ctl->opt_bl_on = parse_switch(optarg, "on", "off");
+			ctl->opt_bl_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_REVERSE:
 			ctl->opt_reverse = set_opt_flag(ctl->opt_reverse);
-			ctl->opt_re_on = parse_switch(optarg, "on", "off");
+			ctl->opt_re_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_UNDERLINE:
 			ctl->opt_underline = set_opt_flag(ctl->opt_underline);
-			ctl->opt_un_on = parse_switch(optarg, "on", "off");
+			ctl->opt_un_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_STORE:
 			ctl->opt_store = set_opt_flag(ctl->opt_store);
 			break;
 		case OPT_CLEAR:
 			ctl->opt_clear = set_opt_flag(ctl->opt_clear);
-			ctl->opt_cl_all = parse_switch(optarg, "all", "reset");
+			ctl->opt_cl_all = parse_switch(optarg, _("argument error"),
+						"all", "reset", NULL);
 			break;
 		case OPT_TABS:
 			ctl->opt_tabs = set_opt_flag(ctl->opt_tabs);
@@ -646,7 +645,8 @@ static void parse_option(struct setterm_control *ctl, int argc, char **argv)
 			break;
 		case OPT_MSG:
 			ctl->opt_msg = set_opt_flag(ctl->opt_msg);
-			ctl->opt_msg_on = parse_switch(optarg, "on", "off");
+			ctl->opt_msg_on = parse_switch(optarg, _("argument error"),
+						"on", "off", NULL);
 			break;
 		case OPT_MSGLEVEL:
 			ctl->opt_msglevel = set_opt_flag(ctl->opt_msglevel);
@@ -682,8 +682,6 @@ static void parse_option(struct setterm_control *ctl, int argc, char **argv)
 		}
 	}
 }
-
-/* End of command line parsing routines. */
 
 /* Return the specified terminfo string, or an empty string if no such
  * terminfo capability exists.  */

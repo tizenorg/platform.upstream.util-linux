@@ -11,7 +11,7 @@
 /**
  * SECTION: column
  * @title: Column
- * @short_description: column API
+ * @short_description: defines output columns formats, headers, etc.
  *
  * An API to access and modify per-column data and information.
  */
@@ -70,6 +70,7 @@ void scols_unref_column(struct libscols_column *cl)
 		list_del(&cl->cl_columns);
 		scols_reset_cell(&cl->header);
 		free(cl->color);
+		free(cl->pending_data_buf);
 		free(cl);
 	}
 }
@@ -86,7 +87,6 @@ struct libscols_column *scols_copy_column(const struct libscols_column *cl)
 {
 	struct libscols_column *ret;
 
-	assert (cl);
 	if (!cl)
 		return NULL;
 	ret = scols_new_column();
@@ -119,14 +119,12 @@ err:
  * @cl: a pointer to a struct libscols_column instance
  * @whint: a width hint
  *
- * Sets the width hint of column @cl to @whint.
+ * Sets the width hint of column @cl to @whint. See scols_table_new_column().
  *
  * Returns: 0, a negative value in case of an error.
  */
 int scols_column_set_whint(struct libscols_column *cl, double whint)
 {
-	assert(cl);
-
 	if (!cl)
 		return -EINVAL;
 
@@ -157,10 +155,15 @@ double scols_column_get_whint(struct libscols_column *cl)
  */
 int scols_column_set_flags(struct libscols_column *cl, int flags)
 {
-	assert(cl);
-
 	if (!cl)
 		return -EINVAL;
+
+	if (cl->table) {
+		if (!(cl->flags & SCOLS_FL_TREE) && (flags & SCOLS_FL_TREE))
+			cl->table->ntreecols++;
+		else if ((cl->flags & SCOLS_FL_TREE) && !(flags & SCOLS_FL_TREE))
+			cl->table->ntreecols--;
+	}
 
 	cl->flags = flags;
 	return 0;
@@ -187,7 +190,6 @@ int scols_column_get_flags(struct libscols_column *cl)
  */
 struct libscols_cell *scols_column_get_header(struct libscols_column *cl)
 {
-	assert(cl);
 	return cl ? &cl->header : NULL;
 }
 
@@ -210,7 +212,6 @@ int scols_column_set_color(struct libscols_column *cl, const char *color)
 {
 	char *p = NULL;
 
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	if (color) {
@@ -257,13 +258,29 @@ int scols_column_set_cmpfunc(struct libscols_column *cl,
 				   void *),
 			void *data)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 
 	cl->cmpfunc = cmp;
 	cl->cmpfunc_data = data;
 	return 0;
+}
+
+/**
+ * scols_column_is_hidden:
+ * @cl: a pointer to a struct libscols_column instance
+ *
+ * Gets the value of @cl's flag hidden.
+ *
+ * Returns: hidden flag value, negative value in case of an error.
+ *
+ * Since: 2.27
+ */
+int scols_column_is_hidden(struct libscols_column *cl)
+{
+	if (!cl)
+		return -EINVAL;
+	return cl->flags & SCOLS_FL_HIDDEN;
 }
 
 /**
@@ -276,7 +293,6 @@ int scols_column_set_cmpfunc(struct libscols_column *cl,
  */
 int scols_column_is_trunc(struct libscols_column *cl)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_TRUNC;
@@ -291,7 +307,6 @@ int scols_column_is_trunc(struct libscols_column *cl)
  */
 int scols_column_is_tree(struct libscols_column *cl)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_TREE;
@@ -306,7 +321,6 @@ int scols_column_is_tree(struct libscols_column *cl)
  */
 int scols_column_is_right(struct libscols_column *cl)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_RIGHT;
@@ -321,7 +335,6 @@ int scols_column_is_right(struct libscols_column *cl)
  */
 int scols_column_is_strict_width(struct libscols_column *cl)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_STRICTWIDTH;
@@ -336,8 +349,23 @@ int scols_column_is_strict_width(struct libscols_column *cl)
  */
 int scols_column_is_noextremes(struct libscols_column *cl)
 {
-	assert(cl);
 	if (!cl)
 		return -EINVAL;
 	return cl->flags & SCOLS_FL_NOEXTREMES;
+}
+/**
+ * scols_column_is_wrap:
+ * @cl: a pointer to a struct libscols_column instance
+ *
+ * Gets the value of @cl's flag wrap.
+ *
+ * Returns: wrap flag value, negative value in case of an error.
+ *
+ * Since: 2.28
+ */
+int scols_column_is_wrap(struct libscols_column *cl)
+{
+	if (!cl)
+		return -EINVAL;
+	return cl->flags & SCOLS_FL_WRAP;
 }

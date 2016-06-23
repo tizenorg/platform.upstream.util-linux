@@ -65,8 +65,9 @@ struct nilfs_super_block {
 
 #define NILFS_SB_MAGIC		0x3434
 #define NILFS_SB_OFFSET		0x400
+#define NILFS_SBB_OFFSET(_sz)	((((_sz) / 0x200) - 8) * 0x200)
 
-static int nilfs_valid_sb(blkid_probe pr, struct nilfs_super_block *sb)
+static int nilfs_valid_sb(blkid_probe pr, struct nilfs_super_block *sb, int is_bak)
 {
 	static unsigned char sum[4];
 	const int sumoff = offsetof(struct nilfs_super_block, s_sum);
@@ -74,6 +75,10 @@ static int nilfs_valid_sb(blkid_probe pr, struct nilfs_super_block *sb)
 	uint32_t crc;
 
 	if (!sb || le16_to_cpu(sb->s_magic) != NILFS_SB_MAGIC)
+		return 0;
+
+	if (is_bak && blkid_probe_is_wholedisk(pr) &&
+	    sb->s_dev_size != pr->size)
 		return 0;
 
 	bytes = le16_to_cpu(sb->s_bytes);
@@ -84,28 +89,31 @@ static int nilfs_valid_sb(blkid_probe pr, struct nilfs_super_block *sb)
 	return blkid_probe_verify_csum(pr, crc, le32_to_cpu(sb->s_sum));
 }
 
-static int probe_nilfs2(blkid_probe pr, const struct blkid_idmag *mag)
+static int probe_nilfs2(blkid_probe pr,
+		const struct blkid_idmag *mag __attribute__((__unused__)))
 {
 	struct nilfs_super_block *sb, *sbp, *sbb;
 	int valid[2], swp = 0;
+	uint64_t magoff;
 
 	/* primary */
 	sbp = (struct nilfs_super_block *) blkid_probe_get_buffer(
 			pr, NILFS_SB_OFFSET, sizeof(struct nilfs_super_block));
 	if (!sbp)
 		return errno ? -errno : 1;
+
 	/* backup */
 	sbb = (struct nilfs_super_block *) blkid_probe_get_buffer(
-			pr, ((pr->size / 0x200) - 8) * 0x200, sizeof(struct nilfs_super_block));
-	if (!sbp)
+			pr, NILFS_SBB_OFFSET(pr->size), sizeof(struct nilfs_super_block));
+	if (!sbb)
 		return errno ? -errno : 1;
 
 	/*
 	 * Compare two super blocks and set 1 in swp if the secondary
 	 * super block is valid and newer.  Otherwise, set 0 in swp.
 	 */
-	valid[0] = nilfs_valid_sb(pr, sbp);
-	valid[1] = nilfs_valid_sb(pr, sbb);
+	valid[0] = nilfs_valid_sb(pr, sbp, 0);
+	valid[1] = nilfs_valid_sb(pr, sbb, 1);
 	if (!valid[0] && !valid[1])
 		return 1;
 
@@ -123,6 +131,13 @@ static int probe_nilfs2(blkid_probe pr, const struct blkid_idmag *mag)
 
 	blkid_probe_set_uuid(pr, sb->s_uuid);
 	blkid_probe_sprintf_version(pr, "%u", le32_to_cpu(sb->s_rev_level));
+
+	magoff = swp ? NILFS_SBB_OFFSET(pr->size) : NILFS_SB_OFFSET;
+	magoff += offsetof(struct nilfs_super_block, s_magic);
+
+	if (blkid_probe_set_magic(pr, magoff, sizeof(sb->s_magic),
+				(unsigned char *) &sb->s_magic))
+		return 1;
 
 	return 0;
 }

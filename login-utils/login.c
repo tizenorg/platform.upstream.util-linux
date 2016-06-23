@@ -48,14 +48,16 @@
 #include <utmp.h>
 #include <stdlib.h>
 #include <sys/syslog.h>
-#include <sys/sysmacros.h>
 #ifdef HAVE_LINUX_MAJOR_H
 # include <linux/major.h>
 #endif
 #include <netdb.h>
-#include <lastlog.h>
 #include <security/pam_appl.h>
-#include <security/pam_misc.h>
+#ifdef HAVE_SECURITY_PAM_MISC_H
+# include <security/pam_misc.h>
+#elif defined(HAVE_SECURITY_OPENPAM_H)
+# include <security/openpam.h>
+#endif
 #include <sys/sendfile.h>
 
 #ifdef HAVE_LIBAUDIT
@@ -252,13 +254,11 @@ static void motd(void)
 		struct stat st;
 		int fd;
 
-		if (stat(motdfile, &st) || !st.st_size)
-			continue;
 		fd = open(motdfile, O_RDONLY, 0);
 		if (fd < 0)
 			continue;
-
-		sendfile(fileno(stdout), fd, NULL, st.st_size);
+		if (!fstat(fd, &st) && st.st_size)
+			sendfile(fileno(stdout), fd, NULL, st.st_size);
 		close(fd);
 	}
 
@@ -405,7 +405,7 @@ static void init_tty(struct login_context *cxt)
 	close(STDOUT_FILENO);
 	close(STDERR_FILENO);
 
-	signal(SIGHUP, SIG_IGN);	/* so vhangup() wont kill us */
+	signal(SIGHUP, SIG_IGN);	/* so vhangup() won't kill us */
 	vhangup();
 	signal(SIGHUP, SIG_DFL);
 
@@ -425,7 +425,9 @@ static void init_tty(struct login_context *cxt)
 static void log_btmp(struct login_context *cxt)
 {
 	struct utmp ut;
+#if defined(_HAVE_UT_TV)        /* in <utmpbits.h> included by <utmp.h> */
 	struct timeval tv;
+#endif
 
 	memset(&ut, 0, sizeof(ut));
 
@@ -495,6 +497,7 @@ static void log_audit(struct login_context *cxt, int status)
 
 static void log_lastlog(struct login_context *cxt)
 {
+	struct sigaction sa, oldsa_xfsz;
 	struct lastlog ll;
 	time_t t;
 	int fd;
@@ -502,9 +505,14 @@ static void log_lastlog(struct login_context *cxt)
 	if (!cxt->pwd)
 		return;
 
+	/* lastlog is huge on systems with large UIDs, ignore SIGXFSZ */
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = SIG_IGN;
+	sigaction(SIGXFSZ, &sa, &oldsa_xfsz);
+
 	fd = open(_PATH_LASTLOG, O_RDWR, 0);
 	if (fd < 0)
-		return;
+		goto done;
 
 	if (lseek(fd, (off_t) cxt->pwd->pw_uid * sizeof(ll), SEEK_SET) == -1)
 		goto done;
@@ -542,7 +550,10 @@ static void log_lastlog(struct login_context *cxt)
 	if (write_all(fd, (char *)&ll, sizeof(ll)))
 		warn(_("write lastlog failed"));
 done:
-	close(fd);
+	if (fd >= 0)
+		close(fd);
+
+	sigaction(SIGXFSZ, &oldsa_xfsz, NULL);		/* restore original setting */
 }
 
 /*
@@ -661,22 +672,14 @@ static struct passwd *get_passwd_entry(const char *username,
 					 struct passwd *pwd)
 {
 	struct passwd *res = NULL;
-	size_t sz = 16384;
 	int x;
 
 	if (!pwdbuf || !username)
 		return NULL;
 
-#ifdef _SC_GETPW_R_SIZE_MAX
-	{
-		long xsz = sysconf(_SC_GETPW_R_SIZE_MAX);
-		if (xsz > 0)
-			sz = (size_t) xsz;
-	}
-#endif
-	*pwdbuf = xrealloc(*pwdbuf, sz);
+	*pwdbuf = xrealloc(*pwdbuf, UL_GETPW_BUFSIZ);
 
-	x = getpwnam_r(username, pwd, *pwdbuf, sz, &res);
+	x = getpwnam_r(username, pwd, *pwdbuf, UL_GETPW_BUFSIZ, &res);
 	if (!res) {
 		errno = x;
 		return NULL;
@@ -1023,23 +1026,25 @@ static void fork_session(struct login_context *cxt)
 static void init_environ(struct login_context *cxt)
 {
 	struct passwd *pwd = cxt->pwd;
-	char *termenv = NULL, **env;
+	char *termenv, **env;
 	char tmp[PATH_MAX];
 	int len, i;
 
 	termenv = getenv("TERM");
-	termenv = termenv ? xstrdup(termenv) : "dumb";
+	if (termenv)
+		termenv = xstrdup(termenv);
 
 	/* destroy environment unless user has requested preservation (-p) */
 	if (!cxt->keep_env) {
-		environ = (char **) xmalloc(sizeof(char *));
+		environ = xmalloc(sizeof(char *));
 		memset(environ, 0, sizeof(char *));
 	}
 
 	setenv("HOME", pwd->pw_dir, 0);	/* legal to override */
 	setenv("USER", pwd->pw_name, 1);
 	setenv("SHELL", pwd->pw_shell, 1);
-	setenv("TERM", termenv, 1);
+	setenv("TERM", termenv ? termenv : "dumb", 1);
+	free(termenv);
 
 	if (pwd->pw_uid)
 		logindefs_setenv("PATH", "ENV_PATH", _PATH_DEFPATH);
@@ -1049,7 +1054,7 @@ static void init_environ(struct login_context *cxt)
 
 	/* mailx will give a funny error msg if you forget this one */
 	len = snprintf(tmp, sizeof(tmp), "%s/%s", _PATH_MAILDIR, pwd->pw_name);
-	if (len > 0 && (size_t) len + 1 <= sizeof(tmp))
+	if (len > 0 && (size_t) len < sizeof(tmp))
 		setenv("MAIL", tmp, 0);
 
 	/* LOGNAME is not documented in login(1) but HP-UX 6.5 does it. We'll
@@ -1110,20 +1115,28 @@ int main(int argc, char **argv)
 	char *buff;
 	int childArgc = 0;
 	int retcode;
+	struct sigaction act;
 
 	char *pwdbuf = NULL;
 	struct passwd *pwd = NULL, _pwd;
 
 	struct login_context cxt = {
-		.tty_mode = TTY_MODE,		/* tty chmod() */
-		.pid = getpid(),		/* PID */
-		.conv = { misc_conv, NULL }	/* PAM conversation function */
+		.tty_mode = TTY_MODE,		  /* tty chmod() */
+		.pid = getpid(),		  /* PID */
+#ifdef HAVE_SECURITY_PAM_MISC_H
+		.conv = { misc_conv, NULL }	  /* Linux-PAM conversation function */
+#elif defined(HAVE_SECURITY_OPENPAM_H)
+		.conv = { openpam_ttyconv, NULL } /* OpenPAM conversation function */
+#endif
+
 	};
 
 	timeout = (unsigned int)getlogindefs_num("LOGIN_TIMEOUT", LOGIN_TIMEOUT);
 
 	signal(SIGALRM, timedout);
-	siginterrupt(SIGALRM, 1);	/* we have to interrupt syscalls like ioctl() */
+	(void) sigaction(SIGALRM, NULL, &act);
+	act.sa_flags &= ~SA_RESTART;
+	sigaction(SIGALRM, &act, NULL);
 	alarm(timeout);
 	signal(SIGQUIT, SIG_IGN);
 	signal(SIGINT, SIG_IGN);
@@ -1170,6 +1183,8 @@ int main(int argc, char **argv)
 		case '?':
 		default:
 			fprintf(stderr, _("Usage: login [-p] [-h <host>] [-H] [[-f] <username>]\n"));
+			fputs(USAGE_SEPARATOR, stderr);
+			fputs(_("Begin a session on the system.\n"), stderr);
 			exit(EXIT_FAILURE);
 		}
 	argc -= optind;

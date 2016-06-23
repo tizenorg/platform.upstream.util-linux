@@ -21,7 +21,7 @@ static blkid_tag blkid_new_tag(void)
 {
 	blkid_tag tag;
 
-	if (!(tag = (blkid_tag) calloc(1, sizeof(struct blkid_struct_tag))))
+	if (!(tag = calloc(1, sizeof(struct blkid_struct_tag))))
 		return NULL;
 
 	INIT_LIST_HEAD(&tag->bit_tags);
@@ -161,7 +161,7 @@ int blkid_set_tag(blkid_dev dev, const char *name,
 		/* Existing tag not present, add to device */
 		if (!(t = blkid_new_tag()))
 			goto errout;
-		t->bit_name = name ? strdup(name) : NULL;
+		t->bit_name = strdup(name);
 		t->bit_val = val;
 		t->bit_dev = dev;
 
@@ -176,7 +176,7 @@ int blkid_set_tag(blkid_dev dev, const char *name,
 					goto errout;
 
 				DBG(TAG, ul_debug("    creating new cache tag head %s", name));
-				head->bit_name = name ? strdup(name) : NULL;
+				head->bit_name = strdup(name);
 				if (!head->bit_name)
 					goto errout;
 				list_add_tail(&head->bit_tags,
@@ -237,7 +237,7 @@ int blkid_parse_tag_string(const char *token, char **ret_type, char **ret_val)
 	}
 
 	if (ret_val) {
-		value = value && *value ? strdup(value) : NULL;
+		value = *value ? strdup(value) : NULL;
 		if (!value)
 			goto errout;
 		*ret_val = value;
@@ -370,7 +370,7 @@ try_again:
 	}
 	if (dev && !(dev->bid_flags & BLKID_BID_FL_VERIFIED)) {
 		dev = blkid_verify(cache, dev);
-		if (!dev || (dev && (dev->bid_flags & BLKID_BID_FL_VERIFIED)))
+		if (!dev || dev->bid_flags & BLKID_BID_FL_VERIFIED)
 			goto try_again;
 	}
 
@@ -397,7 +397,7 @@ extern char *optarg;
 extern int optind;
 #endif
 
-void __attribute__((__noreturn__)) usage(char *prog)
+static void __attribute__((__noreturn__)) usage(char *prog)
 {
 	fprintf(stderr, "Usage: %s [-f blkid_file] [-m debug_mask] device "
 		"[type value]\n",

@@ -1,5 +1,5 @@
 Name:           util-linux
-Version:        2.25.2
+Version:        2.28
 BuildRequires:  binutils-devel
 BuildRequires:  fdupes
 BuildRequires:  gettext-devel
@@ -20,7 +20,7 @@ Url:            https://github.com/karelzak/util-linux
 Summary:        A collection of basic system utilities
 License:        GPL-2.0
 Group:          Base/Utilities
-Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.25/%{name}-%{version}.tar.gz
+Source:         ftp://ftp.kernel.org/pub/linux/utils/util-linux/v2.28/%{name}-%{version}.tar.gz
 Source1:        util-linux-rpmlintrc
 # XXX: make nologin part of util-linux upstream
 Source2:        nologin.c
@@ -123,6 +123,22 @@ Requires:       libsmartcols = %{version}
 %description -n libsmartcols-devel
 Files to develop applications using the libsmartcols library.
 
+%package -n libfdisk1
+Summary:        Filesystem detection library
+Group:          System/Filesystems
+
+%description -n libfdisk1
+Library for filesystem detection.
+
+%package -n libfdisk-devel
+Summary:        Development files for the filesystem detection library
+Group:          Development/Libraries/C and C++
+Requires:       libfdisk1 = %{version}
+
+%description -n libfdisk-devel
+Files needed to develop applications using the library for filesystem
+detection.
+
 %prep
 %setup -q -n %{name}-%{version}
 cp %{SOURCE1001} .
@@ -220,6 +236,10 @@ rm -rf %{buildroot}/%{_mandir}/ru
 
 %postun -n libsmartcols -p /sbin/ldconfig
 
+%post -n libfdisk1 -p /sbin/ldconfig
+
+%postun -n libfdisk1 -p /sbin/ldconfig
+
 %lang_package
 
 %docs_package
@@ -271,6 +291,8 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/look
 %{_bindir}/lsblk
 %{_bindir}/lscpu
+%{_bindir}/lsipc
+%{_bindir}/lsns
 %{_bindir}/mcookie
 %{_bindir}/mesg
 %{_bindir}/more
@@ -340,6 +362,7 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %{_bindir}/last
 %{_bindir}/lastb
 %{_bindir}/nsenter
+%{_sbindir}/zramctl
 
 %files -n libblkid
 %manifest %{name}.manifest
@@ -404,3 +427,18 @@ rm -rf %{buildroot}/%{_mandir}/ru
 %dir %{_includedir}/libsmartcols
 %{_includedir}/libsmartcols/libsmartcols.h
 %{_libdir}/pkgconfig/smartcols.pc
+
+%files -n libfdisk1
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libfdisk.so.1
+%{_libdir}/libfdisk.so.1.*
+
+%files -n libfdisk-devel
+%manifest %{name}.manifest
+%defattr(-, root, root)
+%{_libdir}/libfdisk.so
+%dir %{_includedir}/libfdisk
+%{_includedir}/libfdisk/libfdisk.h
+%{_libdir}/pkgconfig/fdisk.pc
+

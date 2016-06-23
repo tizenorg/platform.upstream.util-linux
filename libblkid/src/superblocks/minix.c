@@ -21,6 +21,7 @@ static int get_minix_version(const unsigned char *data, int *other_endian)
 	struct minix_super_block *sb = (struct minix_super_block *) data;
 	struct minix3_super_block *sb3 = (struct minix3_super_block *) data;
 	int version = 0;
+	char *endian;
 
 	*other_endian = 0;
 
@@ -60,17 +61,18 @@ static int get_minix_version(const unsigned char *data, int *other_endian)
 	if (!version)
 		return -1;
 
-	DBG(LOWPROBE, ul_debug("minix version %d detected [%s]", version,
 #if defined(WORDS_BIGENDIAN)
-	*other_endian ? "LE" : "BE"
+	endian = *other_endian ? "LE" : "BE";
 #else
-	*other_endian ? "BE" : "LE"
+	endian = *other_endian ? "BE" : "LE";
 #endif
-	));
+	DBG(LOWPROBE, ul_debug("minix version %d detected [%s]", version,
+			       endian));
 	return version;
 }
 
-static int probe_minix(blkid_probe pr, const struct blkid_idmag *mag)
+static int probe_minix(blkid_probe pr,
+		const struct blkid_idmag *mag __attribute__((__unused__)))
 {
 	unsigned char *ext;
 	const unsigned char *data;
@@ -89,7 +91,8 @@ static int probe_minix(blkid_probe pr, const struct blkid_idmag *mag)
 		struct minix_super_block *sb = (struct minix_super_block *) data;
 		int zones, ninodes, imaps, zmaps, firstz;
 
-		if (sb->s_imap_blocks == 0 || sb->s_zmap_blocks == 0)
+		if (sb->s_imap_blocks == 0 || sb->s_zmap_blocks == 0 ||
+		    sb->s_log_zone_size != 0)
 			return 1;
 
 		zones = version == 2 ? minix_swab32(swabme, sb->s_zones) :
@@ -104,7 +107,6 @@ static int probe_minix(blkid_probe pr, const struct blkid_idmag *mag)
 			return 1;
 		if (zmaps * MINIX_BLOCK_SIZE * 8 < zones - firstz + 1)
 			return 1;
-
 	} else if (version == 3) {
 		struct minix3_super_block *sb = (struct minix3_super_block *) data;
 

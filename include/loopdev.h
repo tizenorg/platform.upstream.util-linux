@@ -23,6 +23,7 @@
 #define LOOP_GET_STATUS64	0x4C05
 /* #define LOOP_CHANGE_FD	0x4C06 */
 #define LOOP_SET_CAPACITY	0x4C07
+#define LOOP_SET_DIRECT_IO	0x4C08
 
 /* /dev/loop-control interface */
 #ifndef LOOP_CTL_ADD
@@ -39,6 +40,7 @@ enum {
 	LO_FLAGS_USE_AOPS   = 2,
 	LO_FLAGS_AUTOCLEAR  = 4,	/* kernel >= 2.6.25 */
 	LO_FLAGS_PARTSCAN   = 8,	/* kernel >= 3.2 */
+	LO_FLAGS_DIRECT_IO  = 16,	/* kernel >= 4.2 */
 };
 
 #define LO_NAME_SIZE	64
@@ -97,7 +99,6 @@ struct loopdev_cxt {
 	int		flags;		/* LOOPDEV_FL_* flags */
 	unsigned int	has_info:1;	/* .info contains data */
 	unsigned int	extra_check:1;	/* unusual stuff for iterator */
-	unsigned int	debug:1;	/* debug mode ON/OFF */
 	unsigned int	info_failed:1;	/* LOOP_GET_STATUS ioctl failed */
 	unsigned int    control_ok:1;	/* /dev/loop-control success */
 
@@ -145,7 +146,6 @@ extern int loopdev_count_by_backing_file(const char *filename, char **loopdev);
 extern int loopcxt_init(struct loopdev_cxt *lc, int flags)
 				__attribute__ ((warn_unused_result));
 extern void loopcxt_deinit(struct loopdev_cxt *lc);
-extern void loopcxt_enable_debug(struct loopdev_cxt *lc, int enable);
 
 extern int loopcxt_set_device(struct loopdev_cxt *lc, const char *device)
 				__attribute__ ((warn_unused_result));
@@ -166,6 +166,7 @@ extern int loopcxt_next(struct loopdev_cxt *lc);
 extern int loopcxt_setup_device(struct loopdev_cxt *lc);
 extern int loopcxt_delete_device(struct loopdev_cxt *lc);
 extern int loopcxt_set_capacity(struct loopdev_cxt *lc);
+extern int loopcxt_set_dio(struct loopdev_cxt *lc, unsigned long use_dio);
 
 int loopcxt_set_offset(struct loopdev_cxt *lc, uint64_t offset);
 int loopcxt_set_sizelimit(struct loopdev_cxt *lc, uint64_t sizelimit);
@@ -181,6 +182,7 @@ extern int loopcxt_get_encrypt_type(struct loopdev_cxt *lc, uint32_t *type);
 extern const char *loopcxt_get_crypt_name(struct loopdev_cxt *lc);
 extern int loopcxt_is_autoclear(struct loopdev_cxt *lc);
 extern int loopcxt_is_readonly(struct loopdev_cxt *lc);
+extern int loopcxt_is_dio(struct loopdev_cxt *lc);
 extern int loopcxt_is_partscan(struct loopdev_cxt *lc);
 extern int loopcxt_find_by_backing_file(struct loopdev_cxt *lc,
 				const char *filename,

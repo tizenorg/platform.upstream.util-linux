@@ -43,25 +43,31 @@
 #include "nls.h"
 #include "strutils.h"
 #include "closestream.h"
+#include "monotonic.h"
 #include "timer.h"
 
 static void __attribute__((__noreturn__)) usage(int ex)
 {
 	fprintf(stderr, USAGE_HEADER);
 	fprintf(stderr,
-		_(" %1$s [options] <file|directory> <command> [<arguments>...]\n"
-		  " %1$s [options] <file|directory> -c <command>\n"
+		_(" %1$s [options] <file>|<directory> <command> [<argument>...]\n"
+		  " %1$s [options] <file>|<directory> -c <command>\n"
 		  " %1$s [options] <file descriptor number>\n"),
 		program_invocation_short_name);
+
+	fputs(USAGE_SEPARATOR, stderr);
+	fputs(_("Manage file locks from shell scripts.\n"), stderr);
+
 	fputs(USAGE_OPTIONS, stderr);
-	fputs(_(  " -s  --shared             get a shared lock\n"), stderr);
-	fputs(_(  " -x  --exclusive          get an exclusive lock (default)\n"), stderr);
-	fputs(_(  " -u  --unlock             remove a lock\n"), stderr);
-	fputs(_(  " -n  --nonblock           fail rather than wait\n"), stderr);
-	fputs(_(  " -w  --timeout <secs>     wait for a limited amount of time\n"), stderr);
-	fputs(_(  " -E  --conflict-exit-code <number>  exit code after conflict or timeout\n"), stderr);
-	fputs(_(  " -o  --close              close file descriptor before running command\n"), stderr);
-	fputs(_(  " -c  --command <command>  run a single command string through the shell\n"), stderr);
+	fputs(_(  " -s, --shared             get a shared lock\n"), stderr);
+	fputs(_(  " -x, --exclusive          get an exclusive lock (default)\n"), stderr);
+	fputs(_(  " -u, --unlock             remove a lock\n"), stderr);
+	fputs(_(  " -n, --nonblock           fail rather than wait\n"), stderr);
+	fputs(_(  " -w, --timeout <secs>     wait for a limited amount of time\n"), stderr);
+	fputs(_(  " -E, --conflict-exit-code <number>  exit code after conflict or timeout\n"), stderr);
+	fputs(_(  " -o, --close              close file descriptor before running command\n"), stderr);
+	fputs(_(  " -c, --command <command>  run a single command string through the shell\n"), stderr);
+	fputs(_(  "     --verbose            increase verbosity\n"), stderr);
 	fprintf(stderr, USAGE_SEPARATOR);
 	fprintf(stderr, USAGE_HELP);
 	fprintf(stderr, USAGE_VERSION);
@@ -71,9 +77,12 @@ static void __attribute__((__noreturn__)) usage(int ex)
 
 static sig_atomic_t timeout_expired = 0;
 
-static void timeout_handler(int sig __attribute__((__unused__)))
+static void timeout_handler(int sig __attribute__((__unused__)),
+			    siginfo_t *info,
+			    void *context __attribute__((__unused__)))
 {
-	timeout_expired = 1;
+	if (info->si_code == SI_TIMER)
+		timeout_expired = 1;
 }
 
 static int open_file(const char *filename, int *flags)
@@ -107,7 +116,8 @@ static int open_file(const char *filename, int *flags)
 
 int main(int argc, char *argv[])
 {
-	struct itimerval timeout, old_timer;
+	static timer_t t_id;
+	struct itimerval timeout;
 	int have_timeout = 0;
 	int type = LOCK_EX;
 	int block = 0;
@@ -116,6 +126,8 @@ int main(int argc, char *argv[])
 	int opt, ix;
 	int do_close = 0;
 	int status;
+	int verbose = 0;
+	struct timeval time_start, time_done;
 	/*
 	 * The default exit code for lock conflict or timeout
 	 * is specified in man flock.1
@@ -123,8 +135,9 @@ int main(int argc, char *argv[])
 	int conflict_exit_code = 1;
 	char **cmd_argv = NULL, *sh_c_argv[4];
 	const char *filename = NULL;
-	struct sigaction old_sa;
-
+	enum {
+		OPT_VERBOSE = CHAR_MAX + 1
+	};
 	static const struct option long_options[] = {
 		{"shared", no_argument, NULL, 's'},
 		{"exclusive", no_argument, NULL, 'x'},
@@ -135,6 +148,7 @@ int main(int argc, char *argv[])
 		{"wait", required_argument, NULL, 'w'},
 		{"conflict-exit-code", required_argument, NULL, 'E'},
 		{"close", no_argument, NULL, 'o'},
+		{"verbose", no_argument, NULL, OPT_VERBOSE},
 		{"help", no_argument, NULL, 'h'},
 		{"version", no_argument, NULL, 'V'},
 		{NULL, 0, NULL, 0}
@@ -180,6 +194,9 @@ int main(int argc, char *argv[])
 			conflict_exit_code = strtos32_or_err(optarg,
 				_("invalid exit code"));
 			break;
+		case OPT_VERBOSE:
+			verbose = 1;
+			break;
 		case 'V':
 			printf(UTIL_LINUX_VERSION);
 			exit(EX_OK);
@@ -216,7 +233,7 @@ int main(int argc, char *argv[])
 
 	} else if (optind < argc) {
 		/* Use provided file descriptor */
-		fd = (int)strtol_or_err(argv[optind], "bad number");
+		fd = strtos32_or_err(argv[optind], _("bad file descriptor"));
 	} else {
 		/* Bad options */
 		errx(EX_USAGE, _("requires file descriptor, file or directory"));
@@ -232,19 +249,27 @@ int main(int argc, char *argv[])
 			have_timeout = 0;
 			block = LOCK_NB;
 		} else
-			setup_timer(&timeout, &old_timer, &old_sa, timeout_handler);
+			if (setup_timer(&t_id, &timeout, &timeout_handler))
+				err(EX_OSERR, _("cannot set up timer"));
 	}
 
+	if (verbose)
+		gettime_monotonic(&time_start);
 	while (flock(fd, type | block)) {
 		switch (errno) {
 		case EWOULDBLOCK:
 			/* -n option set and failed to lock. */
+			if (verbose)
+				warnx(_("failed to get lock"));
 			exit(conflict_exit_code);
 		case EINTR:
 			/* Signal received */
-			if (timeout_expired)
+			if (timeout_expired) {
 				/* -w option set and failed to lock. */
+				if (verbose)
+					warnx(_("timeout while waiting to get lock"));
 				exit(conflict_exit_code);
+			}
 			/* otherwise try again */
 			continue;
 		case EIO:
@@ -277,14 +302,24 @@ int main(int argc, char *argv[])
 	}
 
 	if (have_timeout)
-		cancel_timer(&old_timer, &old_sa);
+		cancel_timer(&t_id);
+	if (verbose) {
+		struct timeval delta;
 
+		gettime_monotonic(&time_done);
+		timersub(&time_done, &time_start, &delta);
+		printf(_("%s: getting lock took %ld.%06ld seconds\n"),
+		       program_invocation_short_name, delta.tv_sec,
+		       delta.tv_usec);
+	}
 	status = EX_OK;
 
 	if (cmd_argv) {
 		pid_t w, f;
 		/* Clear any inherited settings */
 		signal(SIGCHLD, SIG_DFL);
+		if (verbose)
+			printf(_("%s: executing %s\n"), program_invocation_short_name, cmd_argv[0]);
 		f = fork();
 
 		if (f < 0) {

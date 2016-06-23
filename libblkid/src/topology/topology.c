@@ -167,7 +167,7 @@ static int topology_probe(blkid_probe pr, struct blkid_chain *chn)
 		}
 	}
 
-	blkid_probe_chain_reset_vals(pr, chn);
+	blkid_probe_chain_reset_values(pr, chn);
 
 	DBG(LOWPROBE, ul_debug("--> starting probing loop [TOPOLOGY idx=%d]",
 		chn->idx));
@@ -218,7 +218,7 @@ static int topology_set_value(blkid_probe pr, const char *name,
 		return 0;	/* ignore zeros */
 
 	if (chn->binary) {
-		memcpy(chn->data + structoff, &data, sizeof(data));
+		memcpy((char *) chn->data + structoff, &data, sizeof(data));
 		return 0;
 	}
 	return blkid_probe_sprintf_value(pr, name, "%lu", data);
