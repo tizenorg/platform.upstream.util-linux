@@ -157,6 +157,32 @@ static void encrypt_pass_release(struct libmnt_context *cxt
 	munlockall();
 }
 
+static char *encrypt_pass_get(struct libmnt_context *cxt)
+{
+	if (!cxt)
+		return 0;
+
+#ifdef MCL_FUTURE
+	if (mlockall(MCL_CURRENT | MCL_FUTURE)) {
+		warn(_("couldn't lock into memory"));
+		return NULL;
+	}
+#endif
+	return xgetpass(passfd, _("Password: "));
+}
+
+static void encrypt_pass_release(struct libmnt_context *cxt
+			__attribute__((__unused__)), char *pwd)
+{
+	char *p = pwd;
+
+	while (p && *p)
+		*p++ = '\0';
+
+	free(pwd);
+	munlockall();
+}
+
 /*
  * Replace control chars with '?' to be compatible with coreutils. For more
  * robust solution use findmnt(1) where we use \x?? hex encoding.
