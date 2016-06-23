@@ -303,12 +303,11 @@ static int lookup_umount_fs(struct libmnt_context *cxt)
  */
 static int is_associated_fs(const char *devname, struct libmnt_fs *fs)
 {
-	int r;
+	uintmax_t offset = 0;
 	const char *src;
 	char *val, *optstr;
 	size_t valsz;
-	char *offsetStr = NULL, *sizelimitStr = NULL;
-	extern int __loDev_is_loop_active_same_back(char *, char *, char *, char *);
+	int flags = 0;
 
 	/* check if it begins with /dev/loop */
 	if (strncmp(devname, _PATH_DEV_LOOP, sizeof(_PATH_DEV_LOOP) - 1))
@@ -320,16 +319,16 @@ static int is_associated_fs(const char *devname, struct libmnt_fs *fs)
 
 	/* check for the offset option in @fs */
 	optstr = (char *) mnt_fs_get_user_options(fs);
-	if (optstr) {
-		if(mnt_optstr_get_option(optstr, "offset", &val, &valsz) == 0 && val && valsz)
-			offsetStr = strndup(val, valsz);
-		if(mnt_optstr_get_option(optstr, "sizelimit", &val, &valsz) == 0 && val && valsz)
-			sizelimitStr = strndup(val, valsz);
+
+	if (optstr &&
+	    mnt_optstr_get_option(optstr, "offset", &val, &valsz) == 0) {
+		flags |= LOOPDEV_FL_OFFSET;
+
+		if (mnt_parse_offset(val, valsz, &offset) != 0)
+			return 0;
 	}
-	r = __loDev_is_loop_active_same_back((char *) devname, (char *) src, offsetStr, sizelimitStr);
-	if(offsetStr) free(offsetStr);
-	if(sizelimitStr) free(sizelimitStr);
-	return r;
+
+	return loopdev_is_used(devname, src, offset, flags);
 }
 
 static int prepare_helper_from_options(struct libmnt_context *cxt,
@@ -789,7 +788,7 @@ int mnt_context_prepare_umount(struct libmnt_context *cxt)
 	if (!rc && mnt_context_is_loopdel(cxt) && cxt->fs) {
 		const char *src = mnt_fs_get_srcpath(cxt->fs);
 
-		if (src && !is_loopdev(src))
+		if (src && (!is_loopdev(src) || loopdev_is_autoclear(src)))
 			mnt_context_enable_loopdel(cxt, FALSE);
 	}
 
