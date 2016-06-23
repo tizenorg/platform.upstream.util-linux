@@ -28,7 +28,10 @@ libmount_la_SOURCES = \
 if LINUX
 libmount_la_SOURCES += \
 	libmount/src/context.c \
-	libmount/src/context_loopdev.c \
+	libmount/src/context_loopdev1.c \
+	libmount/src/sha512.c \
+	libmount/src/rmd160.c \
+	libmount/src/aes.c \
 	libmount/src/context_mount.c \
 	libmount/src/context_umount.c \
 	libmount/src/monitor.c
