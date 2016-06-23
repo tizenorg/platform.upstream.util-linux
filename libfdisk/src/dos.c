@@ -659,7 +659,10 @@ static int dos_create_disklabel(struct fdisk_context *cxt)
 	if (!has_id)
 		random_get_bytes(&id, sizeof(id));
 
-	rc = fdisk_init_firstsector_buffer(cxt);
+	if (fdisk_has_protected_bootbits(cxt))
+		rc = fdisk_init_firstsector_buffer(cxt, 0, MBR_PT_BOOTBITS_SIZE);
+	else
+		rc = fdisk_init_firstsector_buffer(cxt, 0, 0);
 	if (rc)
 		return rc;
 	dos_init(cxt);
@@ -1221,7 +1224,7 @@ static int add_partition(struct fdisk_context *cxt, size_t n,
 		}
 	}
 
-	set_partition(cxt, n, 0, start, stop, sys, pa && pa->boot == 1 ? 1 : 0);
+	set_partition(cxt, n, 0, start, stop, sys, fdisk_partition_is_bootable(pa));
 	if (n > 4) {
 		struct pte *pe = self_pte(cxt, n);
 		set_partition(cxt, n - 1, 1, pe->offset, stop,
@@ -1894,7 +1897,6 @@ static int dos_get_partition(struct fdisk_context *cxt, size_t n,
 static int dos_set_partition(struct fdisk_context *cxt, size_t n,
 			     struct fdisk_partition *pa)
 {
-	struct fdisk_dos_label *l;
 	struct dos_partition *p;
 	struct pte *pe;
 	fdisk_sector_t start, size;
@@ -1916,7 +1918,6 @@ static int dos_set_partition(struct fdisk_context *cxt, size_t n,
 	if (pa->type && !pa->type->code)
 		fdisk_warnx(cxt, _("Type 0 means free space to many systems. "
 				   "Having partitions of type 0 is probably unwise."));
-	l = self_label(cxt);
 	p = self_partition(cxt, n);
 	pe = self_pte(cxt, n);
 
@@ -1928,31 +1929,6 @@ static int dos_set_partition(struct fdisk_context *cxt, size_t n,
 	if (fdisk_partition_has_size(pa))
 		size = pa->size;
 
-	if (pa->end_follow_default) {
-		fdisk_sector_t first[cxt->label->nparts_max],
-			 last[cxt->label->nparts_max],
-			 xlast;
-		struct pte *ext = l->ext_offset ? self_pte(cxt, l->ext_index) : NULL; 
-
-		fill_bounds(cxt, first, last);
-
-		if (ext && l->ext_offset) {
-			first[l->ext_index] = l->ext_offset;
-			last[l->ext_index] = get_abs_partition_end(ext);
-		}
-		if (FDISK_IS_UNDEF(start))
-			start = get_abs_partition_start(pe);
-
-		DBG(LABEL, ul_debug("DOS: #%zu    now %ju +%ju sectors",
-			n, (uintmax_t) start, (uintmax_t) dos_partition_get_size(p)));
-
-		xlast = get_unused_last(cxt, n, start, first, last);
-		size = xlast ? xlast - start + 1: dos_partition_get_size(p);
-
-		DBG(LABEL, ul_debug("DOS: #%zu wanted %ju +%ju sectors",
-			n, (uintmax_t) start, (uintmax_t) size));
-	}
-
 	if (!FDISK_IS_UNDEF(start) || !FDISK_IS_UNDEF(size)) {
 		DBG(LABEL, ul_debug("DOS: resize partition"));
 
@@ -1963,13 +1939,15 @@ static int dos_set_partition(struct fdisk_context *cxt, size_t n,
 
 		set_partition(cxt, n, 0, start, start + size - 1,
 				pa->type  ? pa->type->code : p->sys_ind,
-				pa->boot == 1);
+				FDISK_IS_UNDEF(pa->boot) ?
+					p->boot_ind == ACTIVE_FLAG :
+					fdisk_partition_is_bootable(pa));
 	} else {
 		DBG(LABEL, ul_debug("DOS: keep size, modify properties"));
 		if (pa->type)
 			p->sys_ind = pa->type->code;
 		if (!FDISK_IS_UNDEF(pa->boot))
-			p->boot_ind = pa->boot == 1 ? ACTIVE_FLAG : 0;
+			p->boot_ind = fdisk_partition_is_bootable(pa) ? ACTIVE_FLAG : 0;
 	}
 
 	partition_set_changed(cxt, n, 1);

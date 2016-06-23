@@ -27,6 +27,7 @@
 #include "bitops.h"
 #include "strutils.h"
 #include "all-io.h"
+#include "pt-mbr.h"
 
 /**
  * SECTION: gpt
@@ -373,7 +374,7 @@ static const char *gpt_get_header_revstr(struct gpt_header *header)
 	if (!header)
 		goto unknown;
 
-	switch (header->revision) {
+	switch (le32_to_cpu(header->revision)) {
 	case GPT_HEADER_REVISION_V1_02:
 		return "1.2";
 	case GPT_HEADER_REVISION_V1_00:
@@ -406,7 +407,10 @@ static int gpt_mknew_pmbr(struct fdisk_context *cxt)
 	if (!cxt || !cxt->firstsector)
 		return -ENOSYS;
 
-	rc = fdisk_init_firstsector_buffer(cxt);
+	if (fdisk_has_protected_bootbits(cxt))
+		rc = fdisk_init_firstsector_buffer(cxt, 0, MBR_PT_BOOTBITS_SIZE);
+	else
+		rc = fdisk_init_firstsector_buffer(cxt, 0, 0);
 	if (rc)
 		return rc;
 
@@ -954,6 +958,11 @@ static struct gpt_header *gpt_read_header(struct fdisk_context *cxt,
 	if (!gpt_check_signature(header))
 		goto invalid;
 
+	/* make sure header size is between 92 and sector size bytes */
+	hsz = le32_to_cpu(header->size);
+	if (hsz < GPT_HEADER_MINSZ || hsz > cxt->sector_size)
+		goto invalid;
+
 	if (!gpt_check_header_crc(header, NULL))
 		goto invalid;
 
@@ -972,10 +981,6 @@ static struct gpt_header *gpt_read_header(struct fdisk_context *cxt,
 	if (le64_to_cpu(header->my_lba) != lba)
 		goto invalid;
 
-	/* make sure header size is between 92 and sector size bytes */
-	hsz = le32_to_cpu(header->size);
-	if (hsz < GPT_HEADER_MINSZ || hsz > cxt->sector_size)
-		goto invalid;
 
 	if (_ents)
 		*_ents = ents;
@@ -1638,16 +1643,10 @@ static int gpt_set_partition(struct fdisk_context *cxt, size_t n,
 
 	if (fdisk_partition_has_start(pa))
 		start = pa->start;
-	if (fdisk_partition_has_size(pa))
-		end = gpt_partition_start(e) + pa->size - 1ULL;
-
-	if (pa->end_follow_default) {
-		/* enlarge */
-		if (!FDISK_IS_UNDEF(start))
-			start = gpt_partition_start(e);
-		end = find_last_free(gpt->bheader, gpt->ents, start);
-		if (!end)
-			FDISK_INIT_UNDEF(end);
+	if (fdisk_partition_has_size(pa) || fdisk_partition_has_start(pa)) {
+		uint64_t xstart = fdisk_partition_has_start(pa) ? pa->start : gpt_partition_start(e);
+		uint64_t xsize  = fdisk_partition_has_size(pa)  ? pa->size  : gpt_partition_size(e);
+		end = xstart + xsize - 1ULL;
 	}
 
 	if (!FDISK_IS_UNDEF(start))
@@ -1675,13 +1674,13 @@ static int gpt_list_disklabel(struct fdisk_context *cxt)
 	if (fdisk_is_details(cxt)) {
 		struct gpt_header *h = self_label(cxt)->pheader;
 
-		fdisk_info(cxt, _("First LBA: %ju"), h->first_usable_lba);
-		fdisk_info(cxt, _("Last LBA: %ju"), h->last_usable_lba);
+		fdisk_info(cxt, _("First LBA: %ju"), le64_to_cpu(h->first_usable_lba));
+		fdisk_info(cxt, _("Last LBA: %ju"), le64_to_cpu(h->last_usable_lba));
 		/* TRANSLATORS: The LBA (Logical Block Address) of the backup GPT header. */
-		fdisk_info(cxt, _("Alternative LBA: %ju"), h->alternative_lba);
+		fdisk_info(cxt, _("Alternative LBA: %ju"), le64_to_cpu(h->alternative_lba));
 		/* TRANSLATORS: The start of the array of partition entries. */
-		fdisk_info(cxt, _("Partition entries LBA: %ju"), h->partition_entry_lba);
-		fdisk_info(cxt, _("Allocated partition entries: %u"), h->npartition_entries);
+		fdisk_info(cxt, _("Partition entries LBA: %ju"), le64_to_cpu(h->partition_entry_lba));
+		fdisk_info(cxt, _("Allocated partition entries: %u"), le32_to_cpu(h->npartition_entries));
 	}
 
 	return 0;
@@ -2052,7 +2051,7 @@ static int gpt_add_partition(
 	if (rc)
 		return rc;
 
-	disk_f = find_first_available(pheader, ents, pheader->first_usable_lba);
+	disk_f = find_first_available(pheader, ents, le64_to_cpu(pheader->first_usable_lba));
 
 	/* if first sector no explicitly defined then ignore small gaps before
 	 * the first partition */
@@ -2074,7 +2073,7 @@ static int gpt_add_partition(
 		} while(1);
 
 		if (disk_f == 0)
-			disk_f = find_first_available(pheader, ents, pheader->first_usable_lba);
+			disk_f = find_first_available(pheader, ents, le64_to_cpu(pheader->first_usable_lba));
 	}
 
 	disk_l = find_last_free_sector(pheader, ents);
@@ -2179,6 +2178,21 @@ static int gpt_add_partition(
 
 	if (user_f > user_l || partnum >= cxt->label->nparts_max) {
 		fdisk_warnx(cxt, _("Could not create partition %zu"), partnum + 1);
+		rc = -EINVAL;
+		goto done;
+	}
+
+	/* Be paranoid and check agains on-disk setting rather than against libfdisk cxt */
+	if (user_l > le64_to_cpu(pheader->last_usable_lba)) {
+		fdisk_warnx(cxt, _("The last usable GPT sector is %ju, but %ju is requested."),
+				le64_to_cpu(pheader->last_usable_lba), user_l);
+		rc = -EINVAL;
+		goto done;
+	}
+
+	if (user_f < le64_to_cpu(pheader->first_usable_lba)) {
+		fdisk_warnx(cxt, _("The first usable GPT sector is %ju, but %ju is requested."),
+				le64_to_cpu(pheader->first_usable_lba), user_f);
 		rc = -EINVAL;
 		goto done;
 	}
@@ -2551,8 +2565,8 @@ static int gpt_reset_alignment(struct fdisk_context *cxt)
 
 	if (h) {
 		/* always follow existing table */
-		cxt->first_lba = h->first_usable_lba;
-		cxt->last_lba  = h->last_usable_lba;
+		cxt->first_lba = le64_to_cpu(h->first_usable_lba);
+		cxt->last_lba  = le64_to_cpu(h->last_usable_lba);
 	} else {
 		/* estimate ranges for GPT */
 		uint64_t first, last;

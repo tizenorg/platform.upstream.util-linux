@@ -371,7 +371,7 @@ int *init_fields(struct fdisk_context *cxt, const char *str, size_t *n)
 	if (fdisk_label_get_fields_ids(NULL, cxt, &dflt_ids, &fields_nids))
 		goto done;
 
-	fields_ids = xcalloc(sizeof(int), FDISK_NFIELDS * 2);
+	fields_ids = xcalloc(FDISK_NFIELDS * 2, sizeof(int));
 
 	/* copy defaults to the list with wanted fields */
 	memcpy(fields_ids, dflt_ids, fields_nids * sizeof(int));
@@ -380,7 +380,7 @@ int *init_fields(struct fdisk_context *cxt, const char *str, size_t *n)
 	/* extend or replace fields_nids[] according to fields_string */
 	if (fields_string &&
 	    string_add_to_idarray(fields_string, fields_ids, FDISK_NFIELDS * 2,
-			      (int *) &fields_nids, fieldname_to_id) < 0)
+			          &fields_nids, fieldname_to_id) < 0)
 		exit(EXIT_FAILURE);
 done:
 	fields_label = NULL;

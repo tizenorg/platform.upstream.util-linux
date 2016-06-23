@@ -121,6 +121,9 @@ struct fdisk_partition {
 	fdisk_sector_t	start;			/* first sectors */
 	fdisk_sector_t	size;			/* size in sectors */
 
+	int		movestart;		/* FDISK_MOVE_* (scripts only) */
+	int		resize;			/* FDISK_RESIZE_* (scripts only) */
+
 	char		*name;			/* partition name */
 	char		*uuid;			/* partition UUID */
 	char		*attrs;			/* partition flags/attributes converted to string */
@@ -150,6 +153,18 @@ struct fdisk_partition {
 			start_follow_default : 1,	/* use default start */
 			used : 1,			/* partition already used */
 			wholedisk : 1;			/* special system partition */
+};
+
+enum {
+	FDISK_MOVE_NONE = 0,
+	FDISK_MOVE_DOWN = -1,
+	FDISK_MOVE_UP = 1
+};
+
+enum {
+	FDISK_RESIZE_NONE = 0,
+	FDISK_RESIZE_REDUCE = -1,
+	FDISK_RESIZE_ENLARGE = 1
 };
 
 #define FDISK_INIT_UNDEF(_x)	((_x) = (__typeof__(_x)) -1)
@@ -350,6 +365,7 @@ struct fdisk_context {
 	unsigned int readonly : 1,		/* don't write to the device */
 		     display_in_cyl_units : 1,	/* for obscure labels */
 		     display_details : 1,	/* expert display mode */
+		     protect_bootbits : 1,	/* don't zeroize fll irst sector */
 		     listonly : 1;		/* list partition, nothing else */
 
 	int sizeunit;				/* SIZE fields, FDISK_SIZEUNIT_* */
@@ -402,7 +418,8 @@ extern int fdisk_apply_user_device_properties(struct fdisk_context *cxt);
 extern void fdisk_zeroize_device_properties(struct fdisk_context *cxt);
 
 /* utils.c */
-extern int fdisk_init_firstsector_buffer(struct fdisk_context *cxt);
+extern int fdisk_init_firstsector_buffer(struct fdisk_context *cxt,
+			unsigned int protect_off, unsigned int protect_size);
 extern int fdisk_read_firstsector(struct fdisk_context *cxt);
 extern char *fdisk_partname(const char *dev, size_t partno);
 

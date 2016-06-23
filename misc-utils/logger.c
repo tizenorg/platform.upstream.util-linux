@@ -91,6 +91,7 @@ enum {
 	OPT_RFC5424,
 	OPT_SOCKET_ERRORS,
 	OPT_MSGID,
+	OPT_NOACT,
 	OPT_ID
 };
 
@@ -109,6 +110,7 @@ struct logger_ctl {
 	void (*syslogfp)(struct logger_ctl *ctl);
 	unsigned int
 			unix_socket_errors:1,	/* whether to report or not errors */
+			noact:1,		/* do not write to sockets */
 			prio_prefix:1,		/* read priority from intput */
 			stderr_printout:1,	/* output message to stderr */
 			rfc5424_time:1,		/* include time stamp */
@@ -116,6 +118,50 @@ struct logger_ctl {
 			rfc5424_host:1,		/* include hostname */
 			skip_empty_lines:1; /* do not send empty lines when processing files */
 };
+
+/*
+ * For tests we want to be able to control datetime outputs
+ */
+#ifdef TEST_LOGGER
+static inline int logger_gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+	char *str = getenv("LOGGER_TEST_TIMEOFDAY");
+	uintmax_t sec, usec;
+
+	if (str && sscanf(str, "%ju.%ju", &sec, &usec) == 2) {
+		tv->tv_sec = sec;
+		tv->tv_usec = usec;
+		return tv->tv_sec >= 0 && tv->tv_usec >= 0 ? 0 : -EINVAL;
+	}
+
+	return gettimeofday(tv, tz);
+}
+
+static inline char *logger_xgethostname(void)
+{
+	char *str = getenv("LOGGER_TEST_HOSTNAME");
+	return str ? xstrdup(str) : xgethostname();
+}
+
+static inline pid_t logger_getpid(void)
+{
+	char *str = getenv("LOGGER_TEST_GETPID");
+	unsigned int pid;
+
+	if (str && sscanf(str, "%u", &pid) == 1)
+		return pid;
+	return getpid();
+}
+
+
+#undef HAVE_NTP_GETTIME		/* force to default non-NTP */
+
+#else /* !TEST_LOGGER */
+# define logger_gettimeofday(x, y)	gettimeofday(x, y)
+# define logger_xgethostname		xgethostname
+# define logger_getpid			getpid
+#endif
+
 
 static int decode(const char *name, CODE *codetab)
 {
@@ -127,6 +173,7 @@ static int decode(const char *name, CODE *codetab)
 		int num;
 		char *end = NULL;
 
+		errno = 0;
 		num = strtol(name, &end, 10);
 		if (errno || name == end || (end && *end))
 			return -1;
@@ -159,8 +206,8 @@ static int pencode(char *s)
 	level = decode(s, prioritynames);
 	if (level < 0)
 		errx(EXIT_FAILURE, _("unknown priority name: %s"), s);
-	if(facility == LOG_KERN)
-		facility = LOG_USER; /* kern is forbidden */
+	if (facility == LOG_KERN)
+		facility = LOG_USER;	/* kern is forbidden */
 	return ((level & LOG_PRIMASK) | (facility & LOG_FACMASK));
 }
 
@@ -249,12 +296,12 @@ static int inet_socket(const char *servername, const char *port,
 }
 
 #ifdef HAVE_LIBSYSTEMD
-static int journald_entry(FILE *fp)
+static int journald_entry(struct logger_ctl *ctl, FILE *fp)
 {
 	struct iovec *iovec;
 	char *buf = NULL;
 	ssize_t sz;
-	int n, lines, vectors = 8, ret;
+	int n, lines, vectors = 8, ret = 0;
 	size_t dummy = 0;
 
 	iovec = xmalloc(vectors * sizeof(struct iovec));
@@ -276,7 +323,13 @@ static int journald_entry(FILE *fp)
 		iovec[lines].iov_base = buf;
 		iovec[lines].iov_len = sz;
 	}
-	ret = sd_journal_sendv(iovec, lines);
+
+	if (!ctl->noact)
+		ret = sd_journal_sendv(iovec, lines);
+	if (ctl->stderr_printout) {
+		for (n = 0; n < lines; n++)
+			fprintf(stderr, "%s\n", (char *) iovec[n].iov_base);
+	}
 	for (n = 0; n < lines; n++)
 		free(iovec[n].iov_base);
 	free(iovec);
@@ -294,23 +347,23 @@ static char *xgetlogin(void)
 	return cp;
 }
 
-
 /* this creates a timestamp based on current time according to the
  * fine rules of RFC3164, most importantly it ensures in a portable
  * way that the month day is correctly written (with a SP instead
  * of a leading 0). The function uses a static buffer which is
  * overwritten on the next call (just like ctime() does).
  */
-static const char *
-rfc3164_current_time(void)
+static const char *rfc3164_current_time(void)
 {
 	static char time[32];
 	struct timeval tv;
 	struct tm *tm;
-	static char *monthnames[] = { "Jan", "Feb", "Mar", "Apr",
-			"May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+	static char *monthnames[] = {
+		"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug",
+		"Sep", "Oct", "Nov", "Dec"
+	};
 
-	gettimeofday(&tv, NULL);
+	logger_gettimeofday(&tv, NULL);
 	tm = localtime(&tv.tv_sec);
 	snprintf(time, sizeof(time),"%s %2d %2.2d:%2.2d:%2.2d",
 		monthnames[tm->tm_mon], tm->tm_mday,
@@ -327,10 +380,11 @@ static void write_output(const struct logger_ctl *ctl, const char *const msg)
 {
 	char *buf;
 	const size_t len = xasprintf(&buf, "%s%s", ctl->hdr, msg);
-	if (write_all(ctl->fd, buf, len) < 0)
-		warn(_("write failed"));
-	else
-		if (ctl->socket_type == TYPE_TCP)
+
+	if (!ctl->noact) {
+		if (write_all(ctl->fd, buf, len) < 0)
+			warn(_("write failed"));
+		else if (ctl->socket_type == TYPE_TCP) {
 			/* using an additional write seems like the best compromise:
 			 * - writev() is not yet supported by framework
 			 * - adding the \n to the buffer in formatters violates layers
@@ -339,13 +393,17 @@ static void write_output(const struct logger_ctl *ctl, const char *const msg)
 			 */
 			if (write_all(ctl->fd, "\n", 1) < 0)
 				warn(_("write failed"));
+		}
+	}
 	if (ctl->stderr_printout)
 		fprintf(stderr, "%s\n", buf);
+	free(buf);
 }
 
+#define NILVALUE "-"
 static void syslog_rfc3164_header(struct logger_ctl *const ctl)
 {
-	char pid[30], *hostname, *dot;
+	char pid[30], *hostname;
 
 	*pid = '\0';
 	if (ctl->fd < 0)
@@ -353,10 +411,12 @@ static void syslog_rfc3164_header(struct logger_ctl *const ctl)
 	if (ctl->pid)
 		snprintf(pid, sizeof(pid), "[%d]", ctl->pid);
 
-	hostname = xgethostname();
-	dot = strchr(hostname, '.');
-	if (dot)
-		*dot = '\0';
+	if ((hostname = logger_xgethostname())) {
+		char *dot = strchr(hostname, '.');
+		if (dot)
+			*dot = '\0';
+	} else
+		hostname = xstrdup(NILVALUE);
 
 	xasprintf(&ctl->hdr, "<%d>%.15s %s %.200s%s: ",
 		 ctl->pri, rfc3164_current_time(), hostname, ctl->tag, pid);
@@ -384,34 +444,40 @@ static void syslog_rfc3164_header(struct logger_ctl *const ctl)
  * specified RFC5424. The rest of the field mappings should be
  * pretty clear from RFC5424. -- Rainer Gerhards, 2015-03-10
  */
-#define NILVALUE "-"
 static void syslog_rfc5424_header(struct logger_ctl *const ctl)
 {
+	char *time;
+	char *hostname;
+	char *const app_name = ctl->tag;
+	char *procid;
+	char *const msgid = xstrdup(ctl->msgid ? ctl->msgid : NILVALUE);
+	char *structured_data;
+
 	if (ctl->fd < 0)
 		return;
 
-	char *time;
 	if (ctl->rfc5424_time) {
 		struct timeval tv;
 		struct tm *tm;
-		gettimeofday(&tv, NULL);
+
+		logger_gettimeofday(&tv, NULL);
 		if ((tm = localtime(&tv.tv_sec)) != NULL) {
 			char fmt[64];
 			const size_t i = strftime(fmt, sizeof(fmt),
-					"%Y-%m-%dT%H:%M:%S.%%06u%z ", tm);
+						  "%Y-%m-%dT%H:%M:%S.%%06u%z ", tm);
 			/* patch TZ info to comply with RFC3339 (we left SP at end) */
-			fmt[i-1] = fmt[i-2];
-			fmt[i-2] = fmt[i-3];
-			fmt[i-3] = ':';
+			fmt[i - 1] = fmt[i - 2];
+			fmt[i - 2] = fmt[i - 3];
+			fmt[i - 3] = ':';
 			xasprintf(&time, fmt, tv.tv_usec);
 		} else
 			err(EXIT_FAILURE, _("localtime() failed"));
 	} else
 		time = xstrdup(NILVALUE);
 
-	char *hostname;
 	if (ctl->rfc5424_host) {
-		hostname = xgethostname();
+		if (!(hostname = logger_xgethostname()))
+			hostname = xstrdup(NILVALUE);
 		/* Arbitrary looking 'if (var < strlen()) checks originate from
 		 * RFC 5424 - 6 Syslog Message Format definition.  */
 		if (255 < strlen(hostname))
@@ -420,22 +486,18 @@ static void syslog_rfc5424_header(struct logger_ctl *const ctl)
 	} else
 		hostname = xstrdup(NILVALUE);
 
-	char *const app_name = ctl->tag;
 	if (48 < strlen(ctl->tag))
 		errx(EXIT_FAILURE, _("tag '%s' is too long"), ctl->tag);
 
-	char *procid;
 	if (ctl->pid)
 		xasprintf(&procid, "%d", ctl->pid);
 	else
 		procid = xstrdup(NILVALUE);
 
-	char *const msgid = xstrdup((ctl->msgid) ? ctl->msgid : NILVALUE);
-
-	char *structured_data;
 	if (ctl->rfc5424_tq) {
 #ifdef HAVE_NTP_GETTIME
 		struct ntptimeval ntptv;
+
 		if (ntp_gettime(&ntptv) == TIME_OK)
 			xasprintf(&structured_data,
 				 "[timeQuality tzKnown=\"1\" isSynced=\"1\" syncAccuracy=\"%ld\"]",
@@ -444,7 +506,8 @@ static void syslog_rfc5424_header(struct logger_ctl *const ctl)
 #endif
 			xasprintf(&structured_data,
 				 "[timeQuality tzKnown=\"1\" isSynced=\"0\"]");
-	}
+	} else
+		structured_data = xstrdup(NILVALUE);
 
 	xasprintf(&ctl->hdr, "<%d>1 %s %s %s %s %s %s ",
 		ctl->pri,
@@ -519,16 +582,16 @@ static void logger_open(struct logger_ctl *ctl)
 		ctl->fd = inet_socket(ctl->server, ctl->port, ctl->socket_type);
 		if (!ctl->syslogfp)
 			ctl->syslogfp = syslog_rfc5424_header;
-		return;
-	}
-	if (!ctl->unix_socket)
-		ctl->unix_socket = _PATH_DEVLOG;
+	} else {
+		if (!ctl->unix_socket)
+			ctl->unix_socket = _PATH_DEVLOG;
 
-	ctl->fd = unix_socket(ctl, ctl->unix_socket, ctl->socket_type);
-	if (!ctl->syslogfp)
-		ctl->syslogfp = syslog_local_header;
-	if(!ctl->tag)
-			ctl->tag = xgetlogin();
+		ctl->fd = unix_socket(ctl, ctl->unix_socket, ctl->socket_type);
+		if (!ctl->syslogfp)
+			ctl->syslogfp = syslog_local_header;
+	}
+	if (!ctl->tag)
+		ctl->tag = xgetlogin();
 	generate_syslog_header(ctl);
 }
 
@@ -562,6 +625,7 @@ static void logger_command_line(const struct logger_ctl *ctl, char **argv)
 	}
 	if (p != buf)
 		write_output(ctl, buf);
+	free(buf);
 }
 
 static void logger_stdin(struct logger_ctl *ctl)
@@ -581,9 +645,9 @@ static void logger_stdin(struct logger_ctl *ctl)
 			if (c == '<') {
 				pri = 0;
 				buf[i++] = c;
-				while(isdigit(c = getchar()) && pri <= 191) {
-						buf[i++] = c;
-						pri = pri * 10 + c - '0';
+				while (isdigit(c = getchar()) && pri <= 191) {
+					buf[i++] = c;
+					pri = pri * 10 + c - '0';
 				}
 				if (c != EOF && c != '\n')
 					buf[i++] = c;
@@ -611,10 +675,10 @@ static void logger_stdin(struct logger_ctl *ctl)
 		}
 		buf[i] = '\0';
 
-		if(i > 0 || !ctl->skip_empty_lines)
+		if (i > 0 || !ctl->skip_empty_lines)
 			write_output(ctl, buf);
 
-		if (c == '\n') /* discard line terminator */
+		if (c == '\n')	/* discard line terminator */
 			c = getchar();
 	}
 }
@@ -639,6 +703,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_("     --id[=<id>]          log the given <id>, or otherwise the PID\n"), out);
 	fputs(_(" -f, --file <file>        log the contents of this file\n"), out);
 	fputs(_(" -e, --skip-empty         do not log empty lines when processing files\n"), out);
+	fputs(_("     --no-act             do everything except the write the log\n"), out);
 	fputs(_(" -p, --priority <prio>    mark given message with this priority\n"), out);
 	fputs(_("     --prio-prefix        look for a prefix on every line read from stdin\n"), out);
 	fputs(_(" -s, --stderr             output message to standard error as well\n"), out);
@@ -651,7 +716,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_("     --rfc3164            use the obsolete BSD syslog protocol\n"), out);
 	fputs(_("     --rfc5424[=<snip>]   use the syslog protocol (the default for remote);\n"
 		"                            <snip> can be notime, or notq, and/or nohost\n"), out);
-	fputs(_("     --msgid              set rfc5424 MSGID field, ignored for non-rfc5424 format\n"), out);
+	fputs(_("     --msgid <msgid>      set rfc5424 message id field\n"), out);
 	fputs(_(" -u, --socket <socket>    write to this Unix socket\n"), out);
 	fputs(_("     --socket-errors[=<on|off|auto>]\n"
 		"                          print connection errors when using Unix sockets\n"), out);
@@ -701,29 +766,30 @@ int main(int argc, char **argv)
 	FILE *jfd = NULL;
 #endif
 	static const struct option longopts[] = {
-		{ "id",		optional_argument,  0, OPT_ID },
-		{ "stderr",	no_argument,	    0, 's' },
-		{ "file",	required_argument,  0, 'f' },
-		{ "priority",	required_argument,  0, 'p' },
-		{ "tag",	required_argument,  0, 't' },
-		{ "socket",	required_argument,  0, 'u' },
+		{ "id",		   optional_argument, 0, OPT_ID		   },
+		{ "stderr",	   no_argument,	      0, 's'		   },
+		{ "file",	   required_argument, 0, 'f'		   },
+		{ "no-act",        no_argument,       0, OPT_NOACT,	   },
+		{ "priority",	   required_argument, 0, 'p'		   },
+		{ "tag",	   required_argument, 0, 't'		   },
+		{ "socket",	   required_argument, 0, 'u'		   },
 		{ "socket-errors", required_argument, 0, OPT_SOCKET_ERRORS },
-		{ "udp",	no_argument,	    0, 'd' },
-		{ "tcp",	no_argument,	    0, 'T' },
-		{ "server",	required_argument,  0, 'n' },
-		{ "port",	required_argument,  0, 'P' },
-		{ "version",	no_argument,	    0, 'V' },
-		{ "help",	no_argument,	    0, 'h' },
-		{ "prio-prefix", no_argument, 0, OPT_PRIO_PREFIX },
-		{ "rfc3164",	no_argument,  0, OPT_RFC3164 },
-		{ "rfc5424",	optional_argument,  0, OPT_RFC5424 },
-		{ "size",       required_argument,  0, 'S' },
-		{ "msgid",      required_argument,  0, OPT_MSGID },
-		{ "skip-empty", no_argument,  0, 'e' },
+		{ "udp",	   no_argument,	      0, 'd'		   },
+		{ "tcp",	   no_argument,	      0, 'T'		   },
+		{ "server",	   required_argument, 0, 'n'		   },
+		{ "port",	   required_argument, 0, 'P'		   },
+		{ "version",	   no_argument,	      0, 'V'		   },
+		{ "help",	   no_argument,	      0, 'h'		   },
+		{ "prio-prefix",   no_argument,	      0, OPT_PRIO_PREFIX   },
+		{ "rfc3164",	   no_argument,	      0, OPT_RFC3164	   },
+		{ "rfc5424",	   optional_argument, 0, OPT_RFC5424	   },
+		{ "size",	   required_argument, 0, 'S'		   },
+		{ "msgid",	   required_argument, 0, OPT_MSGID	   },
+		{ "skip-empty",	   no_argument,	      0, 'e'		   },
 #ifdef HAVE_LIBSYSTEMD
-		{ "journald",   optional_argument,  0, OPT_JOURNALD },
+		{ "journald",	   optional_argument, 0, OPT_JOURNALD	   },
 #endif
-		{ NULL,		0, 0, 0 }
+		{ NULL,		   0,		      0, 0		   }
 	};
 
 	setlocale(LC_ALL, "");
@@ -743,7 +809,7 @@ int main(int argc, char **argv)
 			ctl.skip_empty_lines = 1;
 			break;
 		case 'i':		/* log process id also */
-			ctl.pid = getpid();
+			ctl.pid = logger_getpid();
 			break;
 		case OPT_ID:
 			if (optarg) {
@@ -753,7 +819,7 @@ int main(int argc, char **argv)
 					p++;
 				ctl.pid = strtoul_or_err(optarg, _("failed to parse id"));
 			} else
-				ctl.pid = getpid();
+				ctl.pid = logger_getpid();
 			break;
 		case 'p':		/* priority */
 			ctl.pri = pencode(optarg);
@@ -800,8 +866,8 @@ int main(int argc, char **argv)
 				parse_rfc5424_flags(&ctl, optarg);
 			break;
 		case OPT_MSGID:
-			if(strchr(optarg, ' '))
-					err(EXIT_FAILURE, _("--msgid cannot contain space"));
+			if (strchr(optarg, ' '))
+				errx(EXIT_FAILURE, _("--msgid cannot contain space"));
 			ctl.msgid = optarg;
 			break;
 #ifdef HAVE_LIBSYSTEMD
@@ -818,6 +884,9 @@ int main(int argc, char **argv)
 		case OPT_SOCKET_ERRORS:
 			unix_socket_errors_mode = parse_unix_socket_errors_flags(optarg);
 			break;
+		case OPT_NOACT:
+			ctl.noact = 1;
+			break;
 		case '?':
 		default:
 			usage(stderr);
@@ -829,7 +898,7 @@ int main(int argc, char **argv)
 		warnx(_("--file <file> and <message> are mutually exclusive, message is ignored"));
 #ifdef HAVE_LIBSYSTEMD
 	if (jfd) {
-		int ret = journald_entry(jfd);
+		int ret = journald_entry(&ctl, jfd);
 		if (stdin != jfd)
 			fclose(jfd);
 		if (ret)
@@ -845,10 +914,9 @@ int main(int argc, char **argv)
 		ctl.unix_socket_errors = 1;
 		break;
 	case AF_UNIX_ERRORS_AUTO:
+		ctl.unix_socket_errors = ctl.noact || ctl.stderr_printout;
 #ifdef HAVE_LIBSYSTEMD
-		ctl.unix_socket_errors = sd_booted();
-#else
-		ctl.unix_socket_errors = 0;
+		ctl.unix_socket_errors |= !!sd_booted();
 #endif
 		break;
 	default:

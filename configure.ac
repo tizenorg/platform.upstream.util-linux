@@ -26,7 +26,7 @@ PACKAGE_VERSION_RELEASE=0
 
 dnl libblkid version
 LIBBLKID_VERSION="$PACKAGE_VERSION_MAJOR.$PACKAGE_VERSION_MINOR.$PACKAGE_VERSION_RELEASE"
-LIBBLKID_DATE="13-Mar-2015"
+LIBBLKID_DATE="30-Apr-2015"
 LIBBLKID_LT_MAJOR=1
 LIBBLKID_LT_MINOR=1
 LIBBLKID_LT_MICRO=0
@@ -106,6 +106,8 @@ UL_WARN_ADD([-fno-common])
 UL_WARN_ADD([-Wall])
 UL_WARN_ADD([-Werror=sequence-point])
 UL_WARN_ADD([-Wextra])
+UL_WARN_ADD([-Wextra-semi])
+UL_WARN_ADD([-Wembedded-directive])
 UL_WARN_ADD([-Wmissing-declarations])
 UL_WARN_ADD([-Wmissing-parameter-type])
 UL_WARN_ADD([-Wmissing-prototypes])
@@ -344,7 +346,6 @@ AC_CHECK_FUNCS([ \
 	mempcpy \
 	nanosleep \
 	ntp_gettime \
-	open_memstream \
 	personality \
 	posix_fadvise \
 	prctl \
@@ -371,6 +372,7 @@ AC_CHECK_FUNCS([openat fstatat unlinkat], [have_openat=yes], [have_openat=no])
 AC_CHECK_FUNCS([ioperm iopl], [have_io=yes])
 AC_CHECK_FUNCS([futimens], [have_futimens=yes])
 AC_CHECK_FUNCS([inotify_init1], [have_inotify_init1=yes])
+AC_CHECK_FUNCS([open_memstream], [have_open_memstream=yes],[have_open_memstream=no])
 
 dnl Old glibc requires -lrt
 AC_CHECK_FUNCS(clock_gettime, [], [
@@ -725,9 +727,10 @@ AS_IF([test "x$with_ncurses" != xno], [
     ])
   ])
 
-  AS_IF([test "x$have_ncurses" = xno], [
-    AC_MSG_ERROR([ncurses or ncursesw selected, but library not found (--without-ncurses to disable)])
-  ])
+  AS_CASE([$with_ncurses:$have_ncurses],
+    [yes:no], [AC_MSG_ERROR([ncurses or ncursesw selected, but library not found])]
+  )
+
 ])
 AC_SUBST([NCURSES_CFLAGS])
 AC_SUBST([NCURSES_LIBS])
@@ -917,6 +920,7 @@ AM_CONDITIONAL([BUILD_SFDISK], [test "x$build_sfdisk" = xyes])
 UL_BUILD_INIT([cfdisk], [check])
 UL_REQUIRES_BUILD([cfdisk], [libfdisk])
 UL_REQUIRES_BUILD([cfdisk], [libsmartcols])
+UL_REQUIRES_HAVE([cfdisk], [open_memstream])
 UL_REQUIRES_HAVE([cfdisk], [ncurses,slang], [ncurses or slang library])
 AM_CONDITIONAL([BUILD_CFDISK], [test "x$build_cfdisk" = xyes])
 
@@ -1754,6 +1758,7 @@ AC_ARG_WITH([python],
 )
 
 have_python=no
+have_libpython=no
 AS_IF([test "x$with_python" != xno], [
   # We follow distributions default and look for PKG module name "python"
   # (minimal version is 2) but if major version is explicitly specified by
@@ -1761,14 +1766,18 @@ AS_IF([test "x$with_python" != xno], [
   # "python3".
   AS_IF([test "x$withval" != xno -a "x$withval" != xyes -a "x$withval" != xcheck],
 	[pymajor="$withval"; PYTHON=python${pymajor}], [pymajor="2"])
+
+  # check for python interpreter
   AM_PATH_PYTHON([$pymajor], [have_python=yes], [have_python=no])
   AS_CASE([$with_python:$have_python],
     [yes:no],
-      [AC_MSG_ERROR([python selected but libpython not found])],
+      [AC_MSG_ERROR([python selected but python interpreter not found])],
     [check:no],
-       [AC_MSG_WARN([libpython not found, do not build python bindings])],
+       [AC_MSG_WARN([python interpreter not found, do not build python bindings])],
     [*:yes],
-       [PKG_CHECK_MODULES([PYTHON], [python-$PYTHON_VERSION])]
+       # check for python development stuff
+       [PKG_CHECK_MODULES([PYTHON], [python-$PYTHON_VERSION],
+			  [have_libpython=yes], [have_libpython=no])]
   )
 ])
 
@@ -1778,7 +1787,7 @@ AC_ARG_ENABLE([pylibmount],
   [], [UL_DEFAULT_ENABLE([pylibmount], [check])]
 )
 UL_BUILD_INIT([pylibmount])
-UL_REQUIRES_HAVE([pylibmount], [python], [libpython])
+UL_REQUIRES_HAVE([pylibmount], [libpython], [libpython])
 UL_REQUIRES_BUILD([pylibmount], [libmount])
 AM_CONDITIONAL([BUILD_PYLIBMOUNT], [test "x$build_pylibmount" = "xyes"])
 

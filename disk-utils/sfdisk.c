@@ -41,6 +41,7 @@
 #include "blkdev.h"
 #include "all-io.h"
 #include "rpmatch.h"
+#include "loopdev.h"
 
 #include "libfdisk.h"
 #include "fdisk-list.h"
@@ -190,6 +191,7 @@ static void sfdisk_init(struct sfdisk *sf)
 	if (!sf->cxt)
 		err(EXIT_FAILURE, _("failed to allocate libfdisk context"));
 	fdisk_set_ask(sf->cxt, ask_callback, (void *) sf);
+	fdisk_enable_bootbits_protection(sf->cxt, 1);
 
 	if (sf->label_nested) {
 		struct fdisk_context *x = fdisk_new_nested_context(sf->cxt,
@@ -1065,9 +1067,26 @@ static int is_device_used(struct sfdisk *sf)
 	if (fd < 0)
 		return 0;
 
-	if (fstat(fd, &st) == 0 && S_ISBLK(st.st_mode))
+	if (fstat(fd, &st) == 0 && S_ISBLK(st.st_mode)
+	    && major(st.st_rdev) != LOOPDEV_MAJOR)
 		return ioctl(fd, BLKRRPART) != 0;
 #endif
+	return 0;
+}
+
+static int ignore_partition(struct fdisk_partition *pa)
+{
+	/* incomplete partition setting */
+	if (!fdisk_partition_has_start(pa) && !fdisk_partition_start_is_default(pa))
+		return 1;
+	if (!fdisk_partition_has_size(pa) && !fdisk_partition_end_is_default(pa))
+		return 1;
+
+	/* probably dump from old sfdisk with start=0 size=0 */
+	if (fdisk_partition_has_start(pa) && fdisk_partition_get_start(pa) == 0 &&
+	    fdisk_partition_has_size(pa) && fdisk_partition_get_size(pa) == 0)
+		return 1;
+
 	return 0;
 }
 
@@ -1109,16 +1128,21 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 	 */
 	if (partno >= 0) {
 		size_t n;
+
 		if (!fdisk_has_label(sf->cxt))
 			errx(EXIT_FAILURE, _("%s: cannot modify partition %d: "
 					     "no partition table was found"),
-					devname, partno);
+					devname, partno + 1);
 		n = fdisk_get_npartitions(sf->cxt);
 		if ((size_t) partno > n)
 			errx(EXIT_FAILURE, _("%s: cannot modify partition %d: "
 					     "partition table contains only %zu "
 					     "partitions"),
-					devname, partno, n);
+					devname, partno + 1, n);
+
+		if (!fdisk_is_partition_used(sf->cxt, partno))
+			fdisk_warnx(sf->cxt, _("warning: %s: partition %d is not defined yet"),
+					devname, partno + 1);
 		created = 1;
 		next_partno = partno;
 	}
@@ -1140,7 +1164,8 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 		if (!sf->quiet)
 			fputs(_("Checking that no-one is using this disk right now ..."), stdout);
 		if (is_device_used(sf)) {
-			fputs(_(" FAILED\n\n"), stdout);
+			if (!sf->quiet)
+				fputs(_(" FAILED\n\n"), stdout);
 
 			fdisk_warnx(sf->cxt, _(
 			"This disk is currently in use - repartitioning is probably a bad idea.\n"
@@ -1149,7 +1174,7 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 
 			if (!sf->force)
 				errx(EXIT_FAILURE, _("Use the --force flag to overrule all checks."));
-		} else
+		} else if (!sf->quiet)
 			fputs(_(" OK\n\n"), stdout);
 	}
 
@@ -1231,9 +1256,9 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 
 			assert(pa);
 
-			if (!fdisk_partition_has_start(pa) &&
-			    !fdisk_partition_start_is_default(pa)) {
-				fdisk_info(sf->cxt, _("Ignoring partition %zu."), next_partno + 1);
+			if (ignore_partition(pa)) {
+				fdisk_info(sf->cxt, _("Ignoring partition."));
+				next_partno++;
 				continue;
 			}
 			if (!created) {		/* create a new disklabel */
@@ -1314,7 +1339,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_("Display or manipulate a disk partition table.\n"), out);
 
 	fputs(_("\nCommands:\n"), out);
-	fputs(_(" -a, --activate <dev> [<part> ...] list or set bootable MBR partitions\n"), out);
+	fputs(_(" -A, --activate <dev> [<part> ...] list or set bootable MBR partitions\n"), out);
 	fputs(_(" -d, --dump <dev>                  dump partition table (usable for later input)\n"), out);
 	fputs(_(" -g, --show-geometry [<dev> ...]   list geometry of all or specified devices\n"), out);
 	fputs(_(" -l, --list [<dev> ...]            list partitions of each device\n"), out);
@@ -1334,7 +1359,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_(" <type>                    partition type, GUID for GPT, hex for MBR\n"), out);
 
 	fputs(USAGE_OPTIONS, out);
-	fputs(_(" -A, --append              append partitions to existing partition table\n"), out);
+	fputs(_(" -a, --append              append partitions to existing partition table\n"), out);
 	fputs(_(" -b, --backup              backup partition table sectors (see -O)\n"), out);
 	fputs(_("     --bytes               print SIZE in bytes rather than in human readable format\n"), out);
 	fputs(_(" -f, --force               disable all consistency checking\n"), out);
@@ -1388,8 +1413,8 @@ int main(int argc, char *argv[])
 	};
 
 	static const struct option longopts[] = {
-		{ "activate",no_argument,	NULL, 'a' },
-		{ "append",  no_argument,       NULL, 'A' },
+		{ "activate",no_argument,	NULL, 'A' },
+		{ "append",  no_argument,       NULL, 'a' },
 		{ "backup",  no_argument,       NULL, 'b' },
 		{ "backup-file", required_argument, NULL, 'O' },
 		{ "bytes",   no_argument,	NULL, OPT_BYTES },
@@ -1434,10 +1459,10 @@ int main(int argc, char *argv[])
 	while ((c = getopt_long(argc, argv, "aAbcdfghlLo:O:nN:qsTu:vVX:Y:",
 					longopts, &longidx)) != -1) {
 		switch(c) {
-		case 'a':
+		case 'A':
 			sf->act = ACT_ACTIVATE;
 			break;
-		case 'A':
+		case 'a':
 			sf->append = 1;
 			break;
 		case 'b':
