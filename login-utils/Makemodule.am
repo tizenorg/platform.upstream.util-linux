@@ -27,6 +27,8 @@ sulogin_SOURCES = \
 	login-utils/sulogin.c \
 	login-utils/sulogin-consoles.c \
 	login-utils/sulogin-consoles.h
+sulogin_CFLAGS = $(SUID_CFLAGS) $(AM_CFLAGS)
+sulogin_LDFLAGS = $(SUID_LDFLAGS) $(AM_LDFLAGS)
 sulogin_LDADD = $(LDADD) libcommon.la
 
 if HAVE_LIBCRYPT
