@@ -31,6 +31,20 @@ function ts_canonicalize {
 	fi
 }
 
+function ts_cd {
+	if [ $# -eq 0 ]; then
+		ts_failed "ul_cd: not enough arguments"
+	fi
+	DEST=$(readlink -f "$1" 2>/dev/null)
+	if [ "x$DEST" = "x" ] || [ ! -d "$DEST" ]; then
+		ts_failed "ul_cd: $1: no such directory"
+	fi
+	cd "$DEST" 2>/dev/null || ts_failed "ul_cd: $1: cannot change directory"
+	if [ "$PWD" != "$DEST" ]; then
+		ts_failed "ul_cd: $PWD is not $DEST"
+	fi
+}
+
 function ts_report {
 	if [ "$TS_PARALLEL" == "yes" ]; then
 		echo "$TS_TITLE $1"
@@ -59,11 +73,11 @@ function ts_check_losetup {
 	if test -b "$tmp"; then
 		return 0
 	fi
-	ts_skip "no loop device support"
+	ts_skip "no loop-device support"
 }
 
 function ts_skip_subtest {
-	ts_report " IGNORE ($1)"
+	ts_report " SKIPPED ($1)"
 }
 
 function ts_skip {
@@ -76,7 +90,7 @@ function ts_skip {
 
 function ts_skip_nonroot {
 	if [ $UID -ne 0 ]; then
-		ts_skip "not root permissions"
+		ts_skip "no root permissions"
 	fi
 }
 
@@ -318,8 +332,8 @@ function ts_init_py {
 
 	[ -f "$top_builddir/py${LIBNAME}.la" ] || ts_skip "py${LIBNAME} not compiled"
 
-	export LD_LIBRARY_PATH="$top_builddir/.libs"
-	export PYTHONPATH="$top_builddir/$LIBNAME/python:$top_builddir/.libs"
+	export LD_LIBRARY_PATH="$top_builddir/.libs:$LD_LIBRARY_PATH"
+	export PYTHONPATH="$top_builddir/$LIBNAME/python:$top_builddir/.libs:$PYTHONPATH"
 
 	export PYTHON_VERSION=$(awk '/^PYTHON_VERSION/ { print $3 }' $top_builddir/Makefile)
 	export PYTHON_MAJOR_VERSION=$(echo $PYTHON_VERSION | sed 's/\..*//')
@@ -587,7 +601,7 @@ function ts_scsi_debug_init {
 	local devname
 	TS_DEVICE="none"
 
-	# dry run is not realy reliable, real modprobe may still fail
+	# dry run is not really reliable, real modprobe may still fail
 	modprobe --dry-run --quiet scsi_debug &>/dev/null \
 		|| ts_skip "missing scsi_debug module (dry-run)"
 

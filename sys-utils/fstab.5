@@ -31,15 +31,6 @@
 .\"
 .\"     @(#)fstab.5	6.5 (Berkeley) 5/10/91
 .\"
-.\" Modified Sat Mar  6 20:45:03 1993, faith@cs.unc.edu, for Linux
-.\" Sat Oct  9 10:07:10 1993: converted to man format by faith@cs.unc.edu
-.\" Sat Nov 20 20:47:38 1993: hpfs documentation added
-.\" Sat Nov 27 20:23:32 1993: Updated authorship information
-.\" Wed Jul 26 00:00:00 1995: Updated some nfs stuff, joey@infodrom.north.de
-.\" Tue Apr  2 00:38:28 1996: added info about "noauto", "user", etc.
-.\" Tue Jun 15 20:02:18 1999: added LABEL and UUID
-.\" Sat Jul 14 2001: Michael K. Johnson <johnsonm@redhat.com> added -O
-.\"
 .TH FSTAB 5 "August 2010" "util-linux" "File Formats"
 .SH NAME
 fstab \- static information about the filesystems
@@ -116,44 +107,9 @@ contains spaces these can be escaped as `\\040'.
 .RI ( fs_vfstype ).
 .RS
 This field describes the type of the filesystem.  Linux supports lots
-of filesystem types, such as
-.IR adfs ,
-.IR affs ,
-.IR autofs ,
-.IR coda ,
-.IR coherent ,
-.IR cramfs ,
-.IR devpts ,
-.IR efs ,
-.IR ext2 ,
-.IR ext3 ,
-.IR hfs ,
-.IR hpfs ,
-.IR iso9660 ,
-.IR jfs ,
-.IR minix ,
-.IR msdos ,
-.IR ncpfs ,
-.IR nfs ,
-.IR ntfs ,
-.IR proc ,
-.IR qnx4 ,
-.IR reiserfs ,
-.IR romfs ,
-.IR smbfs ,
-.IR sysv ,
-.IR tmpfs ,
-.IR udf ,
-.IR ufs ,
-.IR umsdos ,
-.IR vfat ,
-.IR xenix ,
-.IR xfs ,
-and possibly others. For more details, see
+of filesystem types, the most common are ext2, ext3, ext4, xfs, btrfs, vfat,
+sysfs, proc, nfs and cifs. For more details, see
 .BR mount (8).
-
-For the filesystems currently supported by the running kernel, see
-.IR /proc/filesystems .
 
 An entry
 .I swap
@@ -163,6 +119,8 @@ for swapping, cf.\&
 An entry
 .I none
 is useful for bind or move mounts.
+
+More than one type may be specified in a comma-separated list.
 
 .BR mount (8)
 and

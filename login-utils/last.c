@@ -50,7 +50,7 @@
 #include "carefulputc.h"
 #include "strutils.h"
 #include "timeutils.h"
-#include "boottime.h"
+#include "monotonic.h"
 
 #if defined(_HAVE_UT_TV)
 # define UL_UT_TIME ut_tv.tv_sec
@@ -376,9 +376,9 @@ static void trim_trailing_spaces(char *s)
 /*
  *	Show one line of information on screen
  */
-static int list(const struct last_control *ctl, struct utmp *p, time_t t, int what)
+static int list(const struct last_control *ctl, struct utmp *p, time_t logout_time, int what)
 {
-	time_t		secs, tmp, epoch;
+	time_t		secs, utmp_time, now;
 	char		logintime[LAST_TIMESTAMP_LEN];
 	char		logouttime[LAST_TIMESTAMP_LEN];
 	char		length[LAST_TIMESTAMP_LEN];
@@ -417,22 +417,25 @@ static int list(const struct last_control *ctl, struct utmp *p, time_t t, int wh
 	/*
 	 *	Calculate times
 	 */
-	tmp = p->UL_UT_TIME;
+	utmp_time = p->UL_UT_TIME;
 
-	if (ctl->present && (ctl->present < tmp || (0 < t && t < ctl->present)))
-		return 0;
-
-	if (time_formatter(ctl, &logintime[0], sizeof(logintime), &tmp, 0) < 0 ||
-	    time_formatter(ctl, &logouttime[0], sizeof(logouttime), &t, 1) < 0)
+	if (ctl->present) {
+		if (ctl->present < utmp_time)
+			return 0;
+		if (0 < logout_time && logout_time < ctl->present)
+			return 0;
+	}
+	if (time_formatter(ctl, &logintime[0], sizeof(logintime), &utmp_time, 0) < 0 ||
+	    time_formatter(ctl, &logouttime[0], sizeof(logouttime), &logout_time, 1) < 0)
 		errx(EXIT_FAILURE, _("preallocation size exceeded"));
 
-	secs = t - p->UL_UT_TIME;
+	secs  = logout_time - utmp_time;
 	mins  = (secs / 60) % 60;
 	hours = (secs / 3600) % 24;
 	days  = secs / 86400;
 
-	epoch = time(NULL);
-	if (t == epoch) {
+	now = time(NULL);
+	if (logout_time == now) {
 		if (ctl->time_fmt > LAST_TIMEFTM_SHORT_CTIME) {
 			sprintf(logouttime, "  still running");
 			length[0] = 0;
@@ -552,6 +555,9 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fprintf(out, _(
 		" %s [options] [<username>...] [<tty>...]\n"), program_invocation_short_name);
 
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("Show a listing of last logged in users.\n"), out);
+
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -<number>            how many lines to show\n"), out);
 	fputs(_(" -a, --hostlast       display hostnames in the last column\n"), out);
@@ -664,7 +670,7 @@ static void process_wtmp_file(const struct last_control *ctl)
 		begintime = ut.UL_UT_TIME;
 	else {
 		if (fstat(fileno(fp), &st) != 0)
-			err(EXIT_FAILURE, _("stat failed %s"), ctl->altv[ctl->alti]);
+			err(EXIT_FAILURE, _("stat of %s failed"), ctl->altv[ctl->alti]);
 		begintime = st.st_ctime;
 		quit = 1;
 	}

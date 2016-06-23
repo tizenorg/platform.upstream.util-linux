@@ -4,6 +4,12 @@
 
 #include <ctype.h>
 
+/**
+ * SECTION: utils
+ * @title: Utils
+ * @short_description: misc fdisk functions
+ */
+
 /*
  * Zeros in-memory first sector buffer
  */
@@ -15,7 +21,8 @@ int fdisk_init_firstsector_buffer(struct fdisk_context *cxt)
 	if (!cxt->firstsector || cxt->firstsector_bufsz != cxt->sector_size) {
 		/* Let's allocate a new buffer if no allocated yet, or the
 		 * current buffer has incorrect size */
-		free(cxt->firstsector);
+		if (!cxt->parent || cxt->parent->firstsector != cxt->firstsector)
+			free(cxt->firstsector);
 
 		DBG(CXT, ul_debugobj(cxt, "initialize in-memory first sector "
 				"buffer [sector_size=%lu]", cxt->sector_size));
@@ -49,6 +56,13 @@ int fdisk_read_firstsector(struct fdisk_context *cxt)
 	DBG(CXT, ul_debugobj(cxt, "reading first sector "
 				"buffer [sector_size=%lu]", cxt->sector_size));
 
+	r = lseek(cxt->dev_fd, 0, SEEK_SET);
+	if (r == -1)
+	{
+		DBG(CXT, ul_debugobj(cxt, "failed to seek to first sector %m"));
+		return -errno;
+	}
+
 	r = read(cxt->dev_fd, cxt->firstsector, cxt->sector_size);
 
 	if (r != cxt->sector_size) {
@@ -61,8 +75,12 @@ int fdisk_read_firstsector(struct fdisk_context *cxt)
 	return 0;
 }
 
-/*
- * Return allocated buffer with partition name
+/**
+ * fdisk_partname:
+ * @dev: device name
+ * @partno: partition name
+ *
+ * Return: allocated buffer with partition name, use free() to deallocate.
  */
 char *fdisk_partname(const char *dev, size_t partno)
 {
@@ -78,7 +96,11 @@ char *fdisk_partname(const char *dev, size_t partno)
 
 	w = strlen(dev);
 	if (isdigit(dev[w - 1]))
+#ifdef __GNU__
+		p = "s";
+#else
 		p = "p";
+#endif
 
 	/* devfs kludge - note: fdisk partition names are not supposed
 	   to equal kernel names, so there is no reason to do this */

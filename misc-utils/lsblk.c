@@ -62,6 +62,10 @@
 #include "mangle.h"
 #include "optutils.h"
 
+
+#define LSBLK_EXIT_SOMEOK 64
+#define LSBLK_EXIT_ALLFAILED 32
+
 /* column IDs */
 enum {
 	COL_NAME = 0,
@@ -78,6 +82,7 @@ enum {
 	COL_RA,
 	COL_RO,
 	COL_RM,
+	COL_HOTPLUG,
 	COL_MODEL,
 	COL_SERIAL,
 	COL_SIZE,
@@ -104,8 +109,9 @@ enum {
 	COL_PKNAME,
 	COL_HCTL,
 	COL_TRANSPORT,
+	COL_SUBSYS,
 	COL_REV,
-	COL_VENDOR,
+	COL_VENDOR
 };
 
 /* basic table settings */
@@ -151,6 +157,7 @@ static struct colinfo infos[] = {
 	[COL_RA]     = { "RA",      3, SCOLS_FL_RIGHT, N_("read-ahead of the device"), SORT_U64 },
 	[COL_RO]     = { "RO",      1, SCOLS_FL_RIGHT, N_("read-only device") },
 	[COL_RM]     = { "RM",      1, SCOLS_FL_RIGHT, N_("removable device") },
+	[COL_HOTPLUG]= { "HOTPLUG", 1, SCOLS_FL_RIGHT, N_("removable or hotplug device (usb, pcmcia, ...)") },
 	[COL_ROTA]   = { "ROTA",    1, SCOLS_FL_RIGHT, N_("rotational device") },
 	[COL_RAND]   = { "RAND",    1, SCOLS_FL_RIGHT, N_("adds randomness") },
 	[COL_MODEL]  = { "MODEL",   0.1, SCOLS_FL_TRUNC, N_("device identifier") },
@@ -176,6 +183,7 @@ static struct colinfo infos[] = {
 	[COL_WWN]    = { "WWN",     18, 0, N_("unique storage identifier") },
 	[COL_HCTL]   = { "HCTL", 10, 0, N_("Host:Channel:Target:Lun for SCSI") },
 	[COL_TRANSPORT] = { "TRAN", 6, 0, N_("device transport type") },
+	[COL_SUBSYS] = { "SUBSYSTEMS", 0.1, SCOLS_FL_NOEXTREMES, N_("de-duplicated chain of subsystems") },
 	[COL_REV]    = { "REV",   4, SCOLS_FL_RIGHT, N_("device revision") },
 	[COL_VENDOR] = { "VENDOR", 0.1, SCOLS_FL_TRUNC, N_("device vendor") },
 };
@@ -706,6 +714,38 @@ static char *get_transport(struct blkdev_cxt *cxt)
 	return trans ? xstrdup(trans) : NULL;
 }
 
+static char *get_subsystems(struct blkdev_cxt *cxt)
+{
+	char path[PATH_MAX];
+	char *sub, *chain, *res = NULL;
+	size_t len = 0, last = 0;
+
+	chain = sysfs_get_devchain(&cxt->sysfs, path, sizeof(path));
+	if (!chain)
+		return NULL;
+
+	while (sysfs_next_subsystem(&cxt->sysfs, chain, &sub) == 0) {
+		size_t sz;
+
+		/* don't create "block:scsi:scsi", but "block:scsi" */
+		if (len && strcmp(res + last, sub) == 0)
+			continue;
+
+		sz = strlen(sub);
+		res = xrealloc(res, len + sz + 2);
+		if (len)
+			res[len++] = ':';
+
+		memcpy(res + len, sub, sz + 1);
+		last = len;
+		len += sz;
+		free(sub);
+	}
+
+	return res;
+}
+
+
 #define is_parsable(_l)	(scols_table_is_raw((_l)->table) || \
 			 scols_table_is_export((_l)->table))
 
@@ -890,6 +930,9 @@ static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libsc
 		if (!str && cxt->sysfs.parent)
 			str = sysfs_strdup(cxt->sysfs.parent, "removable");
 		break;
+	case COL_HOTPLUG:
+		str = sysfs_is_hotpluggable(&cxt->sysfs) ? xstrdup("1") : xstrdup("0");
+		break;
 	case COL_ROTA:
 		str = sysfs_strdup(&cxt->sysfs, "queue/rotational");
 		break;
@@ -979,6 +1022,9 @@ static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libsc
 	}
 	case COL_TRANSPORT:
 		str = get_transport(cxt);
+		break;
+	case COL_SUBSYS:
+		str = get_subsystems(cxt);
 		break;
 	case COL_DALIGN:
 		if (cxt->discard)
@@ -1143,7 +1189,7 @@ static int list_partitions(struct blkdev_cxt *wholedisk_cxt, struct blkdev_cxt *
 {
 	DIR *dir;
 	struct dirent *d;
-	struct blkdev_cxt part_cxt = {};
+	struct blkdev_cxt part_cxt = { 0 };
 	int r = -1;
 
 	assert(wholedisk_cxt);
@@ -1242,7 +1288,7 @@ static int list_deps(struct blkdev_cxt *cxt)
 {
 	DIR *dir;
 	struct dirent *d;
-	struct blkdev_cxt dep = {};
+	struct blkdev_cxt dep = { 0 };
 	char dirname[PATH_MAX];
 	const char *depname;
 
@@ -1293,10 +1339,10 @@ static int iterate_block_devices(void)
 {
 	DIR *dir;
 	struct dirent *d;
-	struct blkdev_cxt cxt = {};
+	struct blkdev_cxt cxt = { 0 };
 
 	if (!(dir = opendir(_PATH_SYS_BLOCK)))
-		return EXIT_FAILURE;
+		return -errno;
 
 	while ((d = xreaddir(dir))) {
 		if (set_cxt(&cxt, NULL, NULL, d->d_name))
@@ -1316,7 +1362,7 @@ static int iterate_block_devices(void)
 
 	closedir(dir);
 
-	return EXIT_SUCCESS;
+	return 0;
 }
 
 static char *devno_to_sysfs_name(dev_t devno, char *devname, char *buf, size_t buf_size)
@@ -1341,21 +1387,20 @@ static char *devno_to_sysfs_name(dev_t devno, char *devname, char *buf, size_t b
 
 static int process_one_device(char *devname)
 {
-	struct blkdev_cxt parent = {}, cxt = {};
+	struct blkdev_cxt parent = { 0 }, cxt = { 0 };
 	struct stat st;
-	char buf[PATH_MAX + 1], *name, *diskname = NULL;
+	char buf[PATH_MAX + 1], *name = NULL, *diskname = NULL;
 	dev_t disk = 0;
-	int real_part = 0;
-	int status = EXIT_FAILURE;
+	int real_part = 0, rc = -EINVAL;
 
 	if (stat(devname, &st) || !S_ISBLK(st.st_mode)) {
 		warnx(_("%s: not a block device"), devname);
-		return EXIT_FAILURE;
+		goto leave;
 	}
 
 	if (!(name = devno_to_sysfs_name(st.st_rdev, devname, buf, PATH_MAX))) {
 		warn(_("%s: failed to get sysfs name"), devname);
-		return EXIT_FAILURE;
+		goto leave;
 	}
 
 	if (!strncmp(name, "dm-", 3)) {
@@ -1364,7 +1409,7 @@ static int process_one_device(char *devname)
 	} else {
 		if (blkid_devno_to_wholedisk(st.st_rdev, buf, sizeof(buf), &disk)) {
 			warn(_("%s: failed to get whole-disk device number"), devname);
-			return EXIT_FAILURE;
+			goto leave;
 		}
 		diskname = buf;
 		real_part = st.st_rdev != disk;
@@ -1392,7 +1437,7 @@ static int process_one_device(char *devname)
 			process_blkdev(&cxt, &parent, 1, NULL);
 	}
 
-	status = EXIT_SUCCESS;
+	rc = 0;
 leave:
 	free(name);
 	reset_blkdev_cxt(&cxt);
@@ -1400,7 +1445,7 @@ leave:
 	if (real_part)
 		reset_blkdev_cxt(&parent);
 
-	return status;
+	return rc;
 }
 
 static void parse_excludes(const char *str0)
@@ -1481,6 +1526,10 @@ static void __attribute__((__noreturn__)) help(FILE *out)
 
 	fputs(USAGE_HEADER, out);
 	fprintf(out, _(" %s [options] [<device> ...]\n"), program_invocation_short_name);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(_("List information about block devices.\n"), out);
+
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -a, --all            print all devices\n"), out);
 	fputs(_(" -b, --bytes          print SIZE in bytes rather than in human readable format\n"), out);
@@ -1745,9 +1794,20 @@ int main(int argc, char *argv[])
 	}
 
 	if (optind == argc)
-		status = iterate_block_devices();
-	else while (optind < argc)
-		status = process_one_device(argv[optind++]);
+		status = iterate_block_devices() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
+	else {
+		int cnt = 0, cnt_err = 0;
+
+		while (optind < argc) {
+			if (process_one_device(argv[optind++]) != 0)
+				cnt_err++;
+			cnt++;
+		}
+		status = cnt == 0	? EXIT_FAILURE :	/* nothing */
+			 cnt == cnt_err	? LSBLK_EXIT_ALLFAILED :/* all failed */
+			 cnt_err	? LSBLK_EXIT_SOMEOK :	/* some ok */
+					  EXIT_SUCCESS;		/* all success */
+	}
 
 	if (lsblk->sort_col)
 		scols_sort_table(lsblk->table, lsblk->sort_col);
