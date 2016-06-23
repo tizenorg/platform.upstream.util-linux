@@ -242,6 +242,14 @@ local:
 
 FDISK_2.27 {
 	fdisk_enable_bootbits_protection;
+	fdisk_gpt_get_partition_attrs;
+	fdisk_gpt_set_partition_attrs;
 	fdisk_has_protected_bootbits;
+	fdisk_label_get_fields_ids_all;
+	fdisk_script_get_userdata;
+	fdisk_script_set_fgets;
+	fdisk_script_set_userdata;
 	fdisk_table_get_partition_by_partno;
+	fdisk_get_disklabel_item;
+	fdisk_script_enable_json;
 } FDISK_2.26;

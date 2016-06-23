@@ -36,16 +36,17 @@
 /*
  * Alignment according to logical granularity (usually 1MiB)
  */
-static int lba_is_aligned(struct fdisk_context *cxt, fdisk_sector_t lba)
+static int lba_is_aligned(struct fdisk_context *cxt, uintmax_t lba)
 {
 	unsigned long granularity = max(cxt->phy_sector_size, cxt->min_io_size);
 	uintmax_t offset;
 
 	if (cxt->grain > granularity)
 		granularity = cxt->grain;
-	offset = (lba * cxt->sector_size) & (granularity - 1);
 
-	return !((granularity + cxt->alignment_offset - offset) & (granularity - 1));
+	offset = (lba * cxt->sector_size) % granularity;
+
+	return !((granularity + cxt->alignment_offset - offset) % granularity);
 }
 
 /*
@@ -54,9 +55,9 @@ static int lba_is_aligned(struct fdisk_context *cxt, fdisk_sector_t lba)
 static int lba_is_phy_aligned(struct fdisk_context *cxt, fdisk_sector_t lba)
 {
 	unsigned long granularity = max(cxt->phy_sector_size, cxt->min_io_size);
-	uintmax_t offset = (lba * cxt->sector_size) & (granularity - 1);
+	uintmax_t offset = (lba * cxt->sector_size) % granularity;
 
-	return !((granularity + cxt->alignment_offset - offset) & (granularity - 1));
+	return !((granularity + cxt->alignment_offset - offset) % granularity);
 }
 
 /**
@@ -111,9 +112,15 @@ fdisk_sector_t fdisk_align_lba(struct fdisk_context *cxt, fdisk_sector_t lba, in
 	}
 
 	if (lba != res)
-		DBG(CXT, ul_debugobj(cxt, "LBA %ju -aligned-to-> %ju",
+		DBG(CXT, ul_debugobj(cxt, "LBA %ju -aligned-%s-> %ju [grain=%jus]",
 				(uintmax_t) lba,
-				(uintmax_t) res));
+				direction == FDISK_ALIGN_UP ? "up" :
+				direction == FDISK_ALIGN_DOWN ? "down" : "near",
+				(uintmax_t) res,
+				cxt->grain / cxt->sector_size));
+	else
+		DBG(CXT, ul_debugobj(cxt, "LBA %ju -unchanged-", lba));
+
 	return res;
 }
 
@@ -135,6 +142,15 @@ fdisk_sector_t fdisk_align_lba_in_range(struct fdisk_context *cxt,
 
 	start = fdisk_align_lba(cxt, start, FDISK_ALIGN_UP);
 	stop = fdisk_align_lba(cxt, stop, FDISK_ALIGN_DOWN);
+
+	if (lba > start && lba < stop
+	    && (lba - start) < (cxt->grain / cxt->sector_size)) {
+
+		DBG(CXT, ul_debugobj(cxt, "LBA: area smaller than grain, don't align"));
+		res = lba;
+		goto done;
+	}
+
 	lba = fdisk_align_lba(cxt, lba, FDISK_ALIGN_NEAREST);
 
 	if (lba < start)
@@ -144,6 +160,7 @@ fdisk_sector_t fdisk_align_lba_in_range(struct fdisk_context *cxt,
 	else
 		res = lba;
 
+done:
 	DBG(CXT, ul_debugobj(cxt, "LBA %ju range:<%ju..%ju>, result: %ju",
 				(uintmax_t) lba,
 				(uintmax_t) start,
@@ -274,7 +291,7 @@ int fdisk_save_user_geometry(struct fdisk_context *cxt,
  *
  * Save user defined sector sizes to use it for partitioning.
  *
- * The user properties are applied by fdisk_assign_device() or 
+ * The user properties are applied by fdisk_assign_device() or
  * fdisk_reset_device_properties().
  *
  * Returns: <0 on error, 0 on success.
@@ -458,8 +475,17 @@ int fdisk_discover_topology(struct fdisk_context *cxt)
 			/* I/O size used by fdisk */
 			cxt->io_size = cxt->optimal_io_size;
 			if (!cxt->io_size)
-				/* optimal IO is optional, default to minimum IO */
+				/* optimal I/O is optional, default to minimum IO */
 				cxt->io_size = cxt->min_io_size;
+
+			/* ignore optimal I/O if not aligned to phy.sector size */
+			if (cxt->io_size
+			    && cxt->phy_sector_size
+			    && (cxt->io_size % cxt->phy_sector_size) != 0) {
+				DBG(CXT, ul_debugobj(cxt, "ignore misaligned I/O size"));
+				cxt->io_size = cxt->phy_sector_size;
+			}
+
 		}
 	}
 	blkid_free_probe(pr);
@@ -477,7 +503,7 @@ int fdisk_discover_topology(struct fdisk_context *cxt)
 
 	DBG(CXT, ul_debugobj(cxt, "result: log/phy sector size: %ld/%ld",
 			cxt->sector_size, cxt->phy_sector_size));
-	DBG(CXT, ul_debugobj(cxt, "result: fdisk/min/optimal io: %ld/%ld/%ld",
+	DBG(CXT, ul_debugobj(cxt, "result: fdisk/optimal/minimal io: %ld/%ld/%ld",
 		       cxt->io_size, cxt->optimal_io_size, cxt->min_io_size));
 	return 0;
 }

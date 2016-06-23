@@ -137,7 +137,7 @@ int debug;
 bool badyear;
 
 /* User-specified epoch, used when rtc fails to return epoch. */
-unsigned long epoch_option = -1;
+unsigned long epoch_option = ULONG_MAX;
 
 /*
  * Almost all Award BIOS's made between 04/26/94 and 05/31/95 have a nasty
@@ -1055,8 +1055,8 @@ adjust_drift_factor(struct adjtime *adjtime_p,
 			drift_factor = 0;
 		} else {
 			if (debug)
-				printf(_("Clock drifted %.1f seconds in the past "
-					 "%.1f seconds\nin spite of a drift factor of "
+				printf(_("Clock drifted %f seconds in the past "
+					 "%f seconds\nin spite of a drift factor of "
 					 "%f seconds/day.\n"
 					 "Adjusting drift factor by %f seconds/day\n"),
 				       time_diff(nowtime, hclocktime),
@@ -1260,7 +1260,7 @@ manipulate_clock(const bool show, const bool adjust, const bool noadjfile,
 		 const bool testing, const bool predict, const bool get)
 {
 	/* Contents of the adjtime file, or what they should be. */
-	struct adjtime adjtime;
+	struct adjtime adjtime = { 0 };
 	bool universal;
 	/* Set if user lacks necessary authorization to access the clock */
 	bool no_auth;
@@ -1452,13 +1452,13 @@ manipulate_epoch(const bool getepoch,
 			printf(_("Kernel is assuming an epoch value of %lu\n"),
 			       epoch);
 	} else if (setepoch) {
-		if (epoch_opt == -1)
+		if (epoch_opt == ULONG_MAX)
 			warnx(_
 			      ("To set the epoch value, you must use the 'epoch' "
 			       "option to tell to what value to set it."));
 		else if (testing)
 			printf(_
-			       ("Not setting the epoch to %d - testing only.\n"),
+			       ("Not setting the epoch to %lu - testing only.\n"),
 			       epoch_opt);
 		else if (set_epoch_rtc(epoch_opt))
 			printf(_
@@ -1633,8 +1633,6 @@ int main(int argc, char **argv)
 	 * fractions.
 	 */
 	time_t set_time = 0;	/* Time to which user said to set Hardware Clock */
-
-	bool permitted;		/* User is permitted to do the function */
 	int rc, c;
 
 	/* Variables set by various options; show may also be set later */
@@ -1863,6 +1861,11 @@ int main(int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
+	if (getuid() != 0) {
+		warnx(_("Sorry, only the superuser can use the Hardware Clock."));
+		hwclock_exit(EX_NOPERM);
+	}
+
 #ifdef HAVE_LIBAUDIT
 	if (testing != TRUE) {
 		if (adjust == TRUE || hctosys == TRUE || systohc == TRUE ||
@@ -1904,28 +1907,6 @@ int main(int argc, char **argv)
 	      | setepoch | predict | compare | get))
 		show = 1;	/* default to show */
 
-	if (getuid() == 0)
-		permitted = TRUE;
-	else {
-		/* program is designed to run setuid (in some situations) */
-		if (set || systohc || adjust) {
-			warnx(_("Sorry, only the superuser can change "
-				"the Hardware Clock."));
-			permitted = FALSE;
-		} else if (systz || hctosys) {
-			warnx(_("Sorry, only the superuser can change "
-				"the System Clock."));
-			permitted = FALSE;
-		} else if (setepoch) {
-			warnx(_("Sorry, only the superuser can change the "
-				"Hardware Clock epoch in the kernel."));
-			permitted = FALSE;
-		} else
-			permitted = TRUE;
-	}
-
-	if (!permitted)
-		hwclock_exit(EX_NOPERM);
 
 #ifdef __linux__
 	if (getepoch || setepoch) {
@@ -2027,11 +2008,6 @@ void __attribute__((__noreturn__)) hwaudit_exit(int status)
  * be compiled as external references. Since you probably won't be linking
  * with any functions by these names, you will have unresolved external
  * references when you link.
- *
- * The program is designed to run setuid superuser, since we need to be able
- * to do direct I/O. (More to the point: we need permission to execute the
- * iopl() system call). (However, if you use one of the methods other than
- * direct ISA I/O to access the clock, no setuid is required).
  *
  * Here's some info on how we must deal with the time that elapses while
  * this program runs: There are two major delays as we run:

@@ -24,6 +24,7 @@
 
 #include "procutils.h"
 #include "at.h"
+#include "all-io.h"
 #include "c.h"
 
 /*
@@ -96,6 +97,36 @@ int proc_next_tid(struct proc_tasks *tasks, pid_t *tid)
 	return 0;
 }
 
+/* returns process command name, use free() for result */
+char *proc_get_command(pid_t pid)
+{
+	char buf[BUFSIZ], *res = NULL;
+	ssize_t sz = 0;
+	size_t i;
+	int fd;
+
+	snprintf(buf, sizeof(buf), "/proc/%d/cmdline", (int) pid);
+	fd = open(buf, O_RDONLY);
+	if (fd < 0)
+		goto done;
+
+	sz = read_all(fd, buf, sizeof(buf));
+	if (sz <= 0)
+		goto done;
+
+	for (i = 0; i < (size_t) sz; i++) {
+
+		if (buf[i] == '\0')
+			buf[i] = ' ';
+	}
+	buf[sz - 1] = '\0';
+	res = strdup(buf);
+done:
+	if (fd >= 0)
+		close(fd);
+	return res;
+}
+
 struct proc_processes *proc_open_processes(void)
 {
 	struct proc_processes *ps;
@@ -143,6 +174,7 @@ int proc_next_pid(struct proc_processes *ps, pid_t *pid)
 	do {
 		char buf[BUFSIZ], *p;
 
+		errno = 0;
 		d = readdir(ps->dir);
 		if (!d)
 			return errno ? -1 : 1;		/* error or end-of-dir */

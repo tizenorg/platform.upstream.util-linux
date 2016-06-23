@@ -10,6 +10,10 @@
 #include <sys/types.h>
 #include <dirent.h>
 #include <ctype.h>
+#ifdef HAVE_LIBTINFO
+# include <curses.h>
+# include <term.h>
+#endif
 
 #include "c.h"
 #include "colors.h"
@@ -107,41 +111,6 @@ static int cmp_scheme_name(const void *a0, const void *b0)
 				*b = (struct ul_color_scheme *) b0;
 	return strcmp(a->name, b->name);
 }
-
-/*
- * Maintains human readable color names
- */
-const char *color_sequence_from_colorname(const char *str)
-{
-	static const struct ul_color_scheme basic_schemes[] = {
-		{ "black",	UL_COLOR_BLACK           },
-		{ "blue",	UL_COLOR_BLUE            },
-		{ "brown",	UL_COLOR_BROWN           },
-		{ "cyan",	UL_COLOR_CYAN            },
-		{ "darkgray",	UL_COLOR_DARK_GRAY       },
-		{ "gray",	UL_COLOR_GRAY            },
-		{ "green",	UL_COLOR_GREEN           },
-		{ "lightblue",	UL_COLOR_BOLD_BLUE       },
-		{ "lightcyan",	UL_COLOR_BOLD_CYAN       },
-		{ "lightgray,",	UL_COLOR_GRAY            },
-		{ "lightgreen", UL_COLOR_BOLD_GREEN      },
-		{ "lightmagenta", UL_COLOR_BOLD_MAGENTA  },
-		{ "lightred",	UL_COLOR_BOLD_RED        },
-		{ "magenta",	UL_COLOR_MAGENTA         },
-		{ "red",	UL_COLOR_RED             },
-		{ "yellow",	UL_COLOR_BOLD_YELLOW     },
-	};
-	struct ul_color_scheme key = { .name = (char *) str }, *res;
-
-	if (!str)
-		return NULL;
-
-	res = bsearch(&key, basic_schemes, ARRAY_SIZE(basic_schemes),
-				sizeof(struct ul_color_scheme),
-				cmp_scheme_name);
-	return res ? res->seq : NULL;
-}
-
 
 /*
  * Resets control struct (note that we don't allocate the struct)
@@ -664,6 +633,31 @@ static void termcolors_init_debug(void)
 	__UL_INIT_DEBUG(termcolors, TERMCOLORS_DEBUG_, 0, TERMINAL_COLORS_DEBUG);
 }
 
+static int colors_terminal_is_ready(void)
+{
+	int ncolors = -1;
+
+	if (isatty(STDOUT_FILENO) != 1)
+		goto none;
+
+#ifdef HAVE_LIBTINFO
+	{
+		int ret;
+
+		if (setupterm(NULL, STDOUT_FILENO, &ret) != OK || ret != 1)
+			goto none;
+		ncolors = tigetnum("colors");
+		if (ncolors <= 2)
+			goto none;
+	}
+#endif
+	DBG(CONF, ul_debug("terminal is ready (supports %d colors)", ncolors));
+	return 1;
+none:
+	DBG(CONF, ul_debug("terminal is NOT ready"));
+	return 0;
+}
+
 /**
  * colors_init:
  * @mode: UL_COLORMODE_*
@@ -676,7 +670,7 @@ static void termcolors_init_debug(void)
  */
 int colors_init(int mode, const char *name)
 {
-	int atty = -1;
+	int ready = -1;
 	struct ul_color_ctl *cc = &ul_colors;
 
 	cc->utilname = name;
@@ -684,7 +678,7 @@ int colors_init(int mode, const char *name)
 
 	termcolors_init_debug();
 
-	if (mode == UL_COLORMODE_UNDEF && (atty = isatty(STDOUT_FILENO))) {
+	if (mode == UL_COLORMODE_UNDEF && (ready = colors_terminal_is_ready())) {
 		int rc = colors_read_configuration(cc);
 		if (rc)
 			cc->mode = UL_COLORMODE_DEFAULT;
@@ -703,7 +697,7 @@ int colors_init(int mode, const char *name)
 
 	switch (cc->mode) {
 	case UL_COLORMODE_AUTO:
-		cc->has_colors = atty == -1 ? isatty(STDOUT_FILENO) : atty;
+		cc->has_colors = ready == -1 ? colors_terminal_is_ready() : ready;
 		break;
 	case UL_COLORMODE_ALWAYS:
 		cc->has_colors = 1;

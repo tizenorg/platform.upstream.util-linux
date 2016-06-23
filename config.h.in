@@ -166,11 +166,17 @@
 /* Do we need -lcrypt? */
 #undef HAVE_LIBCRYPT
 
+/* Define if libmount available. */
+#undef HAVE_LIBMOUNT
+
 /* Define to 1 if you have the `ncurses' library (-lncurses). */
 #undef HAVE_LIBNCURSES
 
 /* Define to 1 if you have the `ncursesw' library (-lncursesw). */
 #undef HAVE_LIBNCURSESW
+
+/* Define to 1 if you have the `readline' library (-lreadline). */
+#undef HAVE_LIBREADLINE
 
 /* Define if SELinux is available */
 #undef HAVE_LIBSELINUX
@@ -180,6 +186,9 @@
 
 /* Define to 1 if you have the `termcap' library (-ltermcap). */
 #undef HAVE_LIBTERMCAP
+
+/* Define if libtinfo available. */
+#undef HAVE_LIBTINFO
 
 /* Define to 1 if you have the `udev' library (-ludev). */
 #undef HAVE_LIBUDEV
@@ -484,6 +493,9 @@
 /* Define to 1 if you have the <sys/un.h> header file. */
 #undef HAVE_SYS_UN_H
 
+/* Define to 1 if you have the `timer_createx' function. */
+#undef HAVE_TIMER_CREATEX
+
 /* Define to 1 if the target supports thread-local storage. */
 #undef HAVE_TLS
 
@@ -559,6 +571,9 @@
 /* Define to the sub-directory in which libtool stores uninstalled libraries.
    */
 #undef LT_OBJDIR
+
+/* Define to 1 if assertions should be disabled. */
+#undef NDEBUG
 
 /* Should chsh allow only shells in /etc/shells? */
 #undef ONLY_LISTED_SHELLS
@@ -650,6 +665,9 @@
 
 /* Should wall and write be installed setgid tty? */
 #undef USE_TTY_GROUP
+
+/* Define to 1 to remove /bin and /sbin from PATH env.variable */
+#undef USE_USRDIR_PATHS_ONLY
 
 /* Version number of package */
 #undef VERSION

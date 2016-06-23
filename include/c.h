@@ -15,6 +15,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <assert.h>
+
 #ifdef HAVE_ERR_H
 # include <err.h>
 #endif
@@ -229,6 +231,12 @@ static inline int dirfd(DIR *d)
 
 #ifndef O_CLOEXEC
 #define O_CLOEXEC 0
+#endif
+
+#ifdef __FreeBSD_kernel__
+#ifndef F_DUPFD_CLOEXEC
+#define F_DUPFD_CLOEXEC	17	/* Like F_DUPFD, but FD_CLOEXEC is set */
+#endif
 #endif
 
 

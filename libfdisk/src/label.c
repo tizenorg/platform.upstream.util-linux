@@ -121,12 +121,10 @@ int fdisk_label_get_fields_ids(
 	size_t i, n;
 	int *c;
 
-	assert(cxt);
-
-	if (!lb)
-		lb = cxt->label;
-	if (!lb)
+	if (!cxt || (!lb && !cxt->label))
 		return -EINVAL;
+
+	lb = cxt->label;
 	if (!lb->fields || !lb->nfields)
 		return -ENOSYS;
 	c = calloc(lb->nfields, sizeof(int));
@@ -147,6 +145,45 @@ int fdisk_label_get_fields_ids(
 
 		c[n++] = id;
 	}
+	if (ids)
+		*ids = c;
+	else
+		free(c);
+	if (nids)
+		*nids = n;
+	return 0;
+}
+
+/**
+ * fdisk_label_get_fields_ids_all
+ * @lb: label (or NULL for the current label)
+ * @cxt: context
+ * @ids: returns allocated array with FDISK_FIELD_* IDs
+ * @nids: returns number of items in fields
+ *
+ * This function returns all fields for the label.
+ *
+ * Returns: 0 on success, otherwise, a corresponding error.
+ */
+int fdisk_label_get_fields_ids_all(
+		const struct fdisk_label *lb,
+		struct fdisk_context *cxt,
+		int **ids, size_t *nids)
+{
+	size_t i, n;
+	int *c;
+
+	if (!cxt || (!lb && !cxt->label))
+		return -EINVAL;
+
+	lb = cxt->label;
+	if (!lb->fields || !lb->nfields)
+		return -ENOSYS;
+	c = calloc(lb->nfields, sizeof(int));
+	if (!c)
+		return -ENOMEM;
+	for (n = 0, i = 0; i < lb->nfields; i++)
+		c[n++] = lb->fields[i].id;
 	if (ids)
 		*ids = c;
 	else
@@ -295,19 +332,46 @@ int fdisk_verify_disklabel(struct fdisk_context *cxt)
  *
  * Lists details about disklabel, but no partitions.
  *
- * This function uses libfdisk ASK interface to print data. The details about
- * partitions table are printed by FDISK_ASKTYPE_INFO.
+ * This function is based on fdisk_get_disklabel_item() and prints all label
+ * specific information by ASK interface (FDISK_ASKTYPE_INFO, aka fdisk_info()).
+ * The function requires enabled "details" by fdisk_enable_details().
+ *
+ * It's recommended to use fdisk_get_disklabel_item() if you need better
+ * control on output and formmatting.
  *
  * Returns: 0 on success, otherwise, a corresponding error.
  */
 int fdisk_list_disklabel(struct fdisk_context *cxt)
 {
+	int id = 0, rc = 0;
+	struct fdisk_labelitem item = { .id = id };
+
 	if (!cxt || !cxt->label)
 		return -EINVAL;
-	if (!cxt->label->op->list)
-		return -ENOSYS;
 
-	return cxt->label->op->list(cxt);
+	if (!cxt->display_details)
+		return 0;
+
+	/* List all label items */
+	do {
+		/* rc: < 0 error, 0 success, 1 unknown item, 2 out of range */
+		rc = fdisk_get_disklabel_item(cxt, id++, &item);
+		if (rc != 0)
+			continue;
+		switch (item.type) {
+		case 'j':
+			fdisk_info(cxt, "%s: %ju", item.name, item.data.num64);
+			break;
+		case 's':
+			if (item.data.str && item.name)
+				fdisk_info(cxt, "%s: %s", item.name, item.data.str);
+			free(item.data.str);
+			item.data.str = NULL;
+			break;
+		}
+	} while (rc == 0 || rc == 1);
+
+	return rc < 0 ? rc : 0;
 }
 
 /**
@@ -352,12 +416,13 @@ int fdisk_create_disklabel(struct fdisk_context *cxt, const char *name)
 		return -ENOSYS;
 
 	__fdisk_switch_label(cxt, lb);
+	assert(cxt->label == lb);
 
 	if (haslabel && !cxt->parent)
 		fdisk_reset_device_properties(cxt);
 
 	DBG(CXT, ul_debugobj(cxt, "create a new %s label", lb->name));
-	return cxt->label->op->create(cxt);
+	return lb->op->create(cxt);
 }
 
 /**
@@ -396,13 +461,46 @@ int fdisk_locate_disklabel(struct fdisk_context *cxt, int n, const char **name,
  */
 int fdisk_get_disklabel_id(struct fdisk_context *cxt, char **id)
 {
-	if (!cxt || !cxt->label)
+	struct fdisk_labelitem item;
+	int rc;
+
+	if (!cxt || !cxt->label || !id)
 		return -EINVAL;
-	if (!cxt->label->op->get_id)
-		return -ENOSYS;
 
 	DBG(CXT, ul_debugobj(cxt, "asking for disk %s ID", cxt->label->name));
-	return cxt->label->op->get_id(cxt, id);
+
+	rc = fdisk_get_disklabel_item(cxt, FDISK_LABELITEM_ID, &item);
+	if (rc == 0)
+		*id = item.data.str;
+	if (rc > 0)
+		rc = 0;
+	return rc;
+}
+
+/**
+ * fdisk_get_disklabel_item:
+ * @cxt: fdisk context
+ * @id: item ID (FDISK_LABELITEM_* or {GPT,MBR,...}_LABELITEM_*)
+ * @item: specifies and returns the item
+ *
+ * Note that @id is always in range 0..N. It's fine to use the function in loop
+ * until it returns error or 2, the result in @item should be ignored when
+ * function returns 1.
+ *
+ * Returns: 0 on success, < 0 on error, 1 on unssupported item, 2 @id out of range
+ */
+int fdisk_get_disklabel_item(struct fdisk_context *cxt, int id, struct fdisk_labelitem *item)
+{
+	if (!cxt || !cxt->label || !item)
+		return -EINVAL;
+
+	item->id = id;
+	DBG(CXT, ul_debugobj(cxt, "asking for disk %s item %d", cxt->label->name, item->id));
+
+	if (!cxt->label->op->get_item)
+		return -ENOSYS;
+
+	return cxt->label->op->get_item(cxt, item);
 }
 
 /**
@@ -487,7 +585,7 @@ int fdisk_toggle_partition_flag(struct fdisk_context *cxt,
  *
  * Sort partitions according to the partition start sector.
  *
- * Returns: 0 on success, otherwise, a corresponding error.
+ * Returns: 0 on success, 1 reorder unnecessary, otherwise a corresponding error.
  */
 int fdisk_reorder_partitions(struct fdisk_context *cxt)
 {

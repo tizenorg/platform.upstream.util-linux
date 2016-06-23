@@ -135,6 +135,7 @@ enum {
 	LSBLK_NOHEADINGS =	(1 << 2),
 	LSBLK_EXPORT =		(1 << 3),
 	LSBLK_TREE =		(1 << 4),
+	LSBLK_JSON =		(1 << 5),
 };
 
 enum {
@@ -421,6 +422,7 @@ static char *get_device_path(struct blkdev_cxt *cxt)
 		return canonicalize_dm_name(cxt->name);
 
 	snprintf(path, sizeof(path), "/dev/%s", cxt->name);
+	sysfs_devname_sys_to_dev(path);
 	return xstrdup(path);
 }
 
@@ -760,8 +762,10 @@ static char *get_subsystems(struct blkdev_cxt *cxt)
 		size_t sz;
 
 		/* don't create "block:scsi:scsi", but "block:scsi" */
-		if (len && strcmp(res + last, sub) == 0)
+		if (len && strcmp(res + last, sub) == 0) {
+			free(sub);
 			continue;
+		}
 
 		sz = strlen(sub);
 		res = xrealloc(res, len + sz + 2);
@@ -779,7 +783,8 @@ static char *get_subsystems(struct blkdev_cxt *cxt)
 
 
 #define is_parsable(_l)	(scols_table_is_raw((_l)->table) || \
-			 scols_table_is_export((_l)->table))
+			 scols_table_is_export((_l)->table) || \
+			 scols_table_is_json((_l)->table))
 
 static char *mk_name(const char *name)
 {
@@ -790,6 +795,8 @@ static char *mk_name(const char *name)
 		xasprintf(&p, "/dev/%s", name);
 	else
 		p = xstrdup(name);
+	if (p)
+		sysfs_devname_sys_to_dev(p);
 	return p;
 }
 
@@ -911,8 +918,7 @@ static void set_scols_data(struct blkdev_cxt *cxt, int col, int id, struct libsc
 			str = xstrdup(cxt->fstype);
 		break;
 	case COL_TARGET:
-		if (!(cxt->nholders + cxt->npartitions))
-			str = get_device_mountpoint(cxt);
+		str = get_device_mountpoint(cxt);
 		break;
 	case COL_LABEL:
 		probe_device(cxt);
@@ -1154,28 +1160,28 @@ static int set_cxt(struct blkdev_cxt *cxt,
 
 	cxt->filename = get_device_path(cxt);
 	if (!cxt->filename) {
-		warnx(_("%s: failed to get device path"), name);
+		warnx(_("%s: failed to get device path"), cxt->name);
 		return -1;
 	}
 	DBG(CXT, ul_debugobj(cxt, "%s: filename=%s", cxt->name, cxt->filename));
 
-	devno = sysfs_devname_to_devno(name, wholedisk ? wholedisk->name : NULL);
+	devno = sysfs_devname_to_devno(cxt->name, wholedisk ? wholedisk->name : NULL);
 
 	if (!devno) {
-		warnx(_("%s: unknown device name"), name);
+		warnx(_("%s: unknown device name"), cxt->name);
 		return -1;
 	}
 
 	if (lsblk->inverse) {
 		if (sysfs_init(&cxt->sysfs, devno, wholedisk ? &wholedisk->sysfs : NULL)) {
-			warnx(_("%s: failed to initialize sysfs handler"), name);
+			warnx(_("%s: failed to initialize sysfs handler"), cxt->name);
 			return -1;
 		}
 		if (parent)
 			parent->sysfs.parent = &cxt->sysfs;
 	} else {
 		if (sysfs_init(&cxt->sysfs, devno, parent ? &parent->sysfs : NULL)) {
-			warnx(_("%s: failed to initialize sysfs handler"), name);
+			warnx(_("%s: failed to initialize sysfs handler"), cxt->name);
 			return -1;
 		}
 	}
@@ -1196,15 +1202,15 @@ static int set_cxt(struct blkdev_cxt *cxt,
 		DBG(CXT, ul_debugobj(cxt, "zero size device -- ignore"));
 		return -1;
 	}
-	if (is_dm(name)) {
+	if (is_dm(cxt->name)) {
 		cxt->dm_name = sysfs_strdup(&cxt->sysfs, "dm/name");
 		if (!cxt->dm_name) {
-			warnx(_("%s: failed to get dm name"), name);
+			warnx(_("%s: failed to get dm name"), cxt->name);
 			return -1;
 		}
 	}
 
-	cxt->npartitions = sysfs_count_partitions(&cxt->sysfs, name);
+	cxt->npartitions = sysfs_count_partitions(&cxt->sysfs, cxt->name);
 	cxt->nholders = sysfs_count_dirents(&cxt->sysfs, "holders");
 	cxt->nslaves = sysfs_count_dirents(&cxt->sysfs, "slaves");
 
@@ -1606,6 +1612,7 @@ static void __attribute__((__noreturn__)) help(FILE *out)
 	fputs(_(" -f, --fs             output info about filesystems\n"), out);
 	fputs(_(" -i, --ascii          use ascii characters only\n"), out);
 	fputs(_(" -I, --include <list> show only devices with specified major numbers\n"), out);
+	fputs(_(" -J, --json           use JSON output format\n"), out);
 	fputs(_(" -l, --list           use list format output\n"), out);
 	fputs(_(" -m, --perms          output info about permissions\n"), out);
 	fputs(_(" -n, --noheadings     don't print headings\n"), out);
@@ -1653,6 +1660,7 @@ int main(int argc, char *argv[])
 		{ "nodeps",     0, 0, 'd' },
 		{ "discard",    0, 0, 'D' },
 		{ "help",	0, 0, 'h' },
+		{ "json",       0, 0, 'J' },
 		{ "output",     1, 0, 'o' },
 		{ "output-all", 0, 0, 'O' },
 		{ "perms",      0, 0, 'm' },
@@ -1676,6 +1684,7 @@ int main(int argc, char *argv[])
 	static const ul_excl_t excl[] = {       /* rows and cols in in ASCII order */
 		{ 'D','O' },
 		{ 'I','e' },
+		{ 'J', 'P', 'r' },
 		{ 'O','S' },
 		{ 'O','f' },
 		{ 'O','m' },
@@ -1695,7 +1704,7 @@ int main(int argc, char *argv[])
 	lsblk_init_debug();
 
 	while((c = getopt_long(argc, argv,
-			       "abdDe:fhlnmo:OpPiI:rstVSx:", longopts, NULL)) != -1) {
+			       "abdDe:fhJlnmo:OpPiI:rstVSx:", longopts, NULL)) != -1) {
 
 		err_exclusive_options(c, longopts, excl, excl_st);
 
@@ -1721,6 +1730,9 @@ int main(int argc, char *argv[])
 			break;
 		case 'h':
 			help(stdout);
+			break;
+		case 'J':
+			scols_flags |= LSBLK_JSON;
 			break;
 		case 'l':
 			scols_flags &= ~LSBLK_TREE; /* disable the default */
@@ -1840,7 +1852,11 @@ int main(int argc, char *argv[])
 	scols_table_enable_raw(lsblk->table, !!(scols_flags & LSBLK_RAW));
 	scols_table_enable_export(lsblk->table, !!(scols_flags & LSBLK_EXPORT));
 	scols_table_enable_ascii(lsblk->table, !!(scols_flags & LSBLK_ASCII));
+	scols_table_enable_json(lsblk->table, !!(scols_flags & LSBLK_JSON));
 	scols_table_enable_noheadings(lsblk->table, !!(scols_flags & LSBLK_NOHEADINGS));
+
+	if (scols_flags & LSBLK_JSON)
+		scols_table_set_name(lsblk->table, "blockdevices");
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *ci = get_column_info(i);

@@ -1,24 +1,10 @@
 .\" hwclock.8.in -- man page for util-linux' hwclock
 .\"
 .\" 2015-01-07 J William Piggott
-.\" Authored new section: DATE-TIME CONFIGURATION.
-.\" Subsections: Keeping Time..., LOCAL vs UTC, POSIX vs 'RIGHT'.
-.\" Errata and drop outdated language.
-.\" Updates for v2.26
+.\"   Authored new section: DATE-TIME CONFIGURATION.
+.\"   Subsections: Keeping Time..., LOCAL vs UTC, POSIX vs 'RIGHT'.
 .\"
-.\"
-.\" -------------------------------
-.\" Included for troff portability.
-.\" Continuation line for .TP header.
-.de TQ
-.  br
-.  ns
-.  TP \\$1\" no doublequotes around argument!
-..
-.
-.\" -------------------------------
-.
-.TH HWCLOCK 8 "January 2015" "util-linux" "System Administration"
+.TH HWCLOCK 8 "April 2015" "util-linux" "System Administration"
 .SH NAME
 hwclock \- read or set the hardware clock (RTC)
 .SH SYNOPSIS
@@ -38,16 +24,15 @@ Hardware Clock values based on its drift rate.
 .PP
 Since v2.26 important changes were made to the
 .B \-\-hctosys
-function, the
+function and the
 .B \-\-directisa
 option, and a new option
 .B \-\-update\-drift
-was added. See their respective sections below.
+was added.  See their respective descriptions below.
 .
 .SH FUNCTIONS
 The following functions are mutually exclusive, only one can be given at
-a time. If none are given the default is
-.BR \-\-show .
+a time.  If none is given, the default is \fB\-\-show\fR.
 .TP
 .B \-\-adjust
 Add or subtract time from the Hardware Clock to account for systematic
@@ -74,9 +59,9 @@ that the year counter in your Hardware Clock contains the number of
 full years since 1952, then the kernel's Hardware Clock epoch value
 must be 1952.
 .sp
-The set function requires using the
+The \fB\%\-\-setepoch\fR function requires using the
 .B \%\-\-epoch
-option.
+option to specify the year.
 .sp
 This epoch value is used whenever
 .B \%hwclock
@@ -138,7 +123,7 @@ function does this based upon the information in the
 .I /etc/adjtime
 file or the command line arguments
 .BR \%\-\-localtime " and " \-\-utc .
-Note: no daylight saving adjustment is made. See the discussion below under
+Note: no daylight saving adjustment is made.  See the discussion below, under
 .BR "LOCAL vs UTC" .
 .sp
 The kernel also keeps a timezone value, the
@@ -168,7 +153,7 @@ This is a good function to use in one of the system startup scripts before the
 file systems are mounted read/write.
 .sp
 This function should never be used on a running system. Jumping system time
-will cause problems, such as, corrupted filesystem timestamps.  Also, if
+will cause problems, such as corrupted filesystem timestamps.  Also, if
 something has changed the Hardware Clock, like NTP's \%'11\ minute\ mode', then
 .B \%\-\-hctosys
 will set the time incorrectly by including drift compensation.
@@ -245,9 +230,9 @@ changed then a reboot would be required to inform the kernel.
 .BR \-w , \ \-\-systohc
 Set the Hardware Clock from the System Clock, and update the timestamps in
 .IR /etc/adjtime .
-With the
+When the
 .B --update-drift
-option (re)calculate the drift factor.
+option is given, then also (re)calculate the drift factor.
 .
 .TP
 .BR \-V , \ \-\-version
@@ -298,11 +283,6 @@ the true year.  That way, the Hardware Clock inserts leap days where
 they belong.  Again, if you let the Hardware Clock run for more than a
 year without setting it, this scheme could be defeated and you could
 end up losing a day.
-.sp
-.B \%hwclock
-warns you that you probably need
-.B \%\-\-badyear
-whenever it finds your Hardware Clock set to 1994 or 1995.
 .
 .TP
 .BI \%\-\-date= date_string
@@ -318,7 +298,7 @@ The value of this option is used as an argument to the
 option.  For example:
 .RS
 .IP "" 4
-.BI "\%hwclock\ \-\-set\ \-\-date='" 2011-08-14\ 16:45:05 '
+.B "hwclock\ \-\-set\ \-\-date='2011-08-14\ 16:45:05'
 .PP
 The argument must be in local time, even if you keep your Hardware Clock in
 UTC.  See the
@@ -330,7 +310,7 @@ the enter key is pressed.
 .RE
 .
 .TP
-.B \-\-debug
+.BR \-D ", " \-\-debug
 Display a lot of information about what
 .B \%hwclock
 is doing internally.  Some of its functions are complex and this output
@@ -401,7 +381,7 @@ as recorded in
 will be used.  If the adjtime file doesn't exist, the default is UTC.
 .sp
 Note: daylight saving time changes may be inconsistent when the
-Hardware Clock is kept in local time. See the discussion below under
+Hardware Clock is kept in local time.  See the discussion below, under
 .BR "LOCAL vs UTC" .
 .
 .TP
@@ -467,9 +447,9 @@ option to be used.  See the discussion below, under
 .TP
 .B \-\-arc
 This option is equivalent to
-.BI \%\-\-epoch= 1980
+.B \%\-\-epoch=1980
 and is used to specify the most common epoch on Alphas
-with ARC console (but Ruffians have an epoch of 1900).
+with an ARC console (although Ruffians have an epoch of 1900).
 .
 .TP
 .BI \-\-epoch= year
@@ -482,7 +462,7 @@ option to set the kernel's idea of the epoch of the Hardware Clock.
 For example, on a Digital Unix machine:
 .RS
 .IP "" 4
-.BI hwclock\ \-\-setepoch\ \-\-epoch= 1952
+.B hwclock\ \-\-setepoch\ \-\-epoch=1952
 .RE
 .
 .TP
@@ -501,15 +481,15 @@ is mounted.
 option is used for Jensen models;
 .B \%\-\-funky\-toy
 means that the machine requires the UF bit instead of the UIP bit in
-the Hardware Clock to detect a time transition.  "Toy" in the option
+the Hardware Clock to detect a time transition.  The "toy" in the option
 name refers to the Time Of Year facility of the machine.
 .
 .TP
 .B \-\-srm
 This option is equivalent to
-.BI \%\-\-epoch= 1900
+.B \%\-\-epoch=1900
 and is used to specify the most common epoch on Alphas
-with SRM console.
+with an SRM console.
 .
 .SH NOTES
 .
@@ -576,11 +556,11 @@ file, as explained in the man page for
 However, some programs and fringe parts of the Linux kernel such as filesystems
 use the kernel's timezone value.  An example is the vfat filesystem.  If the
 kernel timezone value is wrong, the vfat filesystem will report and set the
-wrong timestamps on files. Another example is the kernel's NTP \%'11\ minute\ mode.'
+wrong timestamps on files.  Another example is the kernel's NTP \%'11\ minute\ mode'.
 If the kernel's timezone value and/or the
 .I \%persistent_clock_is_local
 variable are wrong, then the Hardware Clock will be set incorrectly
-by \%'11\ minute\ mode.'  See the discussion below, under
+by \%'11\ minute\ mode'.  See the discussion below, under
 .BR "Automatic Hardware Clock Synchronization by the Kernel" .
 .PP
 .B \%hwclock
@@ -596,21 +576,6 @@ in the locality at the present time.
 This second field is not used under Linux and is always zero.
 See also
 .BR \%settimeofday (2).
-.
-.SS User access and setuid
-.PP
-Sometimes, you need to install
-.B \%hwclock
-setuid root.  If you want users other than the superuser to be able to
-display the clock value using the direct ISA I/O method, install it setuid
-root.  If you have the rtc device interface on your system, or are on a non-ISA
-compatible system, there is probably no need for users to have the direct
-ISA I/O method, so do not bother.  See the
-.BR \-\-rtc " option."
-.PP
-In any case, hwclock will not allow you to set anything unless you have the
-superuser real uid.  (This restriction is not necessary if you haven't
-installed setuid root, but it's there for now.)
 .
 .SS Hardware Clock Access Methods
 .PP
@@ -758,24 +723,30 @@ You can use an adjtime file that was previously used with the
 .PP
 You should be aware of another way that the Hardware Clock is kept
 synchronized in some systems.  The Linux kernel has a mode wherein it
-copies the System Time to the Hardware Clock every 11 minutes.
+copies the System Time to the Hardware Clock every 11 minutes. This mode
+is a compile time option, so not all kernels will have this capability.
 This is a good mode to use when you are using something sophisticated
 like NTP to keep your System Clock synchronized. (NTP is a way to keep
 your System Time synchronized either to a time server somewhere on the
 network or to a radio clock hooked up to your system.  See RFC 1305.)
 .PP
-This mode (we'll call it \%'11\ minute\ mode') is off until something
-turns it on.  The NTP daemon ntpd is one thing that turns it on.  You
-can turn it off by running anything, including
-.BR \%hwclock\ \-\-hctosys ,
-that sets the System Clock the old fashioned way.  However, if the NTP daemon is
-still running, it will turn 11 minute mode back on again the next time it
-synchronizes the System Clock.
-.PP
-When \%'11\ minute\ mode' is active the 64 bit of the kernel's
-.I time_status
-variable is unset. The status variable can be checked with the
+If the kernel is compiled with the \%'11\ minute\ mode' option it will
+be active when the kernel's clock discipline is in a synchronized state.
+When in this state, bit 6 (the bit that is set in the mask 0x0040)
+of the kernel's
+.I \%time_status
+variable is unset. This value is output as the 'status' line of the
 .BR \%adjtimex\ --print " or " \%ntptime " commands."
+.PP
+It takes an outside influence, like the NTP daemon
+.BR ntpd (1),
+to put the kernel's clock discipline into a synchronized state, and
+therefore turn on \%'11\ minute\ mode'.
+It can be turned off by running anything that sets the System Clock the old
+fashioned way, including
+.BR "\%hwclock\ \-\-hctosys" .
+However, if the NTP daemon is still running, it will turn \%'11\ minute\ mode'
+back on again the next time it synchronizes the System Clock.
 .PP
 If your system runs with \%'11\ minute\ mode' on, it may need to use either
 .BR \%\-\-hctosys " or " \%\-\-systz
@@ -795,7 +766,7 @@ Hardware Clock timescale configuration is changed, then a reboot is required to
 notify the kernel.
 .PP
 .B \%hwclock\ \-\-adjust
-should not be used with NTP \%'11\ minute\ mode.'
+should not be used with NTP \%'11\ minute\ mode'.
 .
 .SS ISA Hardware Clock Century value
 .PP
@@ -823,15 +794,15 @@ are supported by the hardware.
 .PP
 This discussion is based on the following conditions:
 .IP \(bu 2
-Nothing is running that alters the date-time clocks, e.g.,
-.BR \%ntpd "(1), cron jobs, et al."
+Nothing is running that alters the date-time clocks, such as
+.BR \%ntpd "(1) or a cron job."
 .IP \(bu 2
-The system timezone is configured for the correct local time.  See below
+The system timezone is configured for the correct local time.  See below, under
 .BR "POSIX vs 'RIGHT'" .
 .IP \(bu 2
-Early in startup the following are called in this order:
+Early during startup the following are called, in this order:
 .br
-.BI \%adjtimex\ \-\-tick \ <value>\  \-\-frequency \ <value>
+.BI \%adjtimex\ \-\-tick \ value\  \-\-frequency \ value
 .br
 .B \%hwclock\ \-\-hctosys
 .IP \(bu 2
@@ -856,8 +827,7 @@ different for each of them.  However, most systems are configured to
 exchange values between these two clocks at startup and shutdown.  Now
 the individual device's time keeping errors are transferred back and
 forth between each other.  Attempt to configure drift correction for only
-one of them, and the other's drift will be overlaid upon it.  If the big
-picture is not kept in mind, confusion will soon ensue.
+one of them, and the other's drift will be overlaid upon it.
 .PP
 This problem can be avoided when configuring drift correction for the
 System Clock by simply not shutting down the machine.  This, plus the
@@ -869,11 +839,11 @@ should be done first.
 .PP
 The System Clock drift is corrected with the
 .BR \%adjtimex "(8) command's " \-\-tick " and " \%\-\-frequency
-options.  These two work together, tick is the course adjustment and
-frequency is the fine adjustment. (For system that do not have an
+options.  These two work together: tick is the coarse adjustment and
+frequency is the fine adjustment.  (For systems that do not have an
 .BR \%adjtimex " package,"
-.BI \%ntptime\ \-f\  <ppm>
-may be use instead.)
+.BI \%ntptime\ \-f\  ppm
+may be used instead.)
 .PP
 Some Linux distributions attempt to automatically calculate the System
 Clock drift with
@@ -888,7 +858,7 @@ would be
 .BR \%adjtimex 's " \-\-log " options.
 .PP
 It may be more effective to simply track the System Clock drift with
-.BR \%ntpdate\ \-q " , or " \%date\ \-Ins
+.BR \%sntp ", or " \%date\ \-Ins
 and a precision timepiece, and then calculate the correction manually.
 .PP
 After setting the tick and frequency values, continue to test and refine the
@@ -901,27 +871,27 @@ Once the System Clock is ticking smoothly, move on to the Hardware Clock.
 .PP
 As a rule, cold drift will work best for most use cases.  This should be
 true even for 24/7 machines whose normal downtime consists of a reboot.
-In that case the drift factor value makes little difference, but on the
-rare occasion that the machine is shutdown for an extended period then
+In that case the drift factor value makes little difference.  But on the
+rare occasion that the machine is shut down for an extended period, then
 cold drift should yield better results.
 .PP
 .B Steps to calculate cold drift:
 .IP 1 2
-.RB "Confirm that " ntpd "(1) will not be launched at startup."
+.RB "Ensure that " ntpd "(1) will not be launched at startup."
 .IP 2 2
 .RI The " System Clock " "time must be correct at shutdown!"
 .IP 3 2
-Shutdown the system.
+Shut down the system.
 .IP 4 2
 Let an extended period pass without changing the Hardware Clock.
 .IP 5 2
 Start the system.
 .IP 6 2
-.RB "Immediately use " hwclock " to set the correct time with the"
+.RB "Immediately use " hwclock " to set the correct time, adding the"
 .BR \%\-\-update\-drift " option."
 .PP
-Note: if step six uses
-.RB \%\-\-systohc ,
+Note: if step 6 uses
+.BR \%\-\-systohc ,
 then the System Clock must be set correctly (step 6a) just before doing so.
 .PP
 .RB "Having " hwclock
@@ -931,30 +901,8 @@ results it will likely need to be adjusted by directly editing the
 file.  Continue to test and refine the drift factor until the Hardware
 Clock is corrected properly at startup.  To check this, first make sure
 that the System Time is correct before shutdown and then use
-.BR \%ntpdate\ \-q ", or " \%date\ \-Ins
+.BR \%sntp ", or " \%date\ \-Ins
 and a precision timepiece, immediately after startup.
-.PP
-Both clocks typically use a quartz crystal oscillator.  Crystals are
-used for reference oscillators in electronics because by most measures
-they produce a very clean and stable sine wave.  Their greatest
-shortcoming is that they have a Positive Temperature Coefficient;
-meaning that their frequency increases as the temperature increases and
-vise versa. Therefore, both the Hardware and System Clock's drift rate
-changes with intrinsic and extrinsic machine temperatures.  These
-characteristics will vary by machine depending upon its design.
-.PP
-Drift correction strategies are many, but as a general guide the goal
-would be to find a longterm average.  A year long average to take into
-account seasonal ambient temperature shifts may be a good target period.
-So perhaps the date-time advances a bit in the summer and declines a bit
-in the winter, but at the end of a year it balances to zero.
-.PP
-If this is beginning to sound futile, it is not.  Left on its own a
-machine can lose 3 seconds per day or more.  Accumulated drift over a
-year may easily exceed half an hour.  Using carefully crafted drift
-corrections can make a significant improvement in a machine's ability to
-keep reasonably good date-time.
-.
 .SS LOCAL vs UTC
 Keeping the Hardware Clock in a local timescale causes inconsistent
 daylight saving time results:
@@ -1039,16 +987,32 @@ time conversion.
 Attempting to mix and match files from these separate databases will not
 work, because they each require the System Clock to use a different
 timescale. The zoneinfo database must be configured to use either posix
-or 'right', as described above.
-.
-.SH "ENVIRONMENT VARIABLES"
-.I TZ
-.
+or 'right', as described above, or by assigning a database path to the
+.SB TZDIR
+environment variable.
+.SH ENVIRONMENT
+.TP
+.B TZ
+If this variable is set its value takes precedence over the system
+configured timezone.
+.TP
+.B TZDIR
+If this variable is set its value takes precedence over the system
+configured timezone database directory path.
 .SH FILES
-.br
+.TP
 .I /etc/adjtime
-.br
+The configuration and state file for hwclock.
+.TP
 .I /etc/localtime
+The system timezone file.
+.TP
+.I /usr/share/zoneinfo/
+The system timezone database directory.
+.PP
+Device files
+.B hwclock
+may try for Hardware Clock access:
 .br
 .I /dev/rtc
 .br
@@ -1063,9 +1027,6 @@ or 'right', as described above.
 .I /dev/port
 .br
 .I /dev/tty1
-.br
-.I /proc/cpuinfo
-.
 .SH "SEE ALSO"
 .BR date (1),
 .BR adjtimex (8),

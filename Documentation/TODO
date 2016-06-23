@@ -1,19 +1,15 @@
 
  Note that items with (!) have high priority.
 
-libblkid
---------
-  - (!) don't use fixed set of the static buffers for TAGs in blkid_probe,
-    allocate all on the fly. It seems that for example btrfs is crazy enough
-    to have LABELs longer than we have bufferes in libblkid
-    https://bugzilla.redhat.com/show_bug.cgi?id=1164708
+lsblk
+-----
+  - currently it does not show mountpoint for all devices in btrfs RAID. It's because
+    /proc/#/mountinfo contains reference to the one device only. Maybe we can add some
+    btrfs specific code to provide a better output for FS based stacks. Not sure.
+    https://bugzilla.redhat.com/show_bug.cgi?id=1084453
 
 cfdisk
 ------
-  - provide additional information about the current partitions (LABEL=, UUID=,
-    filesystem type, size, usage, mountpoint, ...) just optionally add extra
-    table between main menu and list of partitions.
-
   - (!) add auto-sort support (sort partitions automatically) and
     --sort={auto,never,always} command line option. This feature should be
     enabled by default for logical partitions if we created all container (extended
@@ -55,6 +51,10 @@ bash completion
 
 libmount (mount/umount)
 -----------------------
+
+ - allow to execute mount(2) in another namespace, something like:
+	mount --namespace=/proc/$n/ns/mnt  /dev/sda2 /bar
+   see https://bugzilla.redhat.com/show_bug.cgi?id=1199554 for more details.
 
  - add options to control fstab/mtab mount options usage, something like:
 
@@ -112,28 +112,8 @@ libblkid
 libfdisk
 --------
 
-   [always check libfdisk branch at github!]
-
- - (!) add 'I'nfo fommand to print all details about specified partition
-   (like offset, size, name, uuid, type, C/H/S, fstype)
-
- - (!) add to "First sector" dialog a line with information about available
-   gaps (free areas) to make it more user friendly if you want to skip
-   any useless (small) areas between existing partitions. 
-   See https://bugzilla.redhat.com/show_bug.cgi?id=715114
-
-   (Note that libfdisk already supports freespace lists.)
-
- - (!) add to fdisk "free space" command to print all available gaps
-
  - add support for Apple Partition Map (see libblkid/src/partitions/mac.c)
    http://en.wikipedia.org/wiki/Apple_Partition_Map
-
- - add "move end" command to move end of the last primary/extended partition.
-   This feature seems very attractive to users who resizing their disks 
-   (for example in virtual machines).
-
- - use off_t instead "long long"
 
  - catch SIGINT (Ctrl-C) and return to main menu.
    From Red Hat bugzilla #545488:

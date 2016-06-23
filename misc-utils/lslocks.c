@@ -44,6 +44,7 @@
 #include "c.h"
 #include "list.h"
 #include "closestream.h"
+#include "optutils.h"
 
 /* column IDs */
 enum {
@@ -91,6 +92,7 @@ static struct libmnt_table *tab;		/* /proc/self/mountinfo */
 /* basic output flags */
 static int no_headings;
 static int raw;
+static int json;
 
 struct lock {
 	struct list_head locks;
@@ -464,7 +466,11 @@ static int show_locks(struct list_head *locks)
 		return -1;
 	}
 	scols_table_enable_raw(table, raw);
+	scols_table_enable_json(table, json);
 	scols_table_enable_noheadings(table, no_headings);
+
+	if (json)
+		scols_table_set_name(table, "locks");
 
 	for (i = 0; i < ncolumns; i++) {
 		struct colinfo *col = get_column_info(i);
@@ -512,13 +518,16 @@ static void __attribute__ ((__noreturn__)) usage(FILE * out)
 	fputs(_("List local system locks.\n"), out);
 
 	fputs(USAGE_OPTIONS, out);
-	fputs(_(" -p, --pid <pid>        process id\n"
-		" -o, --output <list>    define which output columns to use\n"
-		" -n, --noheadings       don't print headings\n"
-		" -r, --raw              use the raw output format\n"
-		" -u, --notruncate       don't truncate text in columns\n"
-		" -h, --help             display this help and exit\n"
-		" -V, --version          output version information and exit\n"), out);
+	fputs(_(" -J, --json             use JSON output format\n"), out);
+	fputs(_(" -n, --noheadings       don't print headings\n"), out);
+	fputs(_(" -o, --output <list>    define which output columns to use\n"), out);
+	fputs(_(" -p, --pid <pid>        display only locks held by this process\n"), out);
+	fputs(_(" -r, --raw              use the raw output format\n"), out);
+	fputs(_(" -u, --notruncate       don't truncate text in columns\n"), out);
+
+	fputs(USAGE_SEPARATOR, out);
+	fputs(USAGE_HELP, out);
+	fputs(USAGE_VERSION, out);
 
 	fputs(_("\nAvailable columns (for --output):\n"), out);
 
@@ -536,6 +545,7 @@ int main(int argc, char *argv[])
 	struct list_head locks;
 	char *outarg = NULL;
 	static const struct option long_opts[] = {
+		{ "json",       no_argument,       NULL, 'J' },
 		{ "pid",	required_argument, NULL, 'p' },
 		{ "help",	no_argument,       NULL, 'h' },
 		{ "output",     required_argument, NULL, 'o' },
@@ -546,15 +556,25 @@ int main(int argc, char *argv[])
 		{ NULL, 0, NULL, 0 }
 	};
 
+	static const ul_excl_t excl[] = {	/* rows and cols in ASCII order */
+		{ 'J','r' },
+		{ 0 }
+	};
+	int excl_st[ARRAY_SIZE(excl)] = UL_EXCL_STATUS_INIT;
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
 	while ((c = getopt_long(argc, argv,
-				"p:o:nruhV", long_opts, NULL)) != -1) {
+				"Jp:o:nruhV", long_opts, NULL)) != -1) {
+
+		err_exclusive_options(c, long_opts, excl, excl_st);
 
 		switch(c) {
+		case 'J':
+			json = 1;
+			break;
 		case 'p':
 			pid = strtos32_or_err(optarg, _("invalid PID argument"));
 			break;

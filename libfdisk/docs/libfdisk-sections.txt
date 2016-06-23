@@ -50,6 +50,7 @@ fdisk_ask_string_set_result
 fdisk_ask_yesno
 fdisk_ask_yesno_get_result
 fdisk_ask_yesno_set_result
+fdisk_asktype
 fdisk_ref_ask
 fdisk_unref_ask
 </SECTION>
@@ -95,12 +96,14 @@ fdisk_field_get_id
 fdisk_field_get_name
 fdisk_field_get_width
 fdisk_field_is_number
+fdisk_fieldtype
 <SUBSECTION>
 fdisk_label
 fdisk_is_label
 fdisk_label_get_field
 fdisk_label_get_field_by_name
 fdisk_label_get_fields_ids
+fdisk_label_get_fields_ids_all
 fdisk_label_get_name
 fdisk_label_get_nparttypes
 fdisk_label_get_parttype
@@ -114,6 +117,7 @@ fdisk_label_parse_parttype
 fdisk_label_require_geometry
 fdisk_label_set_changed
 fdisk_label_set_disabled
+fdisk_labeltype
 </SECTION>
 
 <SECTION>
@@ -128,6 +132,7 @@ fdisk_script
 fdisk_new_script
 fdisk_new_script_from_file
 fdisk_ref_script
+fdisk_script_enable_json
 fdisk_script_get_header
 fdisk_script_get_nlines
 fdisk_script_get_table
@@ -135,7 +140,10 @@ fdisk_script_read_context
 fdisk_script_read_file
 fdisk_script_read_line
 fdisk_script_set_header
+fdisk_script_set_fgets
 fdisk_script_write_file
+fdisk_script_set_userdata
+fdisk_script_get_userdata
 fdisk_unref_script
 </SECTION>
 
@@ -220,6 +228,8 @@ fdisk_sgi_set_bootfile
 <SECTION>
 <FILE>gpt</FILE>
 fdisk_gpt_is_hybrid
+fdisk_gpt_get_partition_attrs
+fdisk_gpt_set_partition_attrs
 GPT_FLAG_REQUIRED
 GPT_FLAG_NOBLOCK
 GPT_FLAG_LEGACYBOOT

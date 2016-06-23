@@ -30,6 +30,10 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <assert.h>
+#include <libsmartcols.h>
+#ifdef HAVE_LIBREADLINE
+# include <readline/readline.h>
+#endif
 
 #include "c.h"
 #include "xalloc.h"
@@ -67,6 +71,7 @@ enum {
 	ACT_CHANGE_ID,
 	ACT_DUMP,
 	ACT_LIST,
+	ACT_LIST_FREE,
 	ACT_LIST_TYPES,
 	ACT_SHOW_SIZE,
 	ACT_SHOW_GEOM,
@@ -83,6 +88,7 @@ struct sfdisk {
 	const char	*label;		/* --label <label> */
 	const char	*label_nested;	/* --label-nested <label> */
 	const char	*backup_file;	/* -O <path> */
+	char		*prompt;
 
 	struct fdisk_context	*cxt;	/* libfdisk context */
 
@@ -94,9 +100,11 @@ struct sfdisk {
 		     backup : 1,	/* backup sectors before write PT */
 		     container : 1,	/* PT contains container (MBR extended) partitions */
 		     append : 1,	/* don't create new PT, append partitions only */
+		     json : 1,		/* JSON dump */
 		     noact  : 1;	/* do not write to device */
 };
 
+#define SFDISK_PROMPT	">>> "
 
 static void sfdiskprog_init_debug(void)
 {
@@ -109,11 +117,22 @@ static int get_user_reply(const char *prompt, char *buf, size_t bufsz)
 	char *p;
 	size_t sz;
 
-	fputs(prompt, stdout);
-	fflush(stdout);
+#ifdef HAVE_LIBREADLINE
+	if (isatty(STDIN_FILENO)) {
+		p = readline(prompt);
+		if (!p)
+			return 1;
+		memcpy(buf, p, bufsz);
+		free(p);
+	} else
+#endif
+	{
+		fputs(prompt, stdout);
+		fflush(stdout);
 
-	if (!fgets(buf, bufsz, stdin))
-		return 1;
+		if (!fgets(buf, bufsz, stdin))
+			return 1;
+	}
 
 	for (p = buf; *p && !isgraph(*p); p++);	/* get first non-blank */
 
@@ -127,14 +146,13 @@ static int get_user_reply(const char *prompt, char *buf, size_t bufsz)
 	return 0;
 }
 
-static int ask_callback(struct fdisk_context *cxt,
+static int ask_callback(struct fdisk_context *cxt __attribute__((__unused__)),
 			struct fdisk_ask *ask,
 			void *data)
 {
 	struct sfdisk *sf = (struct sfdisk *) data;
 	int rc = 0;
 
-	assert(cxt);
 	assert(ask);
 
 	switch(fdisk_ask_get_type(ask)) {
@@ -168,7 +186,7 @@ static int ask_callback(struct fdisk_context *cxt,
 			if (rc)
 				break;
 			x = rpmatch(buf);
-			if (x == 1 || x == 0) {
+			if (x == RPMATCH_YES || x == RPMATCH_NO) {
 				fdisk_ask_yesno_set_result(ask, x);
 				break;
 			}
@@ -185,6 +203,7 @@ static int ask_callback(struct fdisk_context *cxt,
 static void sfdisk_init(struct sfdisk *sf)
 {
 	fdisk_init_debug(0);
+	scols_init_debug(0);
 	sfdiskprog_init_debug();
 
 	sf->cxt = fdisk_new_context();
@@ -217,8 +236,9 @@ static int sfdisk_deinit(struct sfdisk *sf)
 	}
 
 	fdisk_unref_context(sf->cxt);
-	memset(sf, 0, sizeof(*sf));
+	free(sf->prompt);
 
+	memset(sf, 0, sizeof(*sf));
 	return 0;
 }
 
@@ -336,6 +356,28 @@ static int command_list_partitions(struct sfdisk *sf, int argc, char **argv)
 		}
 	} else
 		print_all_devices_pt(sf->cxt, sf->verify);
+
+	return 0;
+}
+
+/*
+ * sfdisk --list-free [<device ..]
+ */
+static int command_list_freespace(struct sfdisk *sf, int argc, char **argv)
+{
+	fdisk_enable_listonly(sf->cxt, 1);
+
+	if (argc) {
+		int i, ct = 0;
+
+		for (i = 0; i < argc; i++) {
+			if (ct)
+				fputs("\n\n", stdout);
+			if (print_device_freespace(sf->cxt, argv[i], 0) == 0)
+				ct++;
+		}
+	} else
+		print_all_devices_freespace(sf->cxt);
 
 	return 0;
 }
@@ -627,6 +669,8 @@ static int command_dump(struct sfdisk *sf, int argc, char **argv)
 	if (rc)
 		err(EXIT_FAILURE, _("failed to dump partition table"));
 
+	if (sf->json)
+		fdisk_script_enable_json(dp, 1);
 	fdisk_script_write_file(dp, stdout);
 
 	fdisk_unref_script(dp);
@@ -653,7 +697,7 @@ static void assign_device_partition(struct sfdisk *sf,
 
 	lb = fdisk_get_label(sf->cxt, NULL);
 	if (!lb)
-		errx(EXIT_FAILURE, _("%s: not found partition table."), devname);
+		errx(EXIT_FAILURE, _("%s: no partition table found"), devname);
 
 	n = fdisk_get_npartitions(sf->cxt);
 	if (partno > n)
@@ -935,10 +979,10 @@ static void command_fdisk_help(void)
 	fputs(_("   write    write table to disk and exit\n"), stdout);
 	fputs(_("   quit     show new situation and wait for user's feedback before write\n"), stdout);
 	fputs(_("   abort    exit sfdisk shell\n"), stdout);
-	fputs(_("   print    print partition table.\n"), stdout);
-	fputs(_("   help     this help.\n"), stdout);
+	fputs(_("   print    display the partition table\n"), stdout);
+	fputs(_("   help     show this help text\n"), stdout);
 	fputc('\n', stdout);
-	fputs(_("   CTRL-D   the same like 'quit' command\n"), stdout);
+	fputs(_("   Ctrl-D   the same as 'quit'\n"), stdout);
 
 	fputc('\n', stdout);
 	color_scheme_enable("help-title", UL_COLOR_BOLD);
@@ -947,28 +991,28 @@ static void command_fdisk_help(void)
 	fputs(_("   <start>, <size>, <type>, <bootable>\n"), stdout);
 
 	fputc('\n', stdout);
-	fputs(_("   <start>  begin of the partition in sectors or bytes if specified\n"
-		"            in format <number>{K,M,G,T,P,E,Z,Y}. The default is\n"
-		"            the first free space.\n"), stdout);
+	fputs(_("   <start>  Beginning of the partition in sectors, or bytes if\n"
+		"            specified in the format <number>{K,M,G,T,P,E,Z,Y}.\n"
+		"            The default is the first free space.\n"), stdout);
 
 	fputc('\n', stdout);
-	fputs(_("   <size>   size of the partition in sectors if specified in format\n"
-		"            <number>{K,M,G,T,P,E,Z,Y} then it's interpreted as size\n"
-		"            in bytes. The default is all available space.\n"), stdout);
+	fputs(_("   <size>   Size of the partition in sectors, or bytes if\n"
+		"            specified in the format <number>{K,M,G,T,P,E,Z,Y}.\n"
+		"            The default is all available space.\n"), stdout);
 
 	fputc('\n', stdout);
-	fputs(_("   <type>   partition type. The default is Linux data partition.\n"), stdout);
+	fputs(_("   <type>   The partition type.  Default is a Linux data partition.\n"), stdout);
 	fputs(_("            MBR: hex or L,S,E,X shortcuts.\n"), stdout);
-	fputs(_("            GPT: uuid or L,S,H shortcuts.\n"), stdout);
+	fputs(_("            GPT: UUID or L,S,H shortcuts.\n"), stdout);
 
 	fputc('\n', stdout);
-	fputs(_("   <bootable>  '*' to mark MBR partition as bootable. \n"), stdout);
+	fputs(_("   <bootable>  Use '*' to mark an MBR partition as bootable.\n"), stdout);
 
 	fputc('\n', stdout);
 	color_scheme_enable("help-title", UL_COLOR_BOLD);
 	fputs(_(" Example:\n"), stdout);
 	color_disable();
-	fputs(_("   , 4G     creates 4GiB partition on default start offset.\n"), stdout);
+	fputs(_("   , 4G     Creates a 4GiB partition at default start offset.\n"), stdout);
 	fputc('\n', stdout);
 }
 
@@ -1074,6 +1118,37 @@ static int is_device_used(struct sfdisk *sf)
 	return 0;
 }
 
+#ifdef HAVE_LIBREADLINE
+static char *sfdisk_fgets(struct fdisk_script *dp,
+			  char *buf, size_t bufsz, FILE *f)
+{
+	struct sfdisk *sf = (struct sfdisk *) fdisk_script_get_userdata(dp);
+
+	assert(dp);
+	assert(buf);
+	assert(bufsz > 2);
+
+	if (sf->interactive) {
+		char *p = readline(sf->prompt);
+		size_t len;
+
+		if (!p)
+			return NULL;
+		len = strlen(p);
+		if (len > bufsz - 2)
+			len = bufsz - 2;
+
+		memcpy(buf, p, len);
+		buf[len] = '\n';		/* append \n to be compatible with libc fgetc() */
+		buf[len + 1] = '\0';
+		free(p);
+		fflush(stdout);
+		return buf;
+	}
+	return fgets(buf, bufsz, f);
+}
+#endif
+
 static int ignore_partition(struct fdisk_partition *pa)
 {
 	/* incomplete partition setting */
@@ -1120,6 +1195,10 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 	if (!dp)
 		err(EXIT_FAILURE, _("failed to allocate script handler"));
 	fdisk_set_script(sf->cxt, dp);
+#ifdef HAVE_LIBREADLINE
+	fdisk_script_set_fgets(dp, sfdisk_fgets);
+#endif
+	fdisk_script_set_userdata(dp, (void *) sf);
 
 	/*
 	 * Don't create a new disklabel when [-N] <partno> specified. In this
@@ -1231,11 +1310,23 @@ static int command_fdisk(struct sfdisk *sf, int argc, char **argv)
 			char *partname = fdisk_partname(devname, next_partno + 1);
 			if (!partname)
 				err(EXIT_FAILURE, _("failed to allocate partition name"));
-			printf("%s: ", partname);
+			if (!sf->prompt || !startswith(sf->prompt, partname)) {
+				free(sf->prompt);
+				xasprintf(&sf->prompt,"%s: ", partname);
+			}
 			free(partname);
-		} else
-			printf(">>> ");
+		} else if (!sf->prompt || !startswith(sf->prompt, SFDISK_PROMPT)) {
+			free(sf->prompt);
+			sf->prompt = xstrdup(SFDISK_PROMPT);
+		}
 
+#ifndef HAVE_LIBREADLINE
+		if (sf->prompt)
+			fputs(sf->prompt, stdout);
+#else
+		if (!sf->interactive && sf->prompt)
+			fputs(sf->prompt, stdout);
+#endif
 		rc = fdisk_script_read_line(dp, stdin, buf, sizeof(buf));
 		if (rc < 0) {
 			DBG(PARSE, ul_debug("script parsing failed, trying sfdisk specific commands"));
@@ -1341,11 +1432,13 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 	fputs(_("\nCommands:\n"), out);
 	fputs(_(" -A, --activate <dev> [<part> ...] list or set bootable MBR partitions\n"), out);
 	fputs(_(" -d, --dump <dev>                  dump partition table (usable for later input)\n"), out);
+	fputs(_(" -J, --json <dev>                  dump partition table in JSON format\n"), out);
 	fputs(_(" -g, --show-geometry [<dev> ...]   list geometry of all or specified devices\n"), out);
 	fputs(_(" -l, --list [<dev> ...]            list partitions of each device\n"), out);
+	fputs(_(" -F, --list-free [<dev> ...]       list unpartitions free areas of each device\n"), out);
 	fputs(_(" -s, --show-size [<dev> ...]       list sizes of all or specified devices\n"), out);
 	fputs(_(" -T, --list-types                  print the recognized types (see -X)\n"), out);
-	fputs(_(" -V, --verify                      test whether partitions seem correct\n"), out);
+	fputs(_(" -V, --verify [<dev> ...]          test whether partitions seem correct\n"), out);
 
 	fputs(USAGE_SEPARATOR, out);
 	fputs(_(" --part-label <dev> <part> [<str>] print or change partition label\n"), out);
@@ -1422,9 +1515,11 @@ int main(int argc, char *argv[])
 		{ "dump",    no_argument,	NULL, 'd' },
 		{ "help",    no_argument,       NULL, 'h' },
 		{ "force",   no_argument,       NULL, 'f' },
+		{ "json",    no_argument,	NULL, 'J' },
 		{ "label",   required_argument, NULL, 'X' },
 		{ "label-nested", required_argument, NULL, 'Y' },
 		{ "list",    no_argument,       NULL, 'l' },
+		{ "list-free", no_argument,     NULL, 'F' },
 		{ "list-types", no_argument,	NULL, 'T' },
 		{ "no-act",  no_argument,       NULL, 'n' },
 		{ "no-reread", no_argument,     NULL, OPT_NOREREAD },
@@ -1456,7 +1551,7 @@ int main(int argc, char *argv[])
 	textdomain(PACKAGE);
 	atexit(close_stdout);
 
-	while ((c = getopt_long(argc, argv, "aAbcdfghlLo:O:nN:qsTu:vVX:Y:",
+	while ((c = getopt_long(argc, argv, "aAbcdfFghJlLo:O:nN:qsTu:vVX:Y:",
 					longopts, &longidx)) != -1) {
 		switch(c) {
 		case 'A':
@@ -1479,8 +1574,14 @@ int main(int argc, char *argv[])
 			warnx(_("--id is deprecated in favour of --part-type"));
 			sf->act = ACT_PARTTYPE;
 			break;
+		case 'J':
+			sf->json = 1;
+			/* fallthrough */
 		case 'd':
 			sf->act = ACT_DUMP;
+			break;
+		case 'F':
+			sf->act = ACT_LIST_FREE;
 			break;
 		case 'f':
 			sf->force = 1;
@@ -1591,6 +1692,10 @@ int main(int argc, char *argv[])
 
 	case ACT_LIST_TYPES:
 		rc = command_list_types(sf);
+		break;
+
+	case ACT_LIST_FREE:
+		rc = command_list_freespace(sf, argc - optind, argv + optind);
 		break;
 
 	case ACT_FDISK:

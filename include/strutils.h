@@ -6,6 +6,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <ctype.h>
+#include <stdio.h>
 
 /* default strtoxx_or_err() exit code */
 #ifndef STRTOXX_EXIT_CODE
@@ -35,6 +36,8 @@ extern void strtotimeval_or_err(const char *str, struct timeval *tv,
 		const char *errmesg);
 
 extern int isdigit_string(const char *str);
+
+extern int parse_switch(const char *arg, const char *errmesg, ...);
 
 #ifndef HAVE_MEMPCPY
 extern void *mempcpy(void *restrict dest, const void *restrict src, size_t n);
@@ -200,5 +203,11 @@ static inline size_t ltrim_whitespace(unsigned char *str)
 
 	return len;
 }
+
+extern char *strnappend(const char *s, const char *suffix, size_t b);
+extern char *strappend(const char *s, const char *suffix);
+extern const char *split(const char **state, size_t *l, const char *separator, int quoted);
+
+extern int skip_fline(FILE *fp);
 
 #endif

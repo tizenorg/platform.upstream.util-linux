@@ -135,9 +135,8 @@ static FILE * pw_tmpfile(int lockfd)
 {
 	FILE *fd;
 	char *tmpname = NULL;
-	char *dir = "/etc";
 
-	if ((fd = xfmkstemp(&tmpname, dir)) == NULL) {
+	if ((fd = xfmkstemp(&tmpname, "/etc", ".vipw")) == NULL) {
 		ulckpwdf();
 		err(EXIT_FAILURE, _("can't open temporary file"));
 	}
@@ -352,7 +351,7 @@ int main(int argc, char *argv[])
 		printf(_("Would you like to edit %s now [y/n]? "), orig_file);
 
 		if (fgets(response, sizeof(response), stdin)) {
-			if (rpmatch(response) == 1)
+			if (rpmatch(response) == RPMATCH_YES)
 				edit_file(1);
 		}
 	}

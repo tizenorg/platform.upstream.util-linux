@@ -26,7 +26,7 @@ PACKAGE_VERSION_RELEASE=0
 
 dnl libblkid version
 LIBBLKID_VERSION="$PACKAGE_VERSION_MAJOR.$PACKAGE_VERSION_MINOR.$PACKAGE_VERSION_RELEASE"
-LIBBLKID_DATE="30-Apr-2015"
+LIBBLKID_DATE="07-Sep-2015"
 LIBBLKID_LT_MAJOR=1
 LIBBLKID_LT_MINOR=1
 LIBBLKID_LT_MICRO=0
@@ -169,6 +169,7 @@ UL_SET_ARCH([MIPS], [mips*])
 UL_SET_ARCH([HPPA], [hppa*])
 
 AC_SYS_LARGEFILE
+AC_HEADER_ASSERT
 
 dnl Don't forget to maintain alternatively allowed versions in autogen.sh!
 AM_GNU_GETTEXT_VERSION([0.18.3])
@@ -374,14 +375,20 @@ AC_CHECK_FUNCS([futimens], [have_futimens=yes])
 AC_CHECK_FUNCS([inotify_init1], [have_inotify_init1=yes])
 AC_CHECK_FUNCS([open_memstream], [have_open_memstream=yes],[have_open_memstream=no])
 
-dnl Old glibc requires -lrt
-AC_CHECK_FUNCS(clock_gettime, [], [
-	AC_CHECK_LIB(rt, clock_gettime, [
-		AC_DEFINE(HAVE_CLOCK_GETTIME, 1)
-		CLOCKGETTIME_LIBS="-lrt"
-	])
-])
-AC_SUBST([CLOCKGETTIME_LIBS])
+dnl lib/mononotic.c may require -lrt
+AC_CHECK_FUNCS([clock_gettime], [],
+	[AC_CHECK_LIB([rt], [clock_gettime], [REALTIME_LIBS="-lrt"])]
+)
+AC_SUBST([REALTIME_LIBS])
+
+have_timer="no"
+AC_CHECK_FUNCS([timer_createx],
+	[have_time="yes"],
+	[AC_CHECK_LIB([rt], [timer_create], [
+		have_timer="yes"
+		REALTIME_LIBS="-lrt"
+	])]
+)
 
 
 AC_CHECK_MEMBER([struct sockaddr.sa_len],
@@ -422,7 +429,7 @@ AS_CASE([$have_dirfd:$have_ddfd],
 
 AC_MSG_CHECKING([whether program_invocation_short_name is defined])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
-	#include <argp.h>
+	#include <errno.h>
 ]], [[
 	program_invocation_short_name = "test";
 ]])], [
@@ -442,7 +449,7 @@ AC_LINK_IFELSE([AC_LANG_PROGRAM([extern char *__progname;],
 	   AC_MSG_RESULT([no]))
 
 dnl Static compilation
-m4_define([UL_STATIC_PROGRAMS], [losetup, mount, umount, fdisk, sfdisk, blkid, nsenter])
+m4_define([UL_STATIC_PROGRAMS], [losetup, mount, umount, fdisk, sfdisk, blkid, nsenter, unshare])
 
 AC_ARG_ENABLE([static-programs],
   [AS_HELP_STRING([--enable-static-programs=LIST],
@@ -547,8 +554,28 @@ AS_CASE([$scanf_cv_alloc_modifier],
    have_scanf_alloc_modifier=no]
 )
 
-UL_CHECK_LIB([util], [openpty])
-UL_CHECK_LIB([termcap], [tgetnum])
+
+AC_ARG_WITH([util], AS_HELP_STRING([--without-util], [compile without libutil]),
+  [], [with_util=auto]
+)
+AS_IF([test "x$with_util" = xno], [
+  AM_CONDITIONAL([HAVE_UTIL], [false])
+  have_util=no
+], [
+  UL_CHECK_LIB([util], [openpty])
+])
+
+
+AC_ARG_WITH([termcap], AS_HELP_STRING([--without-termcap], [compile without libtermcap]),
+  [], [with_termcap=auto]
+)
+AS_IF([test "x$with_termcap" = xno], [
+  AM_CONDITIONAL([HAVE_TERMCAP], [false])
+  have_termcap=no
+], [
+  UL_CHECK_LIB([termcap], [tgetnum])
+])
+
 
 AC_CHECK_TYPES([union semun], [], [], [[
 #include <sys/sem.h>
@@ -646,6 +673,7 @@ AS_IF([test "x$with_selinux" = xno], [
 ])
 AC_SUBST([SELINUX_LIBS])
 AC_SUBST([SELINUX_LIBS_STATIC])
+
 
 AC_ARG_WITH([audit],
   AS_HELP_STRING([--with-audit], [compile with audit support]),
@@ -771,17 +799,53 @@ AS_IF([test "x$have_slang" = xyes -o "x$have_ncurses" = xyes], [
 ])
 
 
-dnl Try pkg-config for libtinfo
-PKG_CHECK_MODULES(TINFO, [tinfo], [have_tinfo=yes], [
-    dnl If that failed, fall back to classic searching.
+AC_ARG_WITH([tinfo], AS_HELP_STRING([--without-tinfo], [compile without libtinfo]),
+  [], [with_tinfo=auto]
+)
+have_tinfo=no
+AS_IF([test "x$with_tinfo" != xno], [
+  dnl Try pkg-config for libtinfo
+  PKG_CHECK_MODULES(TINFO, [tinfo], [
+    dnl pkg-config success
+    have_tinfo=yes
+    UL_PKG_STATIC([TINFO_LIBS_STATIC], [tinfo])], [
+
+    dnl If pkg-config failed, fall back to classic searching.
     AC_CHECK_LIB([tinfo], [tgetent], [
        have_tinfo=yes
        TINFO_LIBS="-ltinfo"
+       TINFO_LIBS_STATIC="-ltinfo"
        TINFO_CFLAGS=""])
+  ])
 ])
 AC_SUBST([TINFO_LIBS])
+AC_SUBST([TINFO_LIBS_STATIC])
 AC_SUBST([TINFO_CFLAGS])
 AM_CONDITIONAL([HAVE_TINFO], [test "x$have_tinfo" = xyes])
+AS_IF([test "x$have_tinfo" = xyes], [
+  AC_DEFINE(HAVE_LIBTINFO, 1, [Define if libtinfo available.])
+])
+
+
+AC_ARG_WITH([readline],
+  AS_HELP_STRING([--with-readline], [compile with GNU Readline support]),
+  [], [with_readline=auto]
+)
+
+AS_IF([test "x$with_readline" = xno], [
+  AM_CONDITIONAL([HAVE_READLINE], [false])
+], [
+  UL_CHECK_LIB([readline], [readline])
+  AS_CASE([$with_readline:$have_readline],
+    [yes:no],
+      [AC_MSG_ERROR([readline selected but libreadline not found ])],
+    [*:yes],
+      [READLINE_LIBS="-lreadline"
+       READLINE_LIBS_STATIC="-lreadline $TINFO_LIBS_STATIC"]
+  )
+])
+AC_SUBST([READLINE_LIBS])
+AC_SUBST([READLINE_LIBS_STATIC])
 
 
 AC_ARG_WITH([utempter],
@@ -797,7 +861,6 @@ AS_IF([test "x$with_utempter" = xyes], [
 ], [
   AM_CONDITIONAL([HAVE_UTEMPTER], [false])
 ])
-
 
 
 dnl
@@ -847,6 +910,9 @@ UL_REQUIRES_BUILD([libmount], [libblkid])
 UL_REQUIRES_HAVE([libmount], [scanf_alloc_modifier], [scanf string alloc modifier])
 AM_CONDITIONAL([BUILD_LIBMOUNT], [test "x$build_libmount" = xyes])
 AM_CONDITIONAL([BUILD_LIBMOUNT_TESTS], [test "x$build_libmount" = xyes -a "x$enable_static" = xyes])
+AS_IF([test "x$build_libmount" = xyes], [
+	AC_DEFINE(HAVE_LIBMOUNT, 1, [Define if libmount available.])
+])
 
 AC_SUBST([LIBMOUNT_VERSION])
 AC_SUBST([LIBMOUNT_MAJOR_VERSION], $PACKAGE_VERSION_MAJOR)
@@ -1079,10 +1145,16 @@ UL_REQUIRES_SYSCALL_CHECK([nsenter], [UL_CHECK_SYSCALL([setns])], [setns])
 AM_CONDITIONAL([BUILD_NSENTER], [test "x$build_nsenter" = xyes])
 AC_CHECK_FUNCS([setns])
 
-dnl setpriv depends on libcap-ng.  It would be possible to build
-dnl a version of setpriv with limited functionality without libcap-ng,
-dnl but this isn't currently supported.
-UL_CHECK_LIB([cap-ng], [capng_apply], [cap_ng])
+
+AC_ARG_WITH([cap_ng],
+  AS_HELP_STRING([--without-capng], [compile without libcap-ng]),
+  [], [with_cap_ng=auto]
+)
+AS_IF([test "x$with_cap_ng" = xno], [have_cap_ng=no],[
+  UL_CHECK_LIB([cap-ng], [capng_apply], [cap_ng])
+])
+
+
 AC_ARG_ENABLE([setpriv],
   AS_HELP_STRING([--disable-setpriv], [do not build setpriv]),
   [], [UL_DEFAULT_ENABLE([setpriv], [check])]
@@ -1117,12 +1189,20 @@ AS_IF([test "x$have_futimens" = xyes -a "x$have_inotify_init1" = xyes ], [
 ])
 
 
+AC_ARG_WITH([libz],
+  AS_HELP_STRING([--without-libz], [compile without libz]),
+  [], [with_libz=auto]
+)
+AS_IF([test "x$with_libz" = xno], [have_z=no], [
+  AC_CHECK_LIB([z], [crc32], [have_z=yes], [have_z=no])
+])
+
+
 AC_ARG_ENABLE([cramfs],
   AS_HELP_STRING([--disable-cramfs], [do not build fsck.cramfs, mkfs.cramfs]),
   [], [UL_DEFAULT_ENABLE([cramfs], [check])]
 )
 UL_BUILD_INIT([cramfs])
-AC_CHECK_LIB([z], [crc32], [have_z=yes], [have_z=no])
 UL_REQUIRES_HAVE([cramfs], [z], [z library])
 AM_CONDITIONAL([BUILD_CRAMFS], [test "x$build_cramfs" = xyes])
 
@@ -1232,8 +1312,14 @@ AS_IF([test "x$build_mkswap" = xyes -a "x$build_libuuid" != xyes], [
   AC_MSG_WARN([uuid library is not found; mkswap(8) will not generate UUIDs])
 ])
 
-UL_BUILD_INIT([cal], [yes])
+
+AC_ARG_ENABLE([cal],
+  AS_HELP_STRING([--disable-cal], [do not build cal]),
+  [], [UL_DEFAULT_ENABLE([cal], [check])]
+)
+UL_BUILD_INIT([cal])
 AM_CONDITIONAL([BUILD_CAL], [test "x$build_cal" = xyes])
+
 
 UL_BUILD_INIT([logger], [yes])
 AM_CONDITIONAL([BUILD_LOGGER], [test "x$build_logger" = xyes])
@@ -1297,6 +1383,7 @@ AM_CONDITIONAL([BUILD_PIVOT_ROOT], [test "x$build_pivot_root" = xyes])
 
 
 UL_BUILD_INIT([flock], [yes])
+UL_REQUIRES_HAVE([flock], [timer], [timer_create function])
 AM_CONDITIONAL([BUILD_FLOCK], [test "x$build_flock" = xyes])
 
 UL_BUILD_INIT([ipcmk], [yes])
@@ -1307,6 +1394,11 @@ AM_CONDITIONAL([BUILD_IPCRM], [test "x$build_ipcrm" = xyes])
 
 UL_BUILD_INIT([ipcs], [yes])
 AM_CONDITIONAL([BUILD_IPCS], [test "x$build_ipcs" = xyes])
+
+UL_BUILD_INIT([lsipc], [check])
+UL_REQUIRES_LINUX([lsipc])
+UL_REQUIRES_BUILD([lsipc], [libsmartcols])
+AM_CONDITIONAL([BUILD_LSIPC], [test "x$build_lsipc" = xyes])
 
 UL_BUILD_INIT([renice], [yes])
 AM_CONDITIONAL([BUILD_RENICE], [test "x$build_renice" = xyes])
@@ -1346,7 +1438,8 @@ UL_BUILD_INIT([setarch], [check])
 UL_REQUIRES_LINUX([setarch])
 AM_CONDITIONAL([BUILD_SETARCH], [test "x$build_setarch" = xyes])
 
-UL_BUILD_INIT([script], [yes])
+UL_BUILD_INIT([script], [check])
+UL_REQUIRES_LINUX([script])
 AM_CONDITIONAL([BUILD_SCRIPT], [test "x$build_script" = xyes])
 
 UL_BUILD_INIT([scriptreplay], [yes])
@@ -1391,22 +1484,12 @@ UL_BUILD_INIT([kill])
 UL_REQUIRES_LINUX([kill])
 AM_CONDITIONAL([BUILD_KILL], [test "x$build_kill" = xyes])
 
-dnl Don't use UL_DEFAULT_ENABLE() here, deprecated stuff has to be insensitive
-dnl to --enable-all-programs.
-AC_ARG_ENABLE([deprecated-last],
-  AS_HELP_STRING([--enable-deprecated-last], [build old deprecated last]),
-  [], [enable_deprecated_last=no]
-)
-UL_BUILD_INIT([deprecated_last])
-AM_CONDITIONAL([BUILD_DEPRECATED_LAST], [test "x$build_deprecated_last" = xyes])
-
 
 AC_ARG_ENABLE([last],
   AS_HELP_STRING([--disable-last], [do not build last]),
   [], [UL_DEFAULT_ENABLE([last], [check])]
 )
 UL_BUILD_INIT([last])
-UL_CONFLICTS_BUILD([last], [deprecated_last], [old deprecated last version])
 AM_CONDITIONAL([BUILD_LAST], [test "x$build_last" = xyes])
 
 
@@ -1850,6 +1933,16 @@ AC_ARG_ENABLE([sulogin-emergency-mount],
 AS_IF([test "x$enable_sulogin_emergency_mount" = xyes], [
   AC_DEFINE([USE_SULOGIN_EMERGENCY_MOUNT], [1],
 	    [Should sulogin use a emergency mount of /dev and /proc?])
+])
+
+
+AC_ARG_ENABLE([usrdir-path],
+  AS_HELP_STRING([--enable-usrdir-path], [use only /usr paths in PATH env. variable (recommended on systems with /bin -> /usr/bin symlinks)]),
+  [], [enable_usrdir_path=no]
+)
+
+AS_IF([test "x$enable_usrdir_path" == xyes], [
+  AC_DEFINE([USE_USRDIR_PATHS_ONLY], [1], [Define to 1 to remove /bin and /sbin from PATH env.variable])
 ])
 
 

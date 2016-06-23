@@ -66,18 +66,39 @@ dev_t sysfs_devname_to_devno(const char *name, const char *parent)
 		/*
 		 * Create path to /sys/block/<parent>/<name>/dev
 		 */
-		int len = snprintf(buf, sizeof(buf),
-				_PATH_SYS_BLOCK "/%s/%s/dev", parent, name);
+		char *_name = strdup(name), *_parent = strdup(parent);
+		int len;
+
+		if (!_name || !_parent) {
+			free(_name);
+			free(_parent);
+			return 0;
+		}
+		sysfs_devname_dev_to_sys(_name);
+		sysfs_devname_dev_to_sys(_parent);
+
+		len = snprintf(buf, sizeof(buf),
+				_PATH_SYS_BLOCK "/%s/%s/dev", _parent, _name);
+		free(_name);
+		free(_parent);
 		if (len < 0 || (size_t) len + 1 > sizeof(buf))
 			return 0;
 		path = buf;
 
 	} else if (!dev) {
 		/*
-		 * Create path to /sys/block/<name>/dev
+		 * Create path to /sys/block/<sysname>/dev
 		 */
-		int len = snprintf(buf, sizeof(buf),
-				_PATH_SYS_BLOCK "/%s/dev", name);
+		char *_name = strdup(name);
+		int len;
+
+		if (!_name)
+			return 0;
+
+		sysfs_devname_dev_to_sys(_name);
+		len = snprintf(buf, sizeof(buf),
+				_PATH_SYS_BLOCK "/%s/dev", _name);
+		free(_name);
 		if (len < 0 || (size_t) len + 1 > sizeof(buf))
 			return 0;
 		path = buf;
@@ -246,7 +267,7 @@ DIR *sysfs_opendir(struct sysfs_cxt *cxt, const char *attr)
 		 * -- we cannot use cxt->sysfs_fd directly, because closedir()
 		 * will close this our persistent file descriptor.
 		 */
-		fd = fcntl(cxt->dir_fd, F_DUPFD_CLOEXEC, STDERR_FILENO + 1);
+		fd = dup_fd_cloexec(cxt->dir_fd, STDERR_FILENO + 1);
 
 	if (fd < 0)
 		return NULL;
@@ -457,10 +478,11 @@ int sysfs_write_u64(struct sysfs_cxt *cxt, const char *attr, uint64_t num)
 
 char *sysfs_strdup(struct sysfs_cxt *cxt, const char *attr)
 {
-	char buf[1024];
+	char buf[BUFSIZ];
 	return sysfs_scanf(cxt, attr, "%1023[^\n]", buf) == 1 ?
 						strdup(buf) : NULL;
 }
+
 
 int sysfs_count_dirents(struct sysfs_cxt *cxt, const char *attr)
 {
@@ -544,6 +566,8 @@ char *sysfs_get_devname(struct sysfs_cxt *cxt, char *buf, size_t bufsiz)
 	sz = strlen(name);
 
 	memmove(buf, name, sz + 1);
+	sysfs_devname_sys_to_dev(buf);
+
 	return buf;
 }
 
@@ -633,6 +657,8 @@ int sysfs_next_subsystem(struct sysfs_cxt *cxt __attribute__((unused)),
 
 	if (!subsys || !devchain)
 		return -EINVAL;
+
+	*subsys = NULL;
 
 	while ((sub = get_subsystem(devchain, subbuf, sizeof(subbuf)))) {
 		*subsys = strdup(sub);
@@ -788,6 +814,7 @@ int sysfs_devno_to_wholedisk(dev_t dev, char *diskname,
         if (!name)
             goto err;
 
+	sysfs_devname_sys_to_dev(name);
         if (diskname && len) {
             strncpy(diskname, name, len);
             diskname[len - 1] = '\0';

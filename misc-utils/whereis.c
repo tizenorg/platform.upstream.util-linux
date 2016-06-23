@@ -186,7 +186,7 @@ static const char *whereis_type_to_name(int type)
 static void __attribute__((__noreturn__)) usage(FILE *out)
 {
 	fputs(USAGE_HEADER, out);
-	fprintf(out, _(" %s [options] <file>\n"), program_invocation_short_name);
+	fprintf(out, _(" %s [options] [-BMS <dir>... -f] <name>\n"), program_invocation_short_name);
 
 	fputs(USAGE_SEPARATOR, out);
 	fputs(_("Locate the binary, source, and manual-page files for a command.\n"), out);
@@ -463,7 +463,7 @@ static void lookup(const char *pattern, struct wh_dirlist *ls, int want)
 
 	free(wait);
 
-	if (!uflag || (uflag && count > 1))
+	if (!uflag || count > 1)
 		putchar('\n');
 	return;
 }
@@ -495,7 +495,7 @@ int main(int argc, char **argv)
 {
 	struct wh_dirlist *ls = NULL;
 	int want = ALL_DIRS;
-	int i, want_resetable = 0;
+	int i, want_resetable = 0, opt_f_missing = 0;
 
 	setlocale(LC_ALL, "");
 	bindtextdomain(PACKAGE, LOCALEDIR);
@@ -540,9 +540,11 @@ int main(int argc, char **argv)
 
 			switch (*arg) {
 			case 'f':
+				opt_f_missing = 0;
 				break;
 			case 'u':
 				uflag = 1;
+				opt_f_missing = 0;
 				break;
 			case 'B':
 				if (*(arg + 1))
@@ -551,6 +553,7 @@ int main(int argc, char **argv)
 				free_dirlist(&ls, BIN_DIR);
 				construct_dirlist_from_argv(
 					&ls, &i, argc, argv, BIN_DIR);
+				opt_f_missing = 1;
 				break;
 			case 'M':
 				if (*(arg + 1))
@@ -559,6 +562,7 @@ int main(int argc, char **argv)
 				free_dirlist(&ls, MAN_DIR);
 				construct_dirlist_from_argv(
 					&ls, &i, argc, argv, MAN_DIR);
+				opt_f_missing = 1;
 				break;
 			case 'S':
 				if (*(arg + 1))
@@ -567,6 +571,7 @@ int main(int argc, char **argv)
 				free_dirlist(&ls, SRC_DIR);
 				construct_dirlist_from_argv(
 					&ls, &i, argc, argv, SRC_DIR);
+				opt_f_missing = 1;
 				break;
 			case 'b':
 				if (want_resetable) {
@@ -574,6 +579,7 @@ int main(int argc, char **argv)
 					want_resetable = 0;
 				}
 				want = want == ALL_DIRS ? BIN_DIR : want | BIN_DIR;
+				opt_f_missing = 0;
 				break;
 			case 'm':
 				if (want_resetable) {
@@ -581,6 +587,7 @@ int main(int argc, char **argv)
 					want_resetable = 0;
 				}
 				want = want == ALL_DIRS ? MAN_DIR : want | MAN_DIR;
+				opt_f_missing = 0;
 				break;
 			case 's':
 				if (want_resetable) {
@@ -588,6 +595,7 @@ int main(int argc, char **argv)
 					want_resetable = 0;
 				}
 				want = want == ALL_DIRS ? SRC_DIR : want | SRC_DIR;
+				opt_f_missing = 0;
 				break;
 			case 'l':
 				list_dirlist(ls);
@@ -607,5 +615,7 @@ int main(int argc, char **argv)
 	}
 
 	free_dirlist(&ls, ALL_DIRS);
+	if (opt_f_missing)
+		errx(EXIT_FAILURE, _("option -f is missing"));
 	return EXIT_SUCCESS;
 }

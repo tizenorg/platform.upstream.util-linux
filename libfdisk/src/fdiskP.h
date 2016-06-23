@@ -17,7 +17,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-
 #include "c.h"
 #include "libfdisk.h"
 
@@ -26,13 +25,6 @@
 #include "debug.h"
 #include <stdio.h>
 #include <stdarg.h>
-
-/* features */
-#define CONFIG_LIBFDISK_ASSERT
-
-#ifdef CONFIG_LIBFDISK_ASSERT
-#include <assert.h>
-#endif
 
 /*
  * Debug
@@ -197,16 +189,13 @@ struct fdisk_label_operations {
 	int (*verify)(struct fdisk_context *cxt);
 	/* create new disk label */
 	int (*create)(struct fdisk_context *cxt);
-	/* list disklabel details */
-	int (*list)(struct fdisk_context *cxt);
 	/* returns offset and size of the 'n' part of the PT */
 	int (*locate)(struct fdisk_context *cxt, int n, const char **name,
 		      uint64_t *offset, size_t *size);
 	/* reorder partitions */
 	int (*reorder)(struct fdisk_context *cxt);
-
-	/* get disk label ID */
-	int (*get_id)(struct fdisk_context *cxt, char **id);
+	/* get details from label */
+	int (*get_item)(struct fdisk_context *cxt, struct fdisk_labelitem *item);
 	/* set disk label ID */
 	int (*set_id)(struct fdisk_context *cxt);
 
@@ -426,6 +415,18 @@ extern char *fdisk_partname(const char *dev, size_t partno);
 /* label.c */
 extern int fdisk_probe_labels(struct fdisk_context *cxt);
 extern void fdisk_deinit_label(struct fdisk_label *lb);
+
+struct fdisk_labelitem {
+	int		id;		/* <label>_ITEM_* */
+	char		type;		/* s = string, j = uint64 */
+	const char	*name;
+
+	union {
+		char		*str;
+		uint64_t	num64;
+	} data;
+};
+
 
 /* ask.c */
 struct fdisk_ask *fdisk_new_ask(void);

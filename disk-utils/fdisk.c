@@ -22,6 +22,9 @@
 #include <time.h>
 #include <limits.h>
 #include <libsmartcols.h>
+#ifdef HAVE_LIBREADLINE
+# include <readline/readline.h>
+#endif
 
 #include "c.h"
 #include "xalloc.h"
@@ -58,6 +61,23 @@ static void fdiskprog_init_debug(void)
 	__UL_INIT_DEBUG(fdisk, FDISKPROG_DEBUG_, 0, FDISK_DEBUG);
 }
 
+#ifdef HAVE_LIBREADLINE
+static char *rl_fgets(char *s, int n, FILE *stream, const char *prompt)
+{
+	char *p;
+
+	rl_outstream = stream;
+	p = readline(prompt);
+	if (!p)
+		return NULL;
+
+	strncpy(s, p, n);
+	s[n - 1] = '\0';
+	free(p);
+	return s;
+}
+#endif
+
 int get_user_reply(struct fdisk_context *cxt, const char *prompt,
 			  char *buf, size_t bufsz)
 {
@@ -65,20 +85,37 @@ int get_user_reply(struct fdisk_context *cxt, const char *prompt,
 	size_t sz;
 
 	do {
-	        fputs(prompt, stdout);
-		fflush(stdout);
+#ifdef HAVE_LIBREADLINE
+		if (isatty(STDIN_FILENO)) {
+			if (!rl_fgets(buf, bufsz, stdout, prompt)) {
+				if (fdisk_label_is_changed(fdisk_get_label(cxt, NULL))) {
+					if (rl_fgets(buf, bufsz, stderr,
+							_("\nDo you really want to quit? "))
+							&& !rpmatch(buf))
+						continue;
+				}
+				fdisk_unref_context(cxt);
+				exit(EXIT_FAILURE);
+			} else
+				break;
+		}
+		else
+#endif
+		{
+			fputs(prompt, stdout);
+			fflush(stdout);
+			if (!fgets(buf, bufsz, stdin)) {
+				if (fdisk_label_is_changed(fdisk_get_label(cxt, NULL))) {
+					fprintf(stderr, _("\nDo you really want to quit? "));
 
-		if (!fgets(buf, bufsz, stdin)) {
-			if (fdisk_label_is_changed(fdisk_get_label(cxt, NULL))) {
-				fprintf(stderr, _("\nDo you really want to quit? "));
-
-				if (fgets(buf, bufsz, stdin) && !rpmatch(buf))
-					continue;
-			}
-			fdisk_unref_context(cxt);
-			exit(EXIT_FAILURE);
-		} else
-			break;
+					if (fgets(buf, bufsz, stdin) && !rpmatch(buf))
+						continue;
+				}
+				fdisk_unref_context(cxt);
+				exit(EXIT_FAILURE);
+			} else
+				break;
+		}
 	} while (1);
 
 	for (p = buf; *p && !isgraph(*p); p++);	/* get first non-blank */
@@ -347,7 +384,7 @@ int ask_callback(struct fdisk_context *cxt, struct fdisk_ask *ask,
 			if (rc)
 				break;
 			x = rpmatch(buf);
-			if (x == 1 || x == 0) {
+			if (x == RPMATCH_YES || x == RPMATCH_NO) {
 				fdisk_ask_yesno_set_result(ask, x);
 				break;
 			}
@@ -372,7 +409,7 @@ int ask_callback(struct fdisk_context *cxt, struct fdisk_ask *ask,
 	return rc;
 }
 
-struct fdisk_parttype *ask_partition_type(struct fdisk_context *cxt)
+static struct fdisk_parttype *ask_partition_type(struct fdisk_context *cxt)
 {
 	const char *q;
 	struct fdisk_label *lb;
@@ -405,7 +442,7 @@ struct fdisk_parttype *ask_partition_type(struct fdisk_context *cxt)
 void list_partition_types(struct fdisk_context *cxt)
 {
 	size_t ntypes = 0;
-	struct fdisk_label *lb = fdisk_get_label(cxt, NULL);
+	struct fdisk_label *lb;
 
 	assert(cxt);
 	lb = fdisk_get_label(cxt, NULL);
@@ -525,6 +562,49 @@ void change_partition_type(struct fdisk_context *cxt)
 			i + 1, old);
 
 	fdisk_unref_partition(pa);
+	fdisk_unref_parttype(t);
+}
+
+int print_partition_info(struct fdisk_context *cxt)
+{
+	struct fdisk_partition *pa = NULL;
+	int rc = 0;
+	size_t i, nfields;
+	int *fields = NULL;
+	struct fdisk_label *lb = fdisk_get_label(cxt, NULL);
+
+	if ((rc = fdisk_ask_partnum(cxt, &i, FALSE)))
+		return rc;
+
+	if ((rc = fdisk_get_partition(cxt, i, &pa))) {
+		fdisk_warnx(cxt, _("Partition %zu does not exist yet!"), i + 1);
+		return rc;
+	}
+
+	if ((rc = fdisk_label_get_fields_ids_all(lb, cxt, &fields, &nfields)))
+		goto clean_data;
+
+	for (i = 0; i < nfields; ++i) {
+		int id = fields[i];
+		char *data = NULL;
+		const struct fdisk_field *fd = fdisk_label_get_field(lb, id);
+
+		if (!fd)
+			continue;
+
+		rc = fdisk_partition_to_string(pa, cxt, id, &data);
+		if (rc < 0)
+			goto clean_data;
+		if (!data || !*data)
+			continue;
+		fdisk_info(cxt, _("%15s: %s"), fdisk_field_get_name(fd), data);
+		free(data);
+	}
+
+clean_data:
+	fdisk_unref_partition(pa);
+	free(fields);
+	return rc;
 }
 
 static size_t skip_empty(const unsigned char *buf, size_t i, size_t sz)
@@ -643,6 +723,7 @@ static void __attribute__ ((__noreturn__)) usage(FILE *out)
 
 	fputs(USAGE_OPTIONS, out);
 	fputs(_(" -b, --sector-size <size>      physical and logical sector size\n"), out);
+	fputs(_(" -B, --protect-boot            don't erase bootbits when create a new label\n"), out);
 	fputs(_(" -c, --compatibility[=<mode>]  mode is 'dos' or 'nondos' (default)\n"), out);
 	fputs(_(" -L, --color[=<when>]          colorize output (auto, always or never)\n"), out);
 	fprintf(out,
@@ -700,6 +781,7 @@ int main(int argc, char **argv)
 		{ "units",          optional_argument, NULL, 'u' },
 		{ "version",        no_argument,       NULL, 'V' },
 		{ "output",         no_argument,       NULL, 'o' },
+		{ "protect-boot",   no_argument,       NULL, 'B' },
 		{ NULL, 0, NULL, 0 }
 	};
 
@@ -709,6 +791,7 @@ int main(int argc, char **argv)
 	atexit(close_stdout);
 
 	fdisk_init_debug(0);
+	scols_init_debug(0);
 	fdiskprog_init_debug();
 
 	cxt = fdisk_new_context();
@@ -717,7 +800,7 @@ int main(int argc, char **argv)
 
 	fdisk_set_ask(cxt, ask_callback, NULL);
 
-	while ((c = getopt_long(argc, argv, "b:c::C:hH:lL::o:sS:t:u::vV",
+	while ((c = getopt_long(argc, argv, "b:Bc::C:hH:lL::o:sS:t:u::vV",
 				longopts, NULL)) != -1) {
 		switch (c) {
 		case 'b':
@@ -729,6 +812,9 @@ int main(int argc, char **argv)
 			fdisk_save_user_sector_size(cxt, sz, sz);
 			break;
 		}
+		case 'B':
+			fdisk_enable_bootbits_protection(cxt, 1);
+			break;
 		case 'C':
 			fdisk_save_user_geometry(cxt,
 				strtou32_or_err(optarg,
@@ -864,7 +950,7 @@ int main(int argc, char **argv)
 		if (rc == -EACCES) {
 			rc = fdisk_assign_device(cxt, argv[optind], 1);
 			if (rc == 0)
-				fdisk_warnx(cxt, _("Device open in read-only mode."));
+				fdisk_warnx(cxt, _("Device is open in read-only mode."));
 		}
 		if (rc)
 			err(EXIT_FAILURE, _("cannot open %s"), argv[optind]);

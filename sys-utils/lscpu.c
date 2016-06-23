@@ -34,8 +34,12 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#if defined(__x86_64__) || defined(__i386__)
-# define INCLUDE_VMWARE_BDOOR
+#if (defined(__x86_64__) || defined(__i386__))
+# if !defined( __SANITIZE_ADDRESS__)
+#  define INCLUDE_VMWARE_BDOOR
+# else
+#  warning VMWARE detection disabled by __SANITIZE_ADDRESS__
+# endif
 #endif
 
 #ifdef INCLUDE_VMWARE_BDOOR
@@ -599,9 +603,8 @@ read_hypervisor_cpuid(struct lscpu_desc *desc __attribute__((__unused__)))
 
 static int is_compatible(const char *path, const char *str)
 {
-	FILE *fd;
+	FILE *fd = path_fopen("r", 0, "%s", path);
 
-	fd = path_fopen("r", 0, "%s", path);
 	if (fd) {
 		char buf[256];
 		size_t i, len;
@@ -632,11 +635,9 @@ read_hypervisor_powerpc(struct lscpu_desc *desc)
 		desc->virtype = VIRT_PARA;
 
 	/* PowerNV (POWER Non-Virtualized, bare-metal) */
-	} else if (path_exist(_PATH_PROC_DEVICETREE "/compatible")) {
-		if (is_compatible(_PATH_PROC_DEVICETREE "/compatible", "ibm,powernv")) {
-			desc->hyper = HYPER_NONE;
-			desc->virtype = VIRT_NONE;
-		}
+	} else if (is_compatible(_PATH_PROC_DEVICETREE "/compatible", "ibm,powernv")) {
+		desc->hyper = HYPER_NONE;
+		desc->virtype = VIRT_NONE;
 
 	/* PowerVM (IBM's proprietary hypervisor, aka pHyp) */
 	} else if (path_exist(_PATH_PROC_DEVICETREE "/ibm,partition-name")
@@ -654,11 +655,9 @@ read_hypervisor_powerpc(struct lscpu_desc *desc)
 		}
 
 	/* Qemu */
-	} else if (path_exist(_PATH_PROC_DEVICETREE "/compatible")) {
-		if (is_compatible(_PATH_PROC_DEVICETREE "/compatible", "qemu,pseries")) {
-			desc->hyper = HYPER_KVM;
-			desc->virtype = VIRT_PARA;
-		}
+	} else if (is_compatible(_PATH_PROC_DEVICETREE "/compatible", "qemu,pseries")) {
+		desc->hyper = HYPER_KVM;
+		desc->virtype = VIRT_PARA;
 	}
 	return desc->hyper;
 }
@@ -1634,6 +1633,9 @@ print_summary(struct lscpu_desc *desc, struct lscpu_modifier *mod)
 		snprintf(buf, sizeof(buf), _("NUMA node%d CPU(s):"), desc->idx2nodenum[i]);
 		print_cpuset(buf, desc->nodemaps[i], mod->hex);
 	}
+
+	if (desc->flags)
+		print_s(_("Flags:"), desc->flags);
 }
 
 static void __attribute__((__noreturn__)) usage(FILE *out)

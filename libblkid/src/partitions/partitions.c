@@ -556,7 +556,7 @@ static int idinfo_probe(blkid_probe pr, const struct blkid_idinfo *id,
 			/* reset after error */
 			reset_partlist(blkid_probe_get_partlist(pr));
 			if (chn && !chn->binary)
-				blkid_probe_chain_reset_vals(pr, chn);
+				blkid_probe_chain_reset_values(pr, chn);
 			DBG(LOWPROBE, ul_debug("%s probefunc failed, rc %d",
 						  id->name, rc));
 		}
@@ -584,7 +584,7 @@ static int partitions_probe(blkid_probe pr, struct blkid_chain *chn)
 	if (!pr || chn->idx < -1)
 		return -EINVAL;
 
-	blkid_probe_chain_reset_vals(pr, chn);
+	blkid_probe_chain_reset_values(pr, chn);
 
 	if (pr->flags & BLKID_FL_NOSCAN_DEV)
 		return BLKID_PROBE_NONE;
@@ -1098,11 +1098,18 @@ int blkid_partitions_set_ptuuid(blkid_probe pr, unsigned char *uuid)
 		return 0;
 
 	v = blkid_probe_assign_value(pr, "PTUUID");
+	if (!v)
+		return -ENOMEM;
 
-	blkid_unparse_uuid(uuid, (char *) v->data, sizeof(v->data));
 	v->len = 37;
+	v->data = calloc(1, v->len);
+	if (v->data) {
+		blkid_unparse_uuid(uuid, (char *) v->data, v->len);
+		return 0;
+	}
 
-	return 0;
+	blkid_probe_free_value(v);
+	return -ENOMEM;
 }
 
 /* set PTUUID variable for non-binary API for tables where
@@ -1110,27 +1117,14 @@ int blkid_partitions_set_ptuuid(blkid_probe pr, unsigned char *uuid)
 int blkid_partitions_strcpy_ptuuid(blkid_probe pr, char *str)
 {
 	struct blkid_chain *chn = blkid_probe_get_chain(pr);
-	struct blkid_prval *v;
-	size_t len;
 
 	if (chn->binary || !str || !*str)
 		return 0;
 
-	len = strlen((char *) str);
-	if (len > BLKID_PROBVAL_BUFSIZ)
-		len = BLKID_PROBVAL_BUFSIZ;
+	if (!blkid_probe_set_value(pr, "PTUUID", (unsigned char *) str, strlen(str) + 1))
+		return -ENOMEM;
 
-	v = blkid_probe_assign_value(pr, "PTUUID");
-	if (v) {
-		if (len == BLKID_PROBVAL_BUFSIZ)
-			len--;		/* make a space for \0 */
-
-		memcpy((char *) v->data, str, len);
-		v->data[len] = '\0';
-		v->len = len + 1;
-		return 0;
-	}
-	return -1;
+	return 0;
 }
 
 /**

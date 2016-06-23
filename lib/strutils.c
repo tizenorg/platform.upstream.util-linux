@@ -181,6 +181,35 @@ int isdigit_string(const char *str)
 	return p && p > str && !*p;
 }
 
+/*
+ *  parse_switch(argv[i], "on", "off",  "yes", "no",  NULL);
+ */
+int parse_switch(const char *arg, const char *errmesg, ...)
+{
+	const char *a, *b;
+	va_list ap;
+
+	va_start(ap, errmesg);
+	do {
+		a = va_arg(ap, char *);
+		if (!a)
+			break;
+		b = va_arg(ap, char *);
+		if (!b)
+			break;
+
+		if (strcmp(arg, a) == 0) {
+			va_end(ap);
+			return 1;
+		} else if (strcmp(arg, b) == 0) {
+			va_end(ap);
+			return 0;
+		}
+	} while (1);
+	va_end(ap);
+
+	errx(STRTOXX_EXIT_CODE, "%s: '%s'", errmesg, arg);
+}
 
 #ifndef HAVE_MEMPCPY
 void *mempcpy(void *restrict dest, const void *restrict src, size_t n)
@@ -398,37 +427,39 @@ void strtotimeval_or_err(const char *str, struct timeval *tv, const char *errmes
  */
 void strmode(mode_t mode, char *str)
 {
-	if (S_ISDIR(mode))
-		str[0] = 'd';
-	else if (S_ISLNK(mode))
-		str[0] = 'l';
-	else if (S_ISCHR(mode))
-		str[0] = 'c';
-	else if (S_ISBLK(mode))
-		str[0] = 'b';
-	else if (S_ISSOCK(mode))
-		str[0] = 's';
-	else if (S_ISFIFO(mode))
-		str[0] = 'p';
-	else if (S_ISREG(mode))
-		str[0] = '-';
+	unsigned short i = 0;
 
-	str[1] = mode & S_IRUSR ? 'r' : '-';
-	str[2] = mode & S_IWUSR ? 'w' : '-';
-	str[3] = (mode & S_ISUID
+	if (S_ISDIR(mode))
+		str[i++] = 'd';
+	else if (S_ISLNK(mode))
+		str[i++] = 'l';
+	else if (S_ISCHR(mode))
+		str[i++] = 'c';
+	else if (S_ISBLK(mode))
+		str[i++] = 'b';
+	else if (S_ISSOCK(mode))
+		str[i++] = 's';
+	else if (S_ISFIFO(mode))
+		str[i++] = 'p';
+	else if (S_ISREG(mode))
+		str[i++] = '-';
+
+	str[i++] = mode & S_IRUSR ? 'r' : '-';
+	str[i++] = mode & S_IWUSR ? 'w' : '-';
+	str[i++] = (mode & S_ISUID
 		? (mode & S_IXUSR ? 's' : 'S')
 		: (mode & S_IXUSR ? 'x' : '-'));
-	str[4] = mode & S_IRGRP ? 'r' : '-';
-	str[5] = mode & S_IWGRP ? 'w' : '-';
-	str[6] = (mode & S_ISGID
+	str[i++] = mode & S_IRGRP ? 'r' : '-';
+	str[i++] = mode & S_IWGRP ? 'w' : '-';
+	str[i++] = (mode & S_ISGID
 		? (mode & S_IXGRP ? 's' : 'S')
 		: (mode & S_IXGRP ? 'x' : '-'));
-	str[7] = mode & S_IROTH ? 'r' : '-';
-	str[8] = mode & S_IWOTH ? 'w' : '-';
-	str[9] = (mode & S_ISVTX
+	str[i++] = mode & S_IROTH ? 'r' : '-';
+	str[i++] = mode & S_IWOTH ? 'w' : '-';
+	str[i++] = (mode & S_ISVTX
 		? (mode & S_IXOTH ? 't' : 'T')
 		: (mode & S_IXOTH ? 'x' : '-'));
-	str[10] = '\0';
+	str[i] = '\0';
 }
 
 /*
@@ -733,6 +764,118 @@ int streq_except_trailing_slash(const char *s1, const char *s2)
 	return equal;
 }
 
+
+char *strnappend(const char *s, const char *suffix, size_t b)
+{
+        size_t a;
+        char *r;
+
+        if (!s && !suffix)
+                return strdup("");
+        if (!s)
+                return strndup(suffix, b);
+        if (!suffix)
+                return strdup(s);
+
+        assert(s);
+        assert(suffix);
+
+        a = strlen(s);
+        if (b > ((size_t) -1) - a)
+                return NULL;
+
+        r = malloc(a + b + 1);
+        if (!r)
+                return NULL;
+
+        memcpy(r, s, a);
+        memcpy(r + a, suffix, b);
+        r[a+b] = 0;
+
+        return r;
+}
+
+char *strappend(const char *s, const char *suffix)
+{
+        return strnappend(s, suffix, suffix ? strlen(suffix) : 0);
+}
+
+
+static size_t strcspn_escaped(const char *s, const char *reject)
+{
+        int escaped = 0;
+        int n;
+
+        for (n=0; s[n]; n++) {
+                if (escaped)
+                        escaped = 0;
+                else if (s[n] == '\\')
+                        escaped = 1;
+                else if (strchr(reject, s[n]))
+                        break;
+        }
+
+        /* if s ends in \, return index of previous char */
+        return n - escaped;
+}
+
+/* Split a string into words. */
+const char *split(const char **state, size_t *l, const char *separator, int quoted)
+{
+        const char *current;
+
+        current = *state;
+
+        if (!*current) {
+                assert(**state == '\0');
+                return NULL;
+        }
+
+        current += strspn(current, separator);
+        if (!*current) {
+                *state = current;
+                return NULL;
+        }
+
+        if (quoted && strchr("\'\"", *current)) {
+                char quotechars[2] = {*current, '\0'};
+
+                *l = strcspn_escaped(current + 1, quotechars);
+                if (current[*l + 1] == '\0' || current[*l + 1] != quotechars[0] ||
+                    (current[*l + 2] && !strchr(separator, current[*l + 2]))) {
+                        /* right quote missing or garbage at the end */
+                        *state = current;
+                        return NULL;
+                }
+                *state = current++ + *l + 2;
+        } else if (quoted) {
+                *l = strcspn_escaped(current, separator);
+                if (current[*l] && !strchr(separator, current[*l])) {
+                        /* unfinished escape */
+                        *state = current;
+                        return NULL;
+                }
+                *state = current + *l;
+        } else {
+                *l = strcspn(current, separator);
+                *state = current + *l;
+        }
+
+        return current;
+}
+
+/* Rewind file pointer forward to new line.  */
+int skip_fline(FILE *fp)
+{
+	char ch;
+
+	do {
+		if ((ch = fgetc(fp)) == EOF)
+			return 1;
+		if (ch == '\n')
+			return 0;
+	} while (1);
+}
 
 #ifdef TEST_PROGRAM
 

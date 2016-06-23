@@ -56,6 +56,9 @@
 #include "fileutils.h"
 #include "monotonic.h"
 
+#define STRTOXX_EXIT_CODE	FSCK_EX_ERROR
+#include "strutils.h"
+
 #define XALLOC_EXIT_CODE	FSCK_EX_ERROR
 #include "xalloc.h"
 
@@ -141,6 +144,7 @@ static int progress;
 static int progress_fd;
 static int force_all_parallel;
 static int report_stats;
+static FILE *report_stats_file;
 
 static int num_running;
 static int max_running;
@@ -150,8 +154,9 @@ static int kill_sent;
 static char *fstype;
 static struct fsck_instance *instance_list;
 
-static const char fsck_prefix_path[] = FS_SEARCH_PATH;
+#define FSCK_DEFAULT_PATH "/sbin"
 static char *fsck_path;
+
 
 /* parsed fstab and mtab */
 static struct libmnt_table *fstab, *mtab;
@@ -585,16 +590,28 @@ static void print_stats(struct fsck_instance *inst)
 
 	timersub(&inst->end_time, &inst->start_time, &delta);
 
-	fprintf(stdout, "%s: status %d, rss %ld, "
-			"real %ld.%06ld, user %d.%06d, sys %d.%06d\n",
-		fs_get_device(inst->fs),
-		inst->exit_status,
-		inst->rusage.ru_maxrss,
-		delta.tv_sec, delta.tv_usec,
-		(int)inst->rusage.ru_utime.tv_sec,
-		(int)inst->rusage.ru_utime.tv_usec,
-		(int)inst->rusage.ru_stime.tv_sec,
-		(int)inst->rusage.ru_stime.tv_usec);
+	if (report_stats_file)
+		fprintf(report_stats_file, "%s %d %ld "
+					   "%ld.%06ld %d.%06d %d.%06d\n",
+			fs_get_device(inst->fs),
+			inst->exit_status,
+			inst->rusage.ru_maxrss,
+			delta.tv_sec, delta.tv_usec,
+			(int)inst->rusage.ru_utime.tv_sec,
+			(int)inst->rusage.ru_utime.tv_usec,
+			(int)inst->rusage.ru_stime.tv_sec,
+			(int)inst->rusage.ru_stime.tv_usec);
+	else
+		fprintf(stdout, "%s: status %d, rss %ld, "
+				"real %ld.%06ld, user %d.%06d, sys %d.%06d\n",
+			fs_get_device(inst->fs),
+			inst->exit_status,
+			inst->rusage.ru_maxrss,
+			delta.tv_sec, delta.tv_usec,
+			(int)inst->rusage.ru_utime.tv_sec,
+			(int)inst->rusage.ru_utime.tv_usec,
+			(int)inst->rusage.ru_stime.tv_sec,
+			(int)inst->rusage.ru_stime.tv_usec);
 }
 
 /*
@@ -1370,11 +1387,12 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(_(" -N         do not execute, just show what would be done\n"), out);
 	fputs(_(" -P         check filesystems in parallel, including root\n"), out);
 	fputs(_(" -R         skip root filesystem; useful only with '-A'\n"), out);
-	fputs(_(" -r         report statistics for each device checked\n"), out);
+	fputs(_(" -r [<fd>]  report statistics for each device checked;\n"
+		"            file descriptor is for GUIs\n"), out);
 	fputs(_(" -s         serialize the checking operations\n"), out);
 	fputs(_(" -T         do not show the title on startup\n"), out);
 	fputs(_(" -t <type>  specify filesystem types to be checked;\n"
-		"             <type> is allowed to be a comma-separated list\n"), out);
+		"            <type> is allowed to be a comma-separated list\n"), out);
 	fputs(_(" -V         explain what is being done\n"), out);
 	fputs(_(" -?         display this help and exit\n"), out);
 
@@ -1398,6 +1416,7 @@ static void parse_argv(int argc, char *argv[])
 	int	opt = 0;
 	int     opts_for_fsck = 0;
 	struct sigaction	sa;
+	int	report_stats_fd = -1;
 
 	/*
 	 * Set up signal action
@@ -1503,6 +1522,14 @@ static void parse_argv(int argc, char *argv[])
 				break;
 			case 'r':
 				report_stats = 1;
+				if (arg[j+1]) {					/* -r<fd> */
+					report_stats_fd = strtou32_or_err(arg+j+1, _("invalid argument of -r"));
+					goto next_arg;
+				} else if (i+1 < argc && *argv[i+1] >= '0' && *argv[i+1] <= '9') {	/* -r <fd> */
+					report_stats_fd = strtou32_or_err(argv[i+1], _("invalid argument of -r"));
+					++i;
+					goto next_arg;
+				}
 				break;
 			case 's':
 				serialize = 1;
@@ -1541,6 +1568,16 @@ static void parse_argv(int argc, char *argv[])
 			opt = 0;
 		}
 	}
+
+	/* Validate the report stats file descriptor to avoid disasters */
+	if (report_stats_fd >= 0) {
+		report_stats_file = fdopen(report_stats_fd, "w");
+		if (!report_stats_file)
+			err(FSCK_EX_ERROR,
+				_("invalid argument of -r: %d"),
+				report_stats_fd);
+	}
+
 	if (getenv("FSCK_FORCE_ALL_PARALLEL"))
 		force_all_parallel++;
 	if ((tmp = getenv("FSCK_MAX_INST")))
@@ -1551,8 +1588,8 @@ int main(int argc, char *argv[])
 {
 	int i, status = 0;
 	int interactive = 0;
-	char *oldpath = getenv("PATH");
 	struct libmnt_fs *fs;
+	const char *path = getenv("PATH");
 
 	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
 	setvbuf(stderr, NULL, _IONBF, BUFSIZ);
@@ -1573,16 +1610,7 @@ int main(int argc, char *argv[])
 
 	load_fs_info();
 
-	/* Update our search path to include uncommon directories. */
-	if (oldpath) {
-		fsck_path = xmalloc (strlen (fsck_prefix_path) + 1 +
-				    strlen (oldpath) + 1);
-		strcpy (fsck_path, fsck_prefix_path);
-		strcat (fsck_path, ":");
-		strcat (fsck_path, oldpath);
-	} else {
-		fsck_path = xstrdup(fsck_prefix_path);
-	}
+	fsck_path = xstrdup(path && *path ? path : FSCK_DEFAULT_PATH);
 
 	if ((num_devices == 1) || (serialize))
 		interactive = 1;

@@ -48,7 +48,7 @@ if BUILD_LIBSMARTCOLS_TESTS
 check_PROGRAMS += test_smartcols
 
 libsmartcols_tests_cflags = $(libsmartcols_la_CFLAGS)
-libsmartcols_tests_ldadd  = libsmartcols.la libcommon.la
+libsmartcols_tests_ldadd  = libsmartcols.la libcommon.la libtcolors.la
 
 test_smartcols_SOURCES = libsmartcols/src/test.c
 test_smartcols_CFLAGS = $(libsmartcols_tests_cflags)

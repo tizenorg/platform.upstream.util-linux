@@ -5,12 +5,12 @@ libcommon_la_SOURCES = \
 	lib/at.c \
 	lib/blkdev.c \
 	lib/canonicalize.c \
-	lib/colors.c \
 	lib/crc32.c \
 	lib/crc64.c \
 	lib/env.c \
 	lib/fileutils.c \
 	lib/ismounted.c \
+	lib/color-names.c \
 	lib/mangle.c \
 	lib/match.c \
 	lib/mbsalign.c \
@@ -25,7 +25,7 @@ libcommon_la_SOURCES = \
 	lib/timeutils.c \
 	lib/ttyutils.c \
 	lib/exec_shell.c \
-	lib/readutmp.c
+	lib/strv.c
 
 if LINUX
 libcommon_la_SOURCES += \
@@ -41,7 +41,14 @@ if HAVE_CPU_SET_T
 libcommon_la_SOURCES += lib/cpuset.c
 endif
 
+
+noinst_LTLIBRARIES += libtcolors.la
+libtcolors_la_CFLAGS = $(AM_CFLAGS) $(TINFO_CFLAGS)
+libtcolors_la_LIBADD = $(TINFO_LIBS)
+libtcolors_la_SOURCES = lib/colors.c lib/color-names.c include/colors.h include/color-names.h
+
 dist_man_MANS += lib/terminal-colors.d.5
+
 
 check_PROGRAMS += \
 	test_at \
@@ -55,6 +62,9 @@ check_PROGRAMS += \
 	test_randutils \
 	test_strutils \
 	test_ttyutils
+
+
+
 
 if LINUX
 if HAVE_CPU_SET_T
@@ -86,8 +96,9 @@ test_at_CFLAGS = -DTEST_PROGRAM_AT
 test_strutils_SOURCES = lib/strutils.c
 test_strutils_CFLAGS = -DTEST_PROGRAM
 
-test_colors_SOURCES = lib/colors.c
-test_colors_CFLAGS = -DTEST_PROGRAM
+test_colors_SOURCES = lib/colors.c lib/color-names.c
+test_colors_CFLAGS = -DTEST_PROGRAM $(TINFO_CFLAGS)
+test_colors_LDADD = $(LDADD) $(TINFO_LIBS)
 
 test_randutils_SOURCES = lib/randutils.c
 test_randutils_CFLAGS = -DTEST_PROGRAM

@@ -289,7 +289,7 @@ static void __attribute__((__noreturn__)) usage(FILE *out)
 	fputs(_(" -x, --decode                decode facility and level to readable string\n"), out);
 	fputs(_(" -d, --show-delta            show time delta between printed messages\n"), out);
 	fputs(_(" -e, --reltime               show local time and time delta in readable format\n"), out);
-	fputs(_(" -T, --ctime                 show human readable timestamp\n"), out);
+	fputs(_(" -T, --ctime                 show human readable timestamp (may be inaccurate!)\n"), out);
 	fputs(_(" -t, --notime                don't print messages timestamp\n"), out);
 	fputs(_("     --time-format <format>  show time stamp using format:\n"
 		"                               [delta|reltime|ctime|notime|iso]\n"
@@ -1193,6 +1193,24 @@ static int which_time_format(const char *optarg)
 	errx(EXIT_FAILURE, _("unknown time format: %s"), optarg);
 }
 
+#ifdef TEST_DMESG
+static inline int dmesg_get_boot_time(struct timeval *tv)
+{
+	char *str = getenv("DMESG_TEST_BOOTIME");
+	uintmax_t sec, usec;
+
+	if (str && sscanf(str, "%ju.%ju", &sec, &usec) == 2) {
+		tv->tv_sec = sec;
+		tv->tv_usec = usec;
+		return tv->tv_sec >= 0 && tv->tv_usec >= 0 ? 0 : -EINVAL;
+	}
+
+	return get_boot_time(tv);
+}
+#else
+# define dmesg_get_boot_time	get_boot_time
+#endif
+
 int main(int argc, char *argv[])
 {
 	char *buf = NULL;
@@ -1377,8 +1395,7 @@ int main(int argc, char *argv[])
 	if (is_timefmt(&ctl, RELTIME) ||
 	    is_timefmt(&ctl, CTIME) ||
 	    is_timefmt(&ctl, ISO8601)) {
-
-		if (get_boot_time(&ctl.boot_time) != 0)
+		if (dmesg_get_boot_time(&ctl.boot_time) != 0)
 			ctl.time_fmt = DMESG_TIMEFTM_NONE;
 	}
 
